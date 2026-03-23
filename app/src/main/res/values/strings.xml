@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PassManager</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_title">Create Master Passphrase</string>
+    <string name="onboarding_tagline">Your secrets, locked tight.</string>
+    <string name="onboarding_subtitle">This passphrase encrypts all your data. It cannot be recovered if lost.</string>
+    <string name="onboarding_passphrase_hint">Master passphrase</string>
+    <string name="onboarding_confirm_hint">Confirm passphrase</string>
+    <string name="onboarding_create_button">Create Vault</string>
+    <string name="onboarding_passphrase_mismatch">Passphrases do not match</string>
+    <string name="onboarding_passphrase_too_short">Passphrase must be at least 8 characters</string>
+    <string name="onboarding_vault_creation_failed">Failed to create vault</string>
+
+    <!-- Lock Screen -->
+    <string name="lock_title">Unlock Vault</string>
+    <string name="lock_subtitle">Enter your master passphrase</string>
+    <string name="lock_passphrase_hint">Master passphrase</string>
+    <string name="lock_unlock_button">Unlock</string>
+    <string name="lock_biometric_button">Use Biometric</string>
+    <string name="lock_biometric_prompt_title">Unlock PassManager</string>
+    <string name="lock_biometric_prompt_subtitle">Use your biometric to unlock the vault</string>
+    <string name="lock_biometric_prompt_cancel">Use Passphrase</string>
+    <string name="lock_wrong_passphrase">Incorrect passphrase</string>
+    <string name="lock_unlock_failed">Unlock failed</string>
+    <string name="lock_biometric_unlock_failed">Biometric unlock failed</string>
+    <string name="lock_or_divider">or</string>
+
+    <!-- Vault List -->
+    <string name="vault_title">Vault</string>
+    <string name="vault_empty_title">No items yet</string>
+    <string name="vault_empty_hint">Tap + to add your first</string>
+    <string name="vault_no_results">No results for \"%1$s\"</string>
+    <string name="vault_empty_message">No items yet. Tap + to add one.</string>
+    <string name="vault_search_hint">Search vault…</string>
+    <string name="vault_lock_button">Lock vault now</string>
+
+    <!-- Item Screens -->
+    <string name="item_add_title">Add item</string>
+    <string name="item_edit_title">Edit item</string>
+    <string name="item_add_subtitle">Add a login or secure note. Everything stays encrypted on this device.</string>
+    <string name="item_edit_subtitle">Update this entry. Changes apply when you save.</string>
+    <string name="item_view_title">Item Details</string>
+    <string name="item_entry_fallback">Entry</string>
+    <string name="item_details_title">Details</string>
+    <string name="item_details_subtitle">Stored encrypted on this device only.</string>
+    <string name="item_category_label">Category</string>
+    <string name="item_title_hint">Title</string>
+    <string name="item_username_hint">Username or email</string>
+    <string name="item_address_hint">Address / URL</string>
+    <string name="item_address_placeholder">https://…</string>
+    <string name="item_password_hint">Password</string>
+    <string name="item_notes_hint">Notes</string>
+    <string name="item_save_button">Save</string>
+    <string name="item_delete_button">Delete</string>
+    <string name="item_delete_confirm_title">Delete Item?</string>
+    <string name="item_delete_confirm_message">This action cannot be undone.</string>
+    <string name="item_copy_username">Copy username</string>
+    <string name="item_copy_password">Copy password</string>
+    <string name="item_password_copied">Password copied — clears in 15s</string>
+    <string name="item_username_copied">Username copied</string>
+    <string name="item_address_copied">Address copied</string>
+    <string name="item_generate_password">Generate</string>
+    <string name="item_title_required">Title is required</string>
+    <string name="item_password_required">Password is required</string>
+    <string name="item_load_failed">Failed to load item</string>
+    <string name="item_save_failed">Save failed</string>
+    <string name="item_not_found">Item not found</string>
+    <string name="item_decrypt_failed">Failed to decrypt item</string>
+    <string name="item_delete_failed">Failed to delete item</string>
+
+    <!-- Password Generator -->
+    <string name="generator_title">Generator</string>
+    <string name="generator_subtitle">Random secure password</string>
+    <string name="generator_preview_label">Preview</string>
+    <string name="generator_empty_hint">Generate a password below</string>
+    <string name="generator_entropy_bits">≈ %1$d bits</string>
+    <string name="generator_length_label">Length: %d</string>
+    <string name="generator_length_title">Password length</string>
+    <string name="generator_length_hint">Longer is stronger. Drag the bar to set length (8–64).</string>
+    <string name="generator_length_semantics">Password length, %1$d characters</string>
+    <string name="generator_characters_label">characters</string>
+    <string name="generator_charset_title">Character sets</string>
+    <string name="generator_charset_hint">Keep at least one enabled.</string>
+    <string name="generator_uppercase">Uppercase (A–Z)</string>
+    <string name="generator_uppercase_desc">Latin capitals</string>
+    <string name="generator_lowercase">Lowercase (a–z)</string>
+    <string name="generator_lowercase_desc">Latin small letters</string>
+    <string name="generator_digits">Digits (0–9)</string>
+    <string name="generator_digits_desc">Numeric</string>
+    <string name="generator_symbols">Symbols (!@#…)</string>
+    <string name="generator_symbols_desc">Special characters</string>
+    <string name="generator_regenerate_button">Regenerate</string>
+    <string name="generator_generate_button">Generate</string>
+    <string name="generator_use_button">Use this password</string>
+    <string name="generator_copy_button">Copy</string>
+    <string name="generator_copied">Copied</string>
+
+    <!-- Password Strength -->
+    <string name="strength_weak">Weak</string>
+    <string name="strength_fair">Fair</string>
+    <string name="strength_good">Good</string>
+    <string name="strength_strong">Strong</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_security">SECURITY</string>
+    <string name="settings_section_preferences">PREFERENCES</string>
+    <string name="settings_biometric_title">Biometric Unlock</string>
+    <string name="settings_biometric_subtitle">Use fingerprint or face to unlock</string>
+    <string name="settings_biometric_prompt_title">Enable Biometric</string>
+    <string name="settings_biometric_prompt_subtitle">Authenticate to enable biometric unlock</string>
+    <string name="settings_auto_lock_title">Auto-lock Timeout</string>
+    <string name="settings_auto_lock_subtitle">Lock vault after %1$s of inactivity</string>
+    <string name="settings_auto_lock_1min">1 minute</string>
+    <string name="settings_auto_lock_5min">5 minutes</string>
+    <string name="settings_auto_lock_15min">15 minutes</string>
+    <string name="settings_auto_lock_30min">30 minutes</string>
+    <string name="settings_change_passphrase_title">Change Master Passphrase</string>
+    <string name="settings_change_passphrase_subtitle">Re-encrypt your vault key with a new passphrase</string>
+    <string name="settings_change_passphrase_sheet_title">Change Passphrase</string>
+    <string name="settings_change_passphrase_sheet_subtitle">Your vault will be re-encrypted. Keep the app open until this finishes.</string>
+    <string name="settings_current_passphrase_hint">Current passphrase</string>
+    <string name="settings_new_passphrase_hint">New passphrase</string>
+    <string name="settings_confirm_passphrase_hint">Confirm new passphrase</string>
+    <string name="settings_update_passphrase_button">Update Passphrase</string>
+    <string name="settings_error_biometric_prepare">Failed to prepare biometric</string>
+    <string name="settings_error_biometric_enable">Failed to enable biometric</string>
+    <string name="settings_error_biometric_disable">Failed to disable biometric</string>
+    <string name="settings_wrong_current_passphrase">Incorrect current passphrase</string>
+    <string name="settings_passphrase_change_failed">Failed to change passphrase</string>
+
+    <!-- Common -->
+    <string name="action_back">Back</string>
+    <string name="action_close">Close</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_hide">Hide</string>
+    <string name="action_show">Show</string>
+    <string name="action_copy">Copy %1$s</string>
+    <string name="cancel">Cancel</string>
+    <string name="confirm">Confirm</string>
+    <string name="ok">OK</string>
+    <string name="error_unknown">An unexpected error occurred</string>
+    <string name="error_biometric_invalidated">Biometric keys were invalidated. Please unlock with your passphrase.</string>
+
+    <!-- Drawer navigation -->
+    <string name="nav_open_drawer">Open navigation menu</string>
+    <string name="nav_vault">Vault</string>
+    <string name="nav_generator">Generator</string>
+    <string name="nav_desktop">Desktop Link</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Desktop link -->
+    <string name="desktop_link_title">Desktop link</string>
+    <string name="desktop_link_subtitle">Scan the QR code on your desktop app to connect securely.</string>
+    <string name="desktop_link_unlock_hint">Unlock the vault to connect to a desktop.</string>
+    <string name="desktop_link_verify_title">Verification Code</string>
+    <string name="desktop_link_verify_instruction">Enter this code on your desktop app to verify the connection.</string>
+    <string name="desktop_link_verify_desktop_ip">Connected to %1$s</string>
+    <string name="desktop_link_error">Something went wrong</string>
+    <string name="desktop_link_scan_qr_body">Scan the QR code shown on your desktop app to connect securely.</string>
+    <string name="desktop_link_scan_to_connect">Scan to connect</string>
+    <string name="desktop_link_connecting">Connecting to desktop…</string>
+    <string name="desktop_link_connected">Connected</string>
+    <string name="desktop_link_desktop_at">Desktop at %1$s</string>
+    <string name="desktop_link_passwords_sent">%1$d of %2$d passwords sent</string>
+    <string name="desktop_link_last_item">Last: %1$s</string>
+    <string name="desktop_link_disconnect">Disconnect</string>
+    <string name="desktop_link_session_ended">Session ended: %1$s</string>
+    <string name="desktop_link_scan_again">Scan again</string>
+    <string name="desktop_link_error_with_message">Error: %1$s</string>
+    <string name="desktop_link_try_again">Try again</string>
+    <string name="desktop_link_safety_number_label">Security code</string>
+    <string name="desktop_link_safety_number_hint">Verify this matches the desktop before entering the code</string>
+    <string name="desktop_notification_password_sent">Sent %1$s password to desktop</string>
+    <string name="desktop_pairing_channel_name">Desktop pairing</string>
+    <string name="desktop_pairing_channel_desc">Notifications for desktop password transfers</string>
+    <string name="desktop_error_session_expired">Session expired. Scan the new QR code on your desktop.</string>
+    <string name="desktop_error_unreachable">Desktop app not reachable. Make sure it is running.</string>
+    <string name="desktop_error_timeout">Connection timed out. Try again.</string>
+    <string name="desktop_error_invalid_qr">Invalid QR code. Make sure you are scanning the PassManager QR.</string>
+    <string name="desktop_error_connection_failed_with_reason">Connection failed: %1$s</string>
+    <string name="desktop_error_verification_required">Verification required before sensitive operations</string>
+    <string name="desktop_error_password_retrieval_failed">Failed to retrieve password: %1$s</string>
+    <string name="desktop_session_vault_locked">Vault locked</string>
+    <string name="desktop_session_user_disconnected">User disconnected</string>
+    <string name="desktop_session_desktop_disconnected">Desktop disconnected</string>
+
+    <!-- Desktop agent service -->
+    <string name="desktop_agent_channel_name">Desktop link</string>
+    <string name="desktop_agent_channel_desc">Local server for desktop password sync</string>
+    <string name="desktop_agent_notification_title">Desktop link server</string>
+    <string name="desktop_agent_notification_text">Listening on port %1$d · same network only</string>
+    <string name="desktop_agent_stop">Stop</string>
+</resources>

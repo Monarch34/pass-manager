@@ -1,0 +1,15 @@
+# Copy optional lines into ONE of:
+#   - %USERPROFILE%\.gradle\gradle.properties   (applies to all Gradle projects on this machine)
+#   - or project gradle.properties (local only — do not commit machine paths to Git)
+#
+# Use only if Gradle picks the wrong JDK (e.g. Cursor/VS Code JRE without jlink.exe).
+# Value must be a full JDK: bin/jlink.exe and bin/javac.exe must exist.
+#
+# Windows (Android Studio default install):
+# org.gradle.java.home=C:/Program Files/Android/Android Studio/jbr
+#
+# macOS (Android Studio):
+# org.gradle.java.home=/Applications/Android Studio.app/Contents/jbr/Contents/Home
+#
+# Linux / portable JDK (Eclipse Temurin 17+):
+# org.gradle.java.home=/usr/lib/jvm/temurin-17-jdk-amd64

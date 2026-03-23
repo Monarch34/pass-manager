@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Adaptive launcher: Material primary / primaryContainer (dark scheme — matches AppShieldLogo) -->
+    <color name="ic_launcher_primary">#FF5EEAD4</color>
+    <color name="ic_launcher_primary_container">#FF0D9488</color>
+</resources>

@@ -1,0 +1,13 @@
+## Android SDK location (required for command-line Gradle builds)
+#
+# Copy this file to `local.properties` in the project root and set sdk.dir.
+# `local.properties` is gitignored — never commit it.
+#
+# Windows (example):
+# sdk.dir=C\:\\Users\\YOUR_USER\\AppData\\Local\\Android\\Sdk
+#
+# macOS (example):
+# sdk.dir=/Users/YOUR_USER/Library/Android/sdk
+#
+# Linux (example):
+# sdk.dir=/home/YOUR_USER/Android/Sdk

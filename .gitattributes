@@ -1,0 +1,26 @@
+# Normalize line endings to LF in the repository
+* text=auto eol=lf
+
+# Gradle wrapper scripts — keep LF so they work on Linux/macOS CI
+gradlew text eol=lf
+desktop/gradlew text eol=lf
+
+# Binary files — never modify
+*.jar binary
+*.png binary
+*.ico binary
+*.webp binary
+*.keystore binary
+*.jks binary
+
+# Kotlin / Java source
+*.kt text eol=lf
+*.java text eol=lf
+*.kts text eol=lf
+
+# XML / resource files
+*.xml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.properties text eol=lf
+*.md text eol=lf

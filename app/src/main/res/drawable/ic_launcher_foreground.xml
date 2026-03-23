@@ -1,0 +1,88 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group
+        android:translateX="24.0"
+        android:translateY="8.62"
+        android:scaleX="0.15"
+        android:scaleY="0.15">
+
+        <!-- Top Cap Left -->
+        <path android:fillColor="#1A6D68" android:pathData="M 200 135 L 169 140 L 200 170 Z" />
+        <!-- Top Cap Right -->
+        <path android:fillColor="#21837D" android:pathData="M 200 135 L 231 140 L 200 170 Z" />
+
+        <!-- Outer Shield Left -->
+        <path android:fillColor="#1A6D68" android:pathData="M 200 200 L 169 170 L 60 190 C 60 340 110 430 200 470 Z" />
+        <!-- Outer Shield Right -->
+        <path android:fillColor="#21837D" android:pathData="M 200 200 L 231 170 L 340 190 C 340 340 290 430 200 470 Z" />
+
+        <!-- Inner Shield Left -->
+        <path android:fillColor="#C8E6DA" android:pathData="M 200 200 L 85 215 C 85 330 125 410 200 440 Z" />
+        <!-- Inner Shield Right -->
+        <path android:fillColor="#DDF0E6" android:pathData="M 200 200 L 315 215 C 315 330 275 410 200 440 Z" />
+
+        <!-- Top V Detail Left -->
+        <path android:fillColor="#1A6D68" android:pathData="M 100 150 L 150 150 L 200 200 L 200 250 Z" />
+        <!-- Top V Detail Right -->
+        <path android:fillColor="#21837D" android:pathData="M 300 150 L 250 150 L 200 200 L 200 250 Z" />
+
+        <!-- Circuit Traces Left -->
+        <group>
+            <path android:strokeColor="#A5D4C4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 155 260 L 130 260 L 130 230" />
+            <path android:fillColor="#A5D4C4" android:pathData="M 127 230 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+
+            <path android:strokeColor="#A5D4C4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 155 285 L 115 285 L 115 310" />
+            <path android:fillColor="#A5D4C4" android:pathData="M 112 310 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+
+            <path android:strokeColor="#A5D4C4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 155 310 L 140 310 L 140 340 L 120 340" />
+            <path android:fillColor="#A5D4C4" android:pathData="M 117 340 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+
+            <path android:strokeColor="#A5D4C4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 170 335 L 170 370 L 145 370" />
+            <path android:fillColor="#A5D4C4" android:pathData="M 142 370 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+
+            <path android:strokeColor="#A5D4C4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 180 345 L 180 390 L 160 390" />
+            <path android:fillColor="#A5D4C4" android:pathData="M 157 390 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+
+            <path android:fillColor="#A5D4C4" android:pathData="M 112 250 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+            <path android:fillColor="#A5D4C4" android:pathData="M 142 210 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+            <path android:fillColor="#A5D4C4" android:pathData="M 122 270 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+            <path android:fillColor="#A5D4C4" android:pathData="M 132 300 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+        </group>
+
+        <!-- Circuit Traces Right -->
+        <group>
+            <path android:strokeColor="#BCE0D4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 245 260 L 270 260 L 270 230" />
+            <path android:fillColor="#BCE0D4" android:pathData="M 267 230 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+
+            <path android:strokeColor="#BCE0D4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 245 285 L 285 285 L 285 310" />
+            <path android:fillColor="#BCE0D4" android:pathData="M 282 310 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+
+            <path android:strokeColor="#BCE0D4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 245 310 L 260 310 L 260 340 L 280 340" />
+            <path android:fillColor="#BCE0D4" android:pathData="M 277 340 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+
+            <path android:strokeColor="#BCE0D4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 230 335 L 230 370 L 255 370" />
+            <path android:fillColor="#BCE0D4" android:pathData="M 252 370 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+
+            <path android:strokeColor="#BCE0D4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 220 345 L 220 390 L 240 390" />
+            <path android:fillColor="#BCE0D4" android:pathData="M 237 390 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+
+            <path android:fillColor="#BCE0D4" android:pathData="M 282 250 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+            <path android:fillColor="#BCE0D4" android:pathData="M 252 210 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+            <path android:fillColor="#BCE0D4" android:pathData="M 272 270 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+            <path android:fillColor="#BCE0D4" android:pathData="M 262 300 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
+        </group>
+
+        <!-- Center Lock Left -->
+        <path android:fillColor="#1A6D68" android:pathData="M 200 250 A 40 40 0 0 0 200 330 L 200 315 A 25 25 0 0 1 200 265 Z" />
+        <path android:fillColor="#1A6D68" android:pathData="M 200 277 A 8 8 0 0 0 193.5 289.5 L 190 305 L 200 305 Z" />
+
+        <!-- Center Lock Right -->
+        <path android:fillColor="#21837D" android:pathData="M 200 250 A 40 40 0 0 1 200 330 L 200 315 A 25 25 0 0 0 200 265 Z" />
+        <path android:fillColor="#21837D" android:pathData="M 200 277 A 8 8 0 0 1 206.5 289.5 L 210 305 L 200 305 Z" />
+
+    </group>
+</vector>
