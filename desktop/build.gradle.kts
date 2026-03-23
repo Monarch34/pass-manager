@@ -1,3 +1,4 @@
+// Compose Desktop + Ktor server — standalone project (see ../docs/REPOSITORY_LAYOUT.md)
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)

@@ -1,3 +1,7 @@
+/**
+ * Android application root. Only `:app` is included.
+ * Desktop: separate build in `desktop/` — see `desktop/settings.gradle.kts`.
+ */
 pluginManagement {
     repositories {
         google {

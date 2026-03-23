@@ -1,3 +1,4 @@
+// Android application module (`:app`). Root project: ../settings.gradle.kts
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)

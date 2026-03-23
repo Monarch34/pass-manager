@@ -67,6 +67,9 @@ proguard/
 .DS_Store
 Thumbs.db
 
+# Android / JVM heap dumps (never commit)
+*.hprof
+
 # Temporary files
 *.log
 *.tmp

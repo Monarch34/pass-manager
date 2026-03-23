@@ -1,8 +1,61 @@
 # PassManager
 
-A privacy-first, offline password manager for Android with a companion desktop app for secure password autofill over your local network.
+A privacy-first, offline password manager delivered as **two separate applications** in one repository:
+
+| Application | Role | Code & build |
+|-------------|------|----------------|
+| **Android app** | Vault on the phone — encryption, biometric unlock, QR scan to pair | **Repository root** — Gradle module `:app`, sources under `app/` |
+| **Desktop app** | LAN pairing server + UI on the PC — shows QR, receives verified passwords | **`desktop/`** — **its own** Gradle project (`desktop/settings.gradle.kts`, own `gradlew`) |
+
+They are **not** one multi-module Android project: each app has its **own** Gradle wrapper and lifecycle. They only share this repo and a documented pairing protocol.
 
 **All vault data is encrypted on-device. No cloud. No accounts.**
+
+---
+
+## Quick start (clone → build)
+
+This repository is meant to **build from a clean clone** without committing machine-specific files.
+
+### Shared requirement
+
+- **JDK 17** for both apps.
+
+### Android app (build at repo root)
+
+Also needs **Android SDK** ([Android Studio](https://developer.android.com/studio) or [cmdline-tools](https://developer.android.com/studio#command-tools)).
+
+1. Clone the repo.
+2. **Command-line Gradle only:** copy `local.properties.example` to **`local.properties`** in the **repo root** and set `sdk.dir` (gitignored).
+3. From the **repo root**:
+   - **Windows:** `.\gradlew.bat :app:assembleDebug`
+   - **macOS / Linux:** `./gradlew :app:assembleDebug`
+4. **Android Studio:** open the **repository root** (folder with `settings.gradle.kts` and `app/`). Studio usually creates `local.properties` for you.
+
+### Desktop app (build inside `desktop/`)
+
+Uses **only** the wrapper under `desktop/` — do not expect `./gradlew` at the root to build the desktop binary.
+
+```bash
+cd desktop
+./gradlew run          # macOS / Linux
+# Windows: desktop\gradlew.bat run
+```
+
+Packaging (e.g. Windows MSI): see [Build → Desktop](#desktop-windows-msi).
+
+### What belongs in Git
+
+- **Included:** both apps’ sources, **both** Gradle wrappers (`gradle/wrapper` at root and `desktop/gradle/wrapper`), Room schemas under `app/schemas/`, tests, docs.
+- **Never commit:** `build/`, `.gradle/`, `local.properties`, keystores, secrets (see `.gitignore`).
+
+**License:** [LICENSE](LICENSE) (MIT). This project is **not accepting pull requests or external commits**.
+
+### Documentation (read order)
+
+1. **[docs/REPOSITORY_LAYOUT.md](docs/REPOSITORY_LAYOUT.md)** — where Android vs desktop files and Gradle entry points live.  
+2. **[docs/BUILD.md](docs/BUILD.md)** — JDK, `local.properties`, commands, desktop pairing quirks.  
+3. **[docs/README.md](docs/README.md)** — index of all docs.
 
 ---
 
@@ -21,22 +74,10 @@ A privacy-first, offline password manager for Android with a companion desktop a
 
 ---
 
-## Architecture
+## Repository layout (two apps)
 
-```
-crypto/         AES-GCM cipher, Argon2id KDF, X25519 ECDH, HKDF-SHA256
-data/           Room database (v6, migrations 1→6), repositories
-domain/         Use cases, domain models
-security/       VaultLockManager, DesktopPairingSession, SessionManager
-di/             Hilt modules
-ui/             Compose screens + ViewModels
-navigation/     Nav graph + NavigationViewModel
-
-desktop/
-  crypto/       Same crypto primitives (JVM / Bouncy Castle)
-  server/       Ktor HTTP + WebSocket pairing server (binds to LAN IP)
-  ui/           Compose Desktop screens (Windows MSI target)
-```
+See **[docs/REPOSITORY_LAYOUT.md](docs/REPOSITORY_LAYOUT.md)** for a full table of root Gradle files, `app/`, and `desktop/`.  
+Short form: **`app/`** = Android; **`desktop/`** = separate Gradle project + **[desktop/README.md](desktop/README.md)**.
 
 ---
 
@@ -100,32 +141,26 @@ HTTP/WS transport is **unencrypted** (no TLS). The session key is never transmit
 
 ## Build
 
-### Android
+### Android app (repo root)
 
-Requirements: Android Studio (latest stable), JDK 17, Android SDK
+Requirements: Android Studio (recommended), JDK 17, Android SDK.
 
 ```bash
-# Debug APK
-./gradlew assembleDebug
-
-# Release APK (requires signing config in app/build.gradle.kts)
-./gradlew assembleRelease
+# From repository root
+./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease   # needs signing in app/build.gradle.kts
 ```
 
-minSdk: 26 (Android 8.0) · targetSdk: 35
+minSdk: 26 (Android 8.0) · targetSdk: 35 · Gradle: root `settings.gradle.kts` includes **only** `:app`.
 
-### Desktop (Windows MSI)
+### Desktop app (`desktop/` directory)
 
-Requirements: JDK 17, `JAVA_HOME` set
+Requirements: JDK 17 (`JAVA_HOME` set). **Always `cd desktop` first** — this is a **second** Gradle build.
 
 ```bash
 cd desktop
-
-# Run without packaging
-./gradlew run
-
-# Build Windows MSI installer
-./gradlew packageMsi
+./gradlew run           # run unpackaged
+./gradlew packageMsi    # Windows MSI (when configured in desktop/build.gradle.kts)
 ```
 
 ---
@@ -150,7 +185,7 @@ cd desktop
 
 ## Verification Checklist
 
-1. `./gradlew assembleDebug` must succeed
+1. `./gradlew :app:assembleDebug` must succeed (Android app at repo root)
 2. Force-stop → reopen → only passphrase shown (cold lock)
 3. Background → reopen → biometric option shown (warm lock)
 4. Screenshot on vault screen → blocked by `FLAG_SECURE`

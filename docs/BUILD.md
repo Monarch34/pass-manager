@@ -1,5 +1,18 @@
 # Building PassManager
 
+**Doc index:** [docs/README.md](README.md) · **Repo layout:** [REPOSITORY_LAYOUT.md](REPOSITORY_LAYOUT.md)
+
+---
+
+This repository contains **two separate applications**:
+
+1. **Android app** — Gradle project at the **repository root** (`:app` module only in `settings.gradle.kts`).
+2. **Desktop app** — **Another** Gradle project entirely under **`desktop/`** (own `settings.gradle.kts` and wrapper).
+
+Build each from the instructions below; they do not share a single multi-module Gradle graph.
+
+---
+
 ## Prerequisites (every clone — read this first)
 
 1. **JDK 17+ (full JDK, not a minimal JRE)**  
@@ -43,8 +56,8 @@ the build is using a **minimal JRE** (common with some editor extensions), not a
 
 ```bash
 gradlew --stop
-gradlew assembleDebug
-gradlew testDebugUnitTest
+gradlew :app:assembleDebug
+gradlew :app:testDebugUnitTest
 ```
 
 Requires **`local.properties`** with `sdk.dir=...` for CLI builds (see **`local.properties.example`**).
@@ -53,13 +66,27 @@ Requires **`local.properties`** with `sdk.dir=...` for CLI builds (see **`local.
 
 ## Desktop app (Compose Desktop)
 
-The **`desktop/`** project is a **separate Gradle build** (not `:app`). From the **repository root**:
+The desktop app is **not** the Android `:app` module. Build it using **either** of these (same JDK as Android: `JAVA_HOME` / Studio **`jbr`**):
+
+**Option A — use the desktop wrapper (recommended):**
 
 ```bash
-.\gradlew -p desktop run
+cd desktop
+./gradlew run              # macOS / Linux
+# Windows: gradlew.bat run
 ```
 
-Use the **same JDK** as Android (`JAVA_HOME` / Studio **`jbr`**). The `desktop` folder has no `gradlew.bat`; the root wrapper with `-p desktop` is correct.
+**Option B — from repo root, reuse root wrapper with `-p`:**
+
+```bash
+# Windows (PowerShell / cmd, from repo root)
+.\gradlew.bat -p desktop run
+
+# macOS / Linux
+./gradlew -p desktop run
+```
+
+The **`desktop/`** directory includes its own **`gradlew` / `gradlew.bat`** and **`gradle/wrapper/`** so the desktop app can be built like a standalone project.
 
 ### Desktop pairing: connect timeout to `172.30.x.x` or similar
 
