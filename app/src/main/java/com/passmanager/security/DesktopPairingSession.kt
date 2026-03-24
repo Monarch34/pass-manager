@@ -56,6 +56,9 @@ sealed interface PairingSessionState {
  *
  * W1 mitigation: rate limits password requests (max [MAX_PW_PER_SESSION] per session,
  * min [PW_COOLDOWN_MS] between requests).
+ *
+ * Desktop-initiated vault list refreshes are limited by [VAULT_LIST_COOLDOWN_MS]
+ * so the phone is not spammed; the initial list push after verification is not gated by this.
  */
 @Singleton
 class DesktopPairingSession @Inject constructor() {
@@ -79,6 +82,9 @@ class DesktopPairingSession @Inject constructor() {
     private var passwordsSentThisSession = 0
     private var lastPasswordRequestTimeMs = 0L
     private var lastItemTitle: String? = null
+
+    /** Last time the desktop asked for [SecureRequest.ListItems] (not the post-verify auto-push). */
+    private var lastVaultListRequestFromDesktopMs = 0L
 
     // Exposed for the pairing flow to read
     var desktopIp: String? = null; private set
@@ -237,6 +243,7 @@ class DesktopPairingSession @Inject constructor() {
             passwordsSentThisSession = 0
             lastPasswordRequestTimeMs = 0L
             lastItemTitle = null
+            lastVaultListRequestFromDesktopMs = 0L
 
             _state.value = PairingSessionState.Active(
                 desktopIp = currentState.desktopIp,
@@ -292,6 +299,17 @@ class DesktopPairingSession @Inject constructor() {
         val now = System.currentTimeMillis()
         if (now - lastPasswordRequestTimeMs < PW_COOLDOWN_MS) return false
         return true
+    }
+
+    fun canAcceptVaultListRequestFromDesktop(): Boolean {
+        if (_state.value !is PairingSessionState.Active) return false
+        val now = System.currentTimeMillis()
+        return now - lastVaultListRequestFromDesktopMs >= VAULT_LIST_COOLDOWN_MS
+    }
+
+    fun recordVaultListRequestFromDesktop() {
+        lastVaultListRequestFromDesktopMs = System.currentTimeMillis()
+        resetInactivityTimer()
     }
 
     fun recordPasswordSent(itemTitle: String) {
@@ -369,6 +387,7 @@ class DesktopPairingSession @Inject constructor() {
         passwordsSentThisSession = 0
         lastPasswordRequestTimeMs = 0L
         lastItemTitle = null
+        lastVaultListRequestFromDesktopMs = 0L
         pendingSafetyNumber = ""
         desktopIp = null
         desktopPort = 0
@@ -433,6 +452,8 @@ class DesktopPairingSession @Inject constructor() {
         const val VERIFY_CODE_TIMEOUT_MS = 15_000L
         const val MAX_PW_PER_SESSION = 20
         const val PW_COOLDOWN_MS = 10_000L
+        /** Min interval between desktop `list_items` requests. */
+        const val VAULT_LIST_COOLDOWN_MS = 2_000L
     }
 }
 

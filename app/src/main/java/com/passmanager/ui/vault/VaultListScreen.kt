@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,7 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -22,9 +25,11 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Icon
@@ -33,11 +38,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -50,6 +60,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.passmanager.R
 import com.passmanager.domain.model.ItemCategory
 import com.passmanager.domain.model.VaultItemHeader
+import com.passmanager.domain.model.VaultSortOrder
 import com.passmanager.ui.components.AppShieldLogo
 import com.passmanager.ui.components.FaviconImage
 import com.passmanager.ui.components.SkeletonLoading
@@ -64,14 +75,19 @@ fun VaultListScreen(
     viewModel: VaultListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val titleCache by viewModel.titleCache.collectAsStateWithLifecycle()
-    val addressCache by viewModel.addressCache.collectAsStateWithLifecycle()
 
     LaunchedEffect(uiState.isLocked) {
         if (uiState.isLocked) onLocked()
     }
 
     val filteredItems = uiState.filteredItems
+    val listState = rememberLazyListState()
+    var suppressFaviconNetwork by remember { mutableStateOf(false) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { inProgress ->
+            suppressFaviconNetwork = inProgress
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -122,7 +138,7 @@ fun VaultListScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 8.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+                    .padding(start = 8.dp, end = 4.dp, top = 12.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onOpenDrawer) {
@@ -139,6 +155,42 @@ fun VaultListScreen(
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f)
                 )
+                var sortMenuExpanded by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { sortMenuExpanded = true }) {
+                        Icon(
+                            Icons.Default.SwapVert,
+                            contentDescription = stringResource(R.string.vault_sort_menu_cd),
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = sortMenuExpanded,
+                        onDismissRequest = { sortMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.vault_sort_name_az)) },
+                            onClick = {
+                                viewModel.setSortOrder(VaultSortOrder.NAME_ASC)
+                                sortMenuExpanded = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.vault_sort_date_newest)) },
+                            onClick = {
+                                viewModel.setSortOrder(VaultSortOrder.DATE_NEWEST)
+                                sortMenuExpanded = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.vault_sort_date_oldest)) },
+                            onClick = {
+                                viewModel.setSortOrder(VaultSortOrder.DATE_OLDEST)
+                                sortMenuExpanded = false
+                            }
+                        )
+                    }
+                }
             }
 
             OutlinedTextField(
@@ -159,8 +211,43 @@ fun VaultListScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             )
 
+            Text(
+                text = stringResource(R.string.vault_group_filter_label),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 2.dp)
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                item(key = "all") {
+                    FilterChip(
+                        selected = uiState.categoryFilter == null,
+                        onClick = { viewModel.setCategoryFilter(null) },
+                        label = { Text(stringResource(R.string.vault_group_all)) }
+                    )
+                }
+                items(ItemCategory.entries, key = { it.name }) { category ->
+                    FilterChip(
+                        selected = uiState.categoryFilter == category,
+                        onClick = {
+                            viewModel.setCategoryFilter(
+                                if (uiState.categoryFilter == category) null else category
+                            )
+                        },
+                        label = { Text(category.label) }
+                    )
+                }
+            }
+
             if (uiState.isLoading) {
-                SkeletonLoading(modifier = Modifier.fillMaxSize())
+                SkeletonLoading(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                )
             } else if (filteredItems.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -194,89 +281,115 @@ fun VaultListScreen(
                 }
             } else {
                 LazyColumn(
+                    state = listState,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    items(filteredItems, key = { it.id }) { item ->
-                        val title = titleCache[item.id] ?: ""
-                        val address = addressCache[item.id] ?: ""
-                        val category = ItemCategory.fromString(item.category)
-
-                        ElevatedCard(
-                            onClick = { onNavigateToViewItem(item.id) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.large,
-                            colors = CardDefaults.elevatedCardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                            ),
-                            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .padding(horizontal = 16.dp, vertical = 14.dp)
-                                    .semantics(mergeDescendants = true) {
-                                        contentDescription =
-                                            "${title.ifEmpty { "Loading title" }}, ${category.label}. Tap to open."
-                                    },
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                FaviconImage(
-                                    url = address,
-                                    size = 36.dp,
-                                    fallback = {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .clip(RoundedCornerShape(25))
-                                                .background(category.tint.copy(alpha = 0.15f)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                category.icon,
-                                                contentDescription = null,
-                                                tint = category.tint,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    }
-                                )
-                                Spacer(Modifier.width(16.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = title.ifEmpty { "…" },
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Icon(
-                                            category.icon,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(14.dp),
-                                            tint = category.tint.copy(alpha = 0.7f)
-                                        )
-                                        Text(
-                                            text = category.label,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                                Icon(
-                                    Icons.Default.ChevronRight,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
+                    items(
+                        items = filteredItems,
+                        key = { it.id },
+                        contentType = { _ -> "vault_row" }
+                    ) { item ->
+                        val onOpenItem = remember(item.id) { { onNavigateToViewItem(item.id) } }
+                        VaultListItemRow(
+                            item = item,
+                            title = uiState.headerDisplayCache.titles[item.id] ?: "",
+                            address = uiState.headerDisplayCache.addresses[item.id] ?: "",
+                            useGoogleFavicons = uiState.useGoogleFavicons,
+                            suppressFaviconNetwork = suppressFaviconNetwork,
+                            onOpenItem = onOpenItem
+                        )
                     }
 
                     item { Spacer(Modifier.height(80.dp)) }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun VaultListItemRow(
+    item: VaultItemHeader,
+    title: String,
+    address: String,
+    useGoogleFavicons: Boolean,
+    suppressFaviconNetwork: Boolean,
+    onOpenItem: () -> Unit
+) {
+    val category = ItemCategory.fromString(item.category)
+    Surface(
+        onClick = onOpenItem,
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .semantics(mergeDescendants = true) {
+                    contentDescription =
+                        "${title.ifEmpty { "Loading title" }}, ${category.label}. Tap to open."
+                },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FaviconImage(
+                url = address,
+                useGoogleFavicons = useGoogleFavicons,
+                size = 36.dp,
+                suppressNetworkImage = suppressFaviconNetwork,
+                fallback = {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(25))
+                            .background(category.tint.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            category.icon,
+                            contentDescription = null,
+                            tint = category.tint,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            )
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title.ifEmpty { "…" },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        category.icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = category.tint.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = category.label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }

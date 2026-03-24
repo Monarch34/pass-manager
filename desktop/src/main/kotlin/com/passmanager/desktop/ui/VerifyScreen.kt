@@ -3,10 +3,12 @@ package com.passmanager.desktop.ui
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -40,8 +42,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import com.passmanager.desktop.ui.components.ThemeToggleIconButton
 
 private const val CODE_LENGTH = 6
@@ -82,14 +86,43 @@ fun VerifyScreen(
             modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
         )
 
-        Column(
-            modifier = Modifier.fillMaxSize().padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val padH = when {
+                maxWidth < 400.dp -> 16.dp
+                maxWidth < 520.dp -> 24.dp
+                else -> 32.dp
+            }
+            val padV = when {
+                maxHeight < 560.dp -> 16.dp
+                else -> 24.dp
+            }
+            val digitBoxDp = when {
+                maxWidth < 400.dp -> 44.dp
+                else -> 56.dp
+            }
+            val digitGap = when {
+                maxWidth < 420.dp -> 4.dp
+                else -> 8.dp
+            }
+            val groupGap = when {
+                maxWidth < 420.dp -> 4.dp
+                else -> 8.dp
+            }
+            val titleStyle = when {
+                maxWidth < 400.dp -> MaterialTheme.typography.headlineSmall
+                else -> MaterialTheme.typography.headlineMedium
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = padH, vertical = padV),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
         Text(
             text = Strings.VERIFY_TITLE,
-            style = MaterialTheme.typography.headlineMedium,
+            style = titleStyle,
             color = MaterialTheme.colorScheme.primary
         )
 
@@ -127,20 +160,21 @@ fun VerifyScreen(
             )
         }
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(24.dp))
 
         // 6 digit input boxes
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(digitGap),
             verticalAlignment = Alignment.CenterVertically
         ) {
             for (i in 0 until CODE_LENGTH) {
                 // Visual separator between groups of 3
                 if (i == 3) {
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(groupGap))
                 }
 
                 DigitBox(
+                    boxSize = digitBoxDp,
                     value = digits[i],
                     focusRequester = focusRequesters[i],
                     isError = error != null,
@@ -209,11 +243,17 @@ fun VerifyScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        TextButton(
-            onClick = onCancel,
-            modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
         ) {
-            Text(Strings.VERIFY_CANCEL)
+            TextButton(
+                onClick = onCancel,
+                modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+            ) {
+                Text(Strings.VERIFY_CANCEL)
+            }
+        }
         }
         }
     }
@@ -221,6 +261,7 @@ fun VerifyScreen(
 
 @Composable
 private fun DigitBox(
+    boxSize: Dp,
     value: String,
     focusRequester: FocusRequester,
     isError: Boolean,
@@ -229,6 +270,8 @@ private fun DigitBox(
     onBackspace: () -> Unit
 ) {
     val isFocused = remember { mutableStateOf(false) }
+    val innerSize = boxSize - 8.dp
+    val fontSp = ((boxSize.value * 0.42f).roundToInt()).coerceIn(18, 26).sp
 
     val borderColor = when {
         isError -> MaterialTheme.colorScheme.error
@@ -240,7 +283,7 @@ private fun DigitBox(
 
     Surface(
         modifier = Modifier
-            .size(56.dp)
+            .size(boxSize)
             .border(borderWidth, borderColor, RoundedCornerShape(12.dp)),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHighest
@@ -255,7 +298,7 @@ private fun DigitBox(
                 enabled = enabled,
                 modifier = Modifier
                     .focusRequester(focusRequester)
-                    .size(48.dp)
+                    .size(innerSize)
                     .onFocusChanged { isFocused.value = it.isFocused }
                     .onPreviewKeyEvent { event ->
                         if (event.type == KeyEventType.KeyDown && event.key == Key.Backspace) {
@@ -267,7 +310,7 @@ private fun DigitBox(
                     },
                 singleLine = true,
                 textStyle = TextStyle(
-                    fontSize = 24.sp,
+                    fontSize = fontSp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                     textAlign = TextAlign.Center,

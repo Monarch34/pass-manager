@@ -1,8 +1,11 @@
 package com.passmanager.domain.usecase
 
+import android.content.Context
+import com.passmanager.R
 import com.passmanager.crypto.channel.SecureResponse
 import com.passmanager.domain.repository.VaultRepository
 import com.passmanager.security.DesktopPairingSession
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -15,6 +18,7 @@ import javax.inject.Inject
  * W2 mitigation: uses [DecryptPasswordBytesUseCase] to extract password as ByteArray.
  */
 class SendPasswordToDesktopUseCase @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val vaultRepository: VaultRepository,
     private val decryptPasswordBytesUseCase: DecryptPasswordBytesUseCase,
     private val session: DesktopPairingSession
@@ -24,7 +28,9 @@ class SendPasswordToDesktopUseCase @Inject constructor(
      */
     suspend operator fun invoke(itemId: String): String = withContext(Dispatchers.Default) {
         if (!session.canSendPassword()) {
-            session.sendSecure(SecureResponse.RateLimited("Too many requests — try again later"))
+            session.sendSecure(
+                SecureResponse.RateLimited(context.getString(R.string.desktop_password_rate_limited))
+            )
             throw DesktopRateLimitException()
         }
 

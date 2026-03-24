@@ -4,6 +4,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,11 +15,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import com.passmanager.desktop.clipboard.ClipboardManager
+import com.passmanager.desktop.preferences.DesktopPreferences
 import com.passmanager.desktop.model.SecureRequest
 import com.passmanager.desktop.model.SecureResponse
 import com.passmanager.desktop.server.DesktopSessionManager
@@ -26,6 +29,7 @@ import com.passmanager.desktop.server.DesktopSessionState
 import com.passmanager.desktop.server.PairingServer
 import com.passmanager.desktop.ui.PairScreen
 import com.passmanager.desktop.ui.Strings
+import com.passmanager.desktop.ui.clearDesktopFaviconMemoryCaches
 import com.passmanager.desktop.ui.VaultBrowserScreen
 import com.passmanager.desktop.ui.VerifyScreen
 import com.passmanager.desktop.ui.theme.PassManagerDesktopTheme
@@ -33,6 +37,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.awt.Dimension
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import kotlin.system.exitProcess
@@ -44,6 +49,9 @@ fun main() = application {
     val server = remember { PairingServer(sessionManager, lanIp) }
     val clipboardManager = remember { ClipboardManager(scope) }
     var isDarkTheme by remember { mutableStateOf(true) }
+    var useGoogleFavicons by remember {
+        mutableStateOf(DesktopPreferences.getUseGoogleFavicons())
+    }
 
     // Reactive QR content — updates when a new session is generated
     val qrContent by server.qrContent.collectAsState()
@@ -82,9 +90,18 @@ fun main() = application {
             exitApplication()
         },
         title = Strings.APP_TITLE,
-        state = WindowState(width = 480.dp, height = 640.dp),
+        state = WindowState(width = 520.dp, height = 720.dp),
         resizable = true
     ) {
+        val density = LocalDensity.current
+        SideEffect {
+            with(density) {
+                window.minimumSize = Dimension(
+                    360.dp.roundToPx().coerceAtLeast(280),
+                    480.dp.roundToPx().coerceAtLeast(320)
+                )
+            }
+        }
         PassManagerDesktopTheme(darkTheme = isDarkTheme) {
             // Compose Desktop does not paint Material background on the window by default.
             Surface(
@@ -99,6 +116,22 @@ fun main() = application {
                     clipboardManager = clipboardManager,
                     isDarkTheme = isDarkTheme,
                     onToggleTheme = { isDarkTheme = !isDarkTheme },
+                    useGoogleFavicons = useGoogleFavicons,
+                    onFaviconSourceChange = { useGoogle ->
+                        if (useGoogle != useGoogleFavicons) {
+                            clearDesktopFaviconMemoryCaches()
+                            useGoogleFavicons = useGoogle
+                            DesktopPreferences.setUseGoogleFavicons(useGoogle)
+                        }
+                    },
+                    onRefreshVaultList = {
+                        scope.launch {
+                            val sent = server.sendToPhone(SecureRequest.ListItems)
+                            if (!sent) {
+                                sessionManager.setClipboardStatus(Strings.NOT_CONNECTED)
+                            }
+                        }
+                    },
                     onRequestPassword = { itemId ->
                         scope.launch {
                             val sent = server.sendToPhone(SecureRequest.GetPassword(itemId))
@@ -148,6 +181,9 @@ private fun AppContent(
     clipboardManager: ClipboardManager,
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
+    useGoogleFavicons: Boolean,
+    onFaviconSourceChange: (useGoogle: Boolean) -> Unit,
+    onRefreshVaultList: () -> Unit,
     onRequestPassword: (String) -> Unit,
     onDisconnect: () -> Unit,
     onCodeSubmitted: (String) -> Unit,
@@ -192,7 +228,10 @@ private fun AppContent(
                     onCopyPassword = onRequestPassword,
                     onDisconnect = onDisconnect,
                     isDarkTheme = isDarkTheme,
-                    onToggleTheme = onToggleTheme
+                    onToggleTheme = onToggleTheme,
+                    useGoogleFavicons = useGoogleFavicons,
+                    onFaviconSourceChange = onFaviconSourceChange,
+                    onRefreshVault = onRefreshVaultList
                 )
             }
             is DesktopSessionState.Disconnected -> {
@@ -249,7 +288,10 @@ private suspend fun handlePhoneResponse(
             sessionManager.setClipboardStatus(Strings.ERROR_GENERIC)
         }
         is SecureResponse.RateLimited -> {
-            sessionManager.setClipboardStatus(Strings.RATE_LIMITED)
+            val msg = response.message.trim()
+            sessionManager.setClipboardStatus(
+                if (msg.isNotEmpty()) msg else Strings.RATE_LIMITED_FALLBACK
+            )
         }
     }
 }

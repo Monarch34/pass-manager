@@ -1,12 +1,17 @@
 package com.passmanager.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -15,7 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImagePainter
+import coil.compose.rememberAsyncImagePainter
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.size.Dimension
@@ -38,23 +44,36 @@ private fun extractDomain(url: String): String? {
     }
 }
 
+@Composable
+private fun FaviconPlaceholder(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(25))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+        content = {}
+    )
+}
+
 /**
  * Loads a site favicon for display next to vault items.
  *
- * **Resolution strategy**
- * 1. **Primary:** Google’s favicon service (`/s2/favicons?domain=…&sz=128`) — usually higher quality
- *    and more reliable than fetching `/favicon.ico` alone.
- * 2. **Fallback:** Direct `https://{domain}/favicon.ico` when the primary load fails.
- * 3. **Last resort:** [fallback] composable when the domain is missing or both loads fail.
+ * When [useGoogleFavicons] is true: tries Google’s favicon service first, then
+ * `https://{domain}/favicon.ico`. When false: only the direct URL (no third party).
+ * If loading fails, [fallback] is shown.
  *
- * Note: The primary step sends the domain hostname to Google’s service; use only if that trade-off
- * is acceptable for your threat model.
+ * Uses [rememberAsyncImagePainter] instead of nested [SubcomposeAsyncImage] to cut
+ * main-thread subcomposition cost when many rows are visible.
+ *
+ * @param suppressNetworkImage When true, skips Coil and shows [fallback] (e.g. while a list is scrolling).
  */
 @Composable
 fun FaviconImage(
     url: String,
+    useGoogleFavicons: Boolean,
     modifier: Modifier = Modifier,
     size: Dp = 30.dp,
+    suppressNetworkImage: Boolean = false,
     fallback: @Composable () -> Unit
 ) {
     val domain = remember(url) { extractDomain(url.trim()) }
@@ -64,8 +83,13 @@ fun FaviconImage(
         return
     }
 
+    if (suppressNetworkImage) {
+        fallback()
+        return
+    }
+
     val primaryUrl = remember(domain) {
-        "https://www.google.com/s2/favicons?domain=$domain&sz=128"
+        "https://www.google.com/s2/favicons?domain=$domain&sz=64"
     }
     val directIcoUrl = remember(domain) {
         "https://$domain/favicon.ico"
@@ -74,65 +98,60 @@ fun FaviconImage(
     val context = LocalContext.current
     val density = LocalDensity.current
     val decodePx = remember(size, density) {
-        with(density) { size.roundToPx().coerceAtLeast(32) }
+        with(density) { size.roundToPx().coerceIn(32, 96) }
+    }
+    val coilSize = remember(decodePx) {
+        Size(Dimension.Pixels(decodePx), Dimension.Pixels(decodePx))
     }
 
-    val primaryRequest = remember(primaryUrl, decodePx) {
+    var tryDirectOnly by remember(domain, useGoogleFavicons) {
+        mutableStateOf(!useGoogleFavicons)
+    }
+
+    val dataUrl = if (tryDirectOnly) directIcoUrl else primaryUrl
+    val request = remember(dataUrl, coilSize) {
         ImageRequest.Builder(context)
-            .data(primaryUrl)
-            .size(Size(Dimension.Pixels(decodePx), Dimension.Pixels(decodePx)))
+            .data(dataUrl)
+            .size(coilSize)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
             .crossfade(false)
             .build()
     }
-    val fallbackRequest = remember(directIcoUrl, decodePx) {
-        ImageRequest.Builder(context)
-            .data(directIcoUrl)
-            .size(Size(Dimension.Pixels(decodePx), Dimension.Pixels(decodePx)))
-            .memoryCachePolicy(CachePolicy.ENABLED)
-            .diskCachePolicy(CachePolicy.ENABLED)
-            .crossfade(false)
-            .build()
+
+    val painter = rememberAsyncImagePainter(model = request)
+
+    LaunchedEffect(painter.state, useGoogleFavicons, tryDirectOnly) {
+        if (useGoogleFavicons &&
+            !tryDirectOnly &&
+            painter.state is AsyncImagePainter.State.Error
+        ) {
+            tryDirectOnly = true
+        }
     }
 
-    SubcomposeAsyncImage(
-        model = primaryRequest,
-        contentDescription = "$domain favicon",
-        contentScale = ContentScale.Fit,
-        modifier = modifier
-            .size(size)
-            .clip(RoundedCornerShape(25)),
-        loading = {
-            Box(
-                modifier = Modifier
-                    .size(size)
-                    .clip(RoundedCornerShape(25))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center,
-                content = {}
-            )
-        },
-        error = {
-            SubcomposeAsyncImage(
-                model = fallbackRequest,
+    val clipMod = modifier
+        .size(size)
+        .clip(RoundedCornerShape(25))
+
+    when (val state = painter.state) {
+        is AsyncImagePainter.State.Success -> {
+            Image(
+                painter = painter,
                 contentDescription = "$domain favicon",
                 contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .size(size)
-                    .clip(RoundedCornerShape(25)),
-                loading = {
-                    Box(
-                        modifier = Modifier
-                            .size(size)
-                            .clip(RoundedCornerShape(25))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center,
-                        content = {}
-                    )
-                },
-                error = { fallback() }
+                modifier = clipMod
             )
         }
-    )
+        is AsyncImagePainter.State.Error -> {
+            if (tryDirectOnly || !useGoogleFavicons) {
+                fallback()
+            } else {
+                FaviconPlaceholder(clipMod)
+            }
+        }
+        else -> {
+            FaviconPlaceholder(clipMod)
+        }
+    }
 }

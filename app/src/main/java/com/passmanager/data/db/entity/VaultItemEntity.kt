@@ -7,7 +7,11 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "vault_items",
-    indices = [Index(value = ["updated_at"])]
+    indices = [
+        Index(value = ["updated_at"]),
+        Index(value = ["category"]),
+        Index(value = ["category", "updated_at"])
+    ]
 )
 data class VaultItemEntity(
     @PrimaryKey
@@ -44,12 +48,17 @@ data class VaultItemEntity(
     @ColumnInfo(name = "address_iv", typeAffinity = ColumnInfo.BLOB)
     val addressIv: ByteArray? = null
 ) {
+    /**
+     * Equality based on metadata fields only.  The large encrypted-data blob
+     * changes only when the item is saved, which also bumps [updatedAt], so
+     * comparing id + updatedAt + keyVersion + category + header blobs is
+     * sufficient for Room's Flow-based change detection while avoiding the
+     * cost of comparing multi-KB encrypted payloads on every query emission.
+     */
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is VaultItemEntity) return false
         return id == other.id &&
-            encryptedData.contentEquals(other.encryptedData) &&
-            dataIv.contentEquals(other.dataIv) &&
             keyVersion == other.keyVersion &&
             createdAt == other.createdAt &&
             updatedAt == other.updatedAt &&
@@ -62,16 +71,10 @@ data class VaultItemEntity(
 
     override fun hashCode(): Int {
         var result = id.hashCode()
-        result = 31 * result + encryptedData.contentHashCode()
-        result = 31 * result + dataIv.contentHashCode()
         result = 31 * result + keyVersion
         result = 31 * result + createdAt.hashCode()
         result = 31 * result + updatedAt.hashCode()
         result = 31 * result + category.hashCode()
-        result = 31 * result + (encryptedTitle?.contentHashCode() ?: 0)
-        result = 31 * result + (titleIv?.contentHashCode() ?: 0)
-        result = 31 * result + (encryptedAddress?.contentHashCode() ?: 0)
-        result = 31 * result + (addressIv?.contentHashCode() ?: 0)
         return result
     }
 

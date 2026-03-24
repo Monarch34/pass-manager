@@ -30,6 +30,7 @@ data class SettingsUiState(
     val biometricEnabled: Boolean = false,
     val biometricAvailableOnDevice: Boolean = false,
     val autoLockSeconds: Int = AppPreferences.DEFAULT_AUTO_LOCK_SECONDS,
+    val useGoogleFavicons: Boolean = AppPreferences.DEFAULT_USE_GOOGLE_FAVICONS,
     val error: UserMessage? = null,
     val showChangePassphraseSheet: Boolean = false,
     val isPassphraseChanging: Boolean = false,
@@ -65,6 +66,9 @@ class SettingsViewModel @Inject constructor(
         }
         appPreferences.autoLockTimeoutSeconds
             .onEach { seconds -> _uiState.update { it.copy(autoLockSeconds = seconds) } }
+            .launchIn(viewModelScope)
+        appPreferences.useGoogleFavicons
+            .onEach { useGoogle -> _uiState.update { it.copy(useGoogleFavicons = useGoogle) } }
             .launchIn(viewModelScope)
     }
 
@@ -123,6 +127,12 @@ class SettingsViewModel @Inject constructor(
     fun setAutoLockTimeout(seconds: Int) {
         viewModelScope.launch {
             appPreferences.setAutoLockTimeout(seconds)
+        }
+    }
+
+    fun setUseGoogleFavicons(enabled: Boolean) {
+        viewModelScope.launch {
+            appPreferences.setUseGoogleFavicons(enabled)
         }
     }
 

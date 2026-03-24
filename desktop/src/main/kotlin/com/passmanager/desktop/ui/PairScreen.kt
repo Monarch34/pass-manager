@@ -2,6 +2,7 @@ package com.passmanager.desktop.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.passmanager.desktop.ui.components.AppShieldLogo
@@ -32,6 +34,7 @@ fun PairScreen(
     onToggleTheme: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val density = LocalDensity.current
     Box(modifier = modifier.fillMaxSize()) {
         ThemeToggleIconButton(
             isDarkTheme = isDarkTheme,
@@ -39,18 +42,43 @@ fun PairScreen(
             modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
         )
 
-        Column(
-            modifier = Modifier.fillMaxSize().padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize()
         ) {
-            AppShieldLogo(size = 64.dp)
+            val padH = when {
+                maxWidth < 400.dp -> 16.dp
+                maxWidth < 560.dp -> 24.dp
+                else -> 32.dp
+            }
+            val padV = when {
+                maxHeight < 520.dp -> 16.dp
+                else -> 24.dp
+            }
+            val logoSize = when {
+                maxHeight < 560.dp -> 48.dp
+                else -> 64.dp
+            }
+            val titleStyle = when {
+                maxWidth < 400.dp -> MaterialTheme.typography.headlineSmall
+                else -> MaterialTheme.typography.headlineMedium
+            }
+            val qrSizeDp = (maxWidth - padH * 2).coerceIn(160.dp, 280.dp)
+            val qrPx = with(density) { qrSizeDp.roundToPx().coerceIn(120, 512) }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = padH, vertical = padV),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+            AppShieldLogo(size = logoSize)
 
             Spacer(Modifier.height(16.dp))
 
             Text(
                 text = Strings.APP_TITLE,
-                style = MaterialTheme.typography.headlineMedium,
+                style = titleStyle,
                 color = MaterialTheme.colorScheme.primary
             )
 
@@ -63,17 +91,17 @@ fun PairScreen(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(24.dp))
 
             if (qrContent.isNotBlank()) {
                 QrCodeImage(
                     content = qrContent,
-                    size = 280,
-                    modifier = Modifier.size(280.dp)
+                    size = qrPx,
+                    modifier = Modifier.size(qrSizeDp)
                 )
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
 
             Text(
                 text = Strings.serverAddress(lanIp, port),
@@ -107,6 +135,7 @@ fun PairScreen(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.outline
             )
+            }
         }
     }
 }

@@ -30,6 +30,17 @@ class DesktopPairingSessionTest {
     }
 
     @Test
+    fun `vault list refresh from desktop is rate limited while active`() {
+        assertFalse(session.canAcceptVaultListRequestFromDesktop())
+        activateSessionForTest()
+        assertTrue(session.canAcceptVaultListRequestFromDesktop())
+        session.recordVaultListRequestFromDesktop()
+        assertFalse(session.canAcceptVaultListRequestFromDesktop())
+        setLastVaultListRequestFromDesktopMsForTest(0L)
+        assertTrue(session.canAcceptVaultListRequestFromDesktop())
+    }
+
+    @Test
     fun `rate limiter enforces cooldown between passwords`() {
         activateSessionForTest()
         session.recordPasswordSent("Item1")
@@ -85,6 +96,12 @@ class DesktopPairingSessionTest {
 
     private fun setLastPasswordRequestTimeMsForTest(value: Long) {
         val field = DesktopPairingSession::class.java.getDeclaredField("lastPasswordRequestTimeMs")
+        field.isAccessible = true
+        field.setLong(session, value)
+    }
+
+    private fun setLastVaultListRequestFromDesktopMsForTest(value: Long) {
+        val field = DesktopPairingSession::class.java.getDeclaredField("lastVaultListRequestFromDesktopMs")
         field.isAccessible = true
         field.setLong(session, value)
     }

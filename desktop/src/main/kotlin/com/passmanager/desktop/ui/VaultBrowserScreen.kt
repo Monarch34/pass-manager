@@ -1,19 +1,27 @@
 package com.passmanager.desktop.ui
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.ScrollbarStyle
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,6 +31,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -51,11 +60,15 @@ import com.passmanager.desktop.ui.theme.CategoryCardTint
 import com.passmanager.desktop.ui.theme.CategoryIdentityTint
 import com.passmanager.desktop.ui.theme.CategoryLoginTint
 import com.passmanager.desktop.ui.theme.CategoryNoteTint
+import com.passmanager.desktop.ui.components.FaviconSourceSection
 import com.passmanager.desktop.ui.components.ThemeToggleIconButton
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.net.URI
-import java.util.concurrent.ConcurrentHashMap
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import javax.imageio.ImageIO
 
 @Composable
@@ -66,103 +79,223 @@ fun VaultBrowserScreen(
     onDisconnect: () -> Unit,
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
+    useGoogleFavicons: Boolean,
+    onFaviconSourceChange: (useGoogle: Boolean) -> Unit,
+    onRefreshVault: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier.fillMaxSize().padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(8.dp)
-                ) {}
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = Strings.CONNECTED,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            ThemeToggleIconButton(
-                isDarkTheme = isDarkTheme,
-                onToggleTheme = onToggleTheme
-            )
+    val listState = rememberLazyListState()
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val horizontalPad = when {
+            maxWidth < 360.dp -> 12.dp
+            maxWidth < 520.dp -> 16.dp
+            else -> 20.dp
+        }
+        val verticalPad = when {
+            maxHeight < 520.dp -> 10.dp
+            else -> 16.dp
+        }
+        val scrollbarGutter = when {
+            maxWidth < 380.dp -> 10.dp
+            else -> 16.dp
         }
 
-        clipboardStatus?.let { status ->
-            Spacer(Modifier.height(8.dp))
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.secondaryContainer
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = horizontalPad, vertical = verticalPad)
+        ) {
+        // Pinned header — does not scroll with vault list
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 2.dp,
+            shadowElevation = 1.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Row(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(8.dp)
+                    ) {}
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = Strings.CONNECTED,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    IconButton(onClick = onRefreshVault) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = Strings.REFRESH_VAULT_LIST,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    ThemeToggleIconButton(
+                        isDarkTheme = isDarkTheme,
+                        onToggleTheme = onToggleTheme
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.Top
+        ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            ) {
+        if (clipboardStatus != null) {
+            item(key = "clipboard") {
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Text(
+                        text = clipboardStatus,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        }
+
+        item(key = "spacer_main") {
+            Spacer(Modifier.height(12.dp))
+        }
+
+        if (items.isEmpty()) {
+            item(key = "empty_state") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 120.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Default.Key,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = Strings.WAITING_FOR_ITEMS,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            item(key = "favicon_when_empty") {
+                Spacer(Modifier.height(8.dp))
+                FaviconSourceSection(
+                    useGoogleFavicons = useGoogleFavicons,
+                    onSelectPrivate = {
+                        if (useGoogleFavicons) onFaviconSourceChange(false)
+                    },
+                    onSelectGoogle = {
+                        if (!useGoogleFavicons) onFaviconSourceChange(true)
+                    },
+                    compact = true
+                )
+            }
+        } else {
+            item(key = "item_count_and_favicon") {
                 Text(
-                    text = status,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    text = Strings.itemCount(items.size),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                FaviconSourceSection(
+                    useGoogleFavicons = useGoogleFavicons,
+                    onSelectPrivate = {
+                        if (useGoogleFavicons) onFaviconSourceChange(false)
+                    },
+                    onSelectGoogle = {
+                        if (!useGoogleFavicons) onFaviconSourceChange(true)
+                    },
+                    compact = true
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+            items(items, key = { it.id }) { item ->
+                VaultItemRow(
+                    item = item,
+                    onCopy = { onCopyPassword(item.id) },
+                    useGoogleFavicons = useGoogleFavicons
+                )
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                )
+            }
+        }
+            }
+
+            Spacer(Modifier.width(scrollbarGutter))
+
+            // Scroll track + thumb (wide enough to grab easily)
+            Surface(
+                modifier = Modifier
+                    .width(20.dp)
+                    .fillMaxHeight()
+                    .padding(vertical = 10.dp, horizontal = 2.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                tonalElevation = 0.dp
+            ) {
+                val thumbIdle = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f)
+                val thumbHover = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                VerticalScrollbar(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(horizontal = 4.dp, vertical = 8.dp),
+                    adapter = rememberScrollbarAdapter(listState),
+                    style = ScrollbarStyle(
+                        minimalHeight = 36.dp,
+                        thickness = 10.dp,
+                        shape = RoundedCornerShape(5.dp),
+                        hoverDurationMillis = 250,
+                        unhoverColor = thumbIdle,
+                        hoverColor = thumbHover
+                    )
                 )
             }
         }
 
         Spacer(Modifier.height(12.dp))
-
-        if (items.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.Key,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = Strings.WAITING_FOR_ITEMS,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        } else {
-            Text(
-                text = Strings.itemCount(items.size),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(8.dp))
-
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(1.dp)
-            ) {
-                items(items, key = { it.id }) { item ->
-                    VaultItemRow(
-                        item = item,
-                        onCopy = { onCopyPassword(item.id) }
-                    )
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
 
         OutlinedButton(
             onClick = onDisconnect,
@@ -179,13 +312,15 @@ fun VaultBrowserScreen(
             Spacer(Modifier.width(8.dp))
             Text(Strings.DISCONNECT)
         }
+        }
     }
 }
 
 @Composable
 private fun VaultItemRow(
     item: ItemSummary,
-    onCopy: () -> Unit
+    onCopy: () -> Unit,
+    useGoogleFavicons: Boolean
 ) {
     val categoryTint = categoryTintColor(item.category)
     val categoryIcon = categoryIcon(item.category)
@@ -201,17 +336,26 @@ private fun VaultItemRow(
         if (domain != null) {
             FaviconIcon(
                 domain = domain,
+                useGoogleFavicons = useGoogleFavicons,
                 fallbackIcon = categoryIcon,
                 fallbackTint = categoryTint,
                 modifier = Modifier.size(30.dp)
             )
         } else {
-            Icon(
-                categoryIcon,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = categoryTint
-            )
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(categoryTint.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    categoryIcon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = categoryTint
+                )
+            }
         }
 
         Spacer(Modifier.width(12.dp))
@@ -247,25 +391,89 @@ private fun VaultItemRow(
 
 // ── Favicon loading with cache ──────────────────────────────────────────
 //
-// Fetches /favicon.ico directly from the site — no third-party involved,
-// preserving user privacy. Falls back to a letter avatar if unavailable.
+// Private mode: only `https://domain/favicon.ico`. Optional Google s2 (user toggle)
+// matches Android for better coverage; domain is sent to Google in that mode.
+//
+// Quick wins: bounded LRU cache, limited concurrent loads, smaller Google sz=.
 
-private val faviconCache = ConcurrentHashMap<String, ImageBitmap?>()
+private const val MAX_FAVICON_CACHE_ENTRIES = 128
+private const val MAX_CONCURRENT_FAVICON_LOADS = 4
+
+private val faviconLoadSemaphore = Semaphore(MAX_CONCURRENT_FAVICON_LOADS)
+
+private val faviconStoreLock = Any()
+private val faviconCacheLru = object : LinkedHashMap<String, ImageBitmap>(MAX_FAVICON_CACHE_ENTRIES, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap>): Boolean =
+        size > MAX_FAVICON_CACHE_ENTRIES
+}
+
+/** Domains we already tried; favicon was null or failed. */
+private val faviconMissDomains = HashSet<String>()
+
+private fun faviconCacheGet(key: String): ImageBitmap? = synchronized(faviconStoreLock) {
+    faviconCacheLru[key]
+}
+
+private fun faviconCachePut(key: String, bitmap: ImageBitmap) {
+    synchronized(faviconStoreLock) {
+        faviconCacheLru[key] = bitmap
+    }
+}
+
+private fun faviconMissContains(key: String): Boolean = synchronized(faviconStoreLock) {
+    faviconMissDomains.contains(key)
+}
+
+private fun faviconMissAdd(key: String) {
+    synchronized(faviconStoreLock) {
+        faviconMissDomains.add(key)
+    }
+}
+
+/** Clears in-memory favicon caches when the user changes favicon policy. */
+internal fun clearDesktopFaviconMemoryCaches() {
+    synchronized(faviconStoreLock) {
+        faviconCacheLru.clear()
+        faviconMissDomains.clear()
+    }
+}
 
 @Composable
 private fun FaviconIcon(
     domain: String,
+    useGoogleFavicons: Boolean,
     fallbackIcon: ImageVector,
     fallbackTint: Color,
     modifier: Modifier = Modifier
 ) {
-    val bitmapState = remember(domain) { mutableStateOf(faviconCache[domain]) }
-    val loaded = remember(domain) { mutableStateOf(faviconCache.containsKey(domain)) }
+    val cacheKey = remember(domain, useGoogleFavicons) { cacheKeyFor(domain, useGoogleFavicons) }
+    val cached = remember(cacheKey) { faviconCacheGet(cacheKey) }
+    val bitmapState = remember(cacheKey) { mutableStateOf(cached) }
+    val loaded = remember(cacheKey) {
+        mutableStateOf(cached != null || faviconMissContains(cacheKey))
+    }
 
-    LaunchedEffect(domain) {
+    LaunchedEffect(cacheKey) {
+        faviconCacheGet(cacheKey)?.let { hit ->
+            bitmapState.value = hit
+            loaded.value = true
+            return@LaunchedEffect
+        }
+        if (faviconMissContains(cacheKey)) {
+            loaded.value = true
+            return@LaunchedEffect
+        }
         if (!loaded.value) {
-            val bitmap = withContext(Dispatchers.IO) { loadFavicon(domain) }
-            faviconCache[domain] = bitmap
+            val bitmap = faviconLoadSemaphore.withPermit {
+                withContext(Dispatchers.IO) {
+                    faviconCacheGet(cacheKey) ?: loadFavicon(domain, useGoogleFavicons)
+                }
+            }
+            if (bitmap != null) {
+                faviconCachePut(cacheKey, bitmap)
+            } else {
+                faviconMissAdd(cacheKey)
+            }
             bitmapState.value = bitmap
             loaded.value = true
         }
@@ -296,13 +504,44 @@ private fun FaviconIcon(
     }
 }
 
+private fun cacheKeyFor(domain: String, useGoogle: Boolean): String =
+    "$domain|${if (useGoogle) "g" else "p"}"
+
 /**
- * Fetches /favicon.ico directly from the domain over HTTPS.
- * No third-party service is contacted — only the site itself.
+ * When [useGoogleResolver] is true, tries Google s2 first (same as Android), then direct ICO.
+ * When false, only `https://domain/favicon.ico` — no third party.
  */
-private fun loadFavicon(domain: String): ImageBitmap? {
+private fun loadFavicon(domain: String, useGoogleResolver: Boolean): ImageBitmap? {
+    if (useGoogleResolver) {
+        loadFaviconFromGoogle(domain)?.let { return it }
+    }
+    return loadFaviconDirect(domain)
+}
+
+private fun loadFaviconFromGoogle(domain: String): ImageBitmap? {
+    return try {
+        val enc = URLEncoder.encode(domain, StandardCharsets.UTF_8)
+        val url = URI("https://www.google.com/s2/favicons?domain=$enc&sz=64").toURL()
+        openAndDecodeFavicon(url)
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/**
+ * Fetches /favicon.ico directly from the domain over HTTPS (private mode).
+ */
+private fun loadFaviconDirect(domain: String): ImageBitmap? {
     return try {
         val url = URI("https://$domain/favicon.ico").toURL()
+        openAndDecodeFavicon(url)
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun openAndDecodeFavicon(url: java.net.URL): ImageBitmap? {
+    return try {
         val conn = url.openConnection()
         conn.connectTimeout = 3000
         conn.readTimeout = 3000
@@ -323,41 +562,45 @@ private fun LetterAvatar(letter: Char, tint: Color, modifier: Modifier = Modifie
         shape = RoundedCornerShape(6.dp),
         color = tint.copy(alpha = 0.15f)
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             Text(
                 text = letter.toString(),
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = tint
-                )
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = tint,
+                fontSize = 14.sp
             )
         }
     }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────
-
 private fun extractDomain(url: String): String? {
-    if (url.isBlank()) return null
+    val trimmed = url.trim()
+    if (trimmed.isEmpty()) return null
+    val normalized = when {
+        trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+        trimmed.contains(".") -> "https://$trimmed"
+        else -> return null
+    }
     return try {
-        val withScheme = if (url.startsWith("http")) url else "https://$url"
-        URI(withScheme).host?.removePrefix("www.")
+        URI(normalized).host?.removePrefix("www.")
     } catch (_: Exception) {
         null
     }
 }
 
-private fun categoryTintColor(category: String): Color = when (category) {
+private fun categoryTintColor(category: String): Color = when (category.lowercase()) {
     "login" -> CategoryLoginTint
     "card" -> CategoryCardTint
-    "note" -> CategoryNoteTint
     "identity" -> CategoryIdentityTint
+    "note" -> CategoryNoteTint
     else -> CategoryLoginTint
 }
 
-private fun categoryIcon(category: String): ImageVector = when (category) {
+private fun categoryIcon(category: String): ImageVector = when (category.lowercase()) {
+    "login" -> Icons.Default.Person
     "card" -> Icons.Default.CreditCard
-    "note" -> Icons.AutoMirrored.Filled.Note
     "identity" -> Icons.Default.Person
+    "note" -> Icons.AutoMirrored.Filled.Note
     else -> Icons.Default.Key
 }

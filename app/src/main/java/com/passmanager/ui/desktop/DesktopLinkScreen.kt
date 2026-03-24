@@ -465,78 +465,6 @@ private fun QrScannerContent(viewModel: DesktopLinkViewModel) {
     val frameInFlight = remember { AtomicBoolean(false) }
     val qrCaptured = remember { AtomicBoolean(false) }
 
-    AnimatedVisibility(visible = true, enter = fadeIn(), exit = fadeOut()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(350.dp)
-        ) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { ctx ->
-                    val previewView = PreviewView(ctx)
-                    val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-
-                    cameraProviderFuture.addListener({
-                        val cameraProvider = cameraProviderFuture.get()
-
-                        val preview = Preview.Builder().build().also {
-                            it.setSurfaceProvider(previewView.surfaceProvider)
-                        }
-
-                        val analysis = ImageAnalysis.Builder()
-                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                            .build()
-
-                        analysis.setAnalyzer(executor) { imageProxy ->
-                            if (qrCaptured.get()) {
-                                imageProxy.close()
-                                return@setAnalyzer
-                            }
-                            if (!frameInFlight.compareAndSet(false, true)) {
-                                imageProxy.close()
-                                return@setAnalyzer
-                            }
-                            val mediaImage = imageProxy.image ?: run {
-                                frameInFlight.set(false)
-                                imageProxy.close()
-                                return@setAnalyzer
-                            }
-                            val inputImage = InputImage.fromMediaImage(
-                                mediaImage, imageProxy.imageInfo.rotationDegrees
-                            )
-                            scanner.process(inputImage)
-                                .addOnSuccessListener { barcodes ->
-                                    for (barcode in barcodes) {
-                                        if (barcode.format == Barcode.FORMAT_QR_CODE) {
-                                            barcode.rawValue?.let { raw ->
-                                                qrCaptured.set(true)
-                                                viewModel.onQrCodeScanned(raw)
-                                            }
-                                        }
-                                    }
-                                }
-                                .addOnCompleteListener {
-                                    frameInFlight.set(false)
-                                    imageProxy.close()
-                                }
-                        }
-
-                        try {
-                            cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(
-                                lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA,
-                                preview, analysis
-                            )
-                        } catch (_: Exception) { }
-                    }, ContextCompat.getMainExecutor(ctx))
-
-                    previewView
-                }
-            )
-        }
-    }
-
     DisposableEffect(Unit) {
         onDispose {
             scanner.close()
@@ -544,10 +472,91 @@ private fun QrScannerContent(viewModel: DesktopLinkViewModel) {
         }
     }
 
-    TextButton(
-        onClick = { viewModel.stopScanning() },
-        modifier = Modifier.fillMaxWidth()
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(stringResource(R.string.cancel))
+        AnimatedVisibility(visible = true, enter = fadeIn(), exit = fadeOut()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(350.dp)
+            ) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { ctx ->
+                        val previewView = PreviewView(ctx)
+                        val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+
+                        cameraProviderFuture.addListener({
+                            val cameraProvider = cameraProviderFuture.get()
+
+                            val preview = Preview.Builder().build().also {
+                                it.setSurfaceProvider(previewView.surfaceProvider)
+                            }
+
+                            val analysis = ImageAnalysis.Builder()
+                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                .build()
+
+                            analysis.setAnalyzer(executor) { imageProxy ->
+                                if (qrCaptured.get()) {
+                                    imageProxy.close()
+                                    return@setAnalyzer
+                                }
+                                if (!frameInFlight.compareAndSet(false, true)) {
+                                    imageProxy.close()
+                                    return@setAnalyzer
+                                }
+                                val mediaImage = imageProxy.image ?: run {
+                                    frameInFlight.set(false)
+                                    imageProxy.close()
+                                    return@setAnalyzer
+                                }
+                                val inputImage = InputImage.fromMediaImage(
+                                    mediaImage, imageProxy.imageInfo.rotationDegrees
+                                )
+                                scanner.process(inputImage)
+                                    .addOnSuccessListener { barcodes ->
+                                        for (barcode in barcodes) {
+                                            if (barcode.format == Barcode.FORMAT_QR_CODE) {
+                                                barcode.rawValue?.let { raw ->
+                                                    qrCaptured.set(true)
+                                                    viewModel.onQrCodeScanned(raw)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    .addOnCompleteListener {
+                                        frameInFlight.set(false)
+                                        imageProxy.close()
+                                    }
+                            }
+
+                            try {
+                                cameraProvider.unbindAll()
+                                cameraProvider.bindToLifecycle(
+                                    lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA,
+                                    preview, analysis
+                                )
+                            } catch (_: Exception) { }
+                        }, ContextCompat.getMainExecutor(ctx))
+
+                        previewView
+                    }
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            TextButton(onClick = { viewModel.stopScanning() }) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
     }
 }

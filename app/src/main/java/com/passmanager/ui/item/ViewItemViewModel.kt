@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.passmanager.R
+import com.passmanager.data.preferences.AppPreferences
 import com.passmanager.domain.model.DecryptedVaultItem
 import com.passmanager.domain.usecase.DecryptItemUseCase
 import com.passmanager.domain.repository.VaultRepository
@@ -13,6 +14,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -23,13 +27,15 @@ data class ViewItemUiState(
     val isLoading: Boolean = true,
     val error: UserMessage? = null,
     val isDeleted: Boolean = false,
-    val passwordVisible: Boolean = false
+    val passwordVisible: Boolean = false,
+    val useGoogleFavicons: Boolean = AppPreferences.DEFAULT_USE_GOOGLE_FAVICONS
 )
 
 @HiltViewModel
 class ViewItemViewModel @Inject constructor(
     private val decryptItemUseCase: DecryptItemUseCase,
     private val vaultRepository: VaultRepository,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ViewItemUiState())
@@ -37,6 +43,12 @@ class ViewItemViewModel @Inject constructor(
 
     private var observeJob: Job? = null
     private var currentItemId: String = ""
+
+    init {
+        appPreferences.useGoogleFavicons
+            .onEach { useGoogle -> _uiState.update { it.copy(useGoogleFavicons = useGoogle) } }
+            .launchIn(viewModelScope)
+    }
 
     fun loadForItem(itemId: String) {
         if (itemId.isBlank()) return

@@ -13,6 +13,7 @@ import com.passmanager.crypto.channel.PairingQrPayload
 import com.passmanager.crypto.channel.SecureRequest
 import com.passmanager.crypto.channel.SecureResponse
 import com.passmanager.domain.usecase.ConnectToDesktopUseCase
+import com.passmanager.domain.usecase.DesktopRateLimitException
 import com.passmanager.domain.usecase.SendItemListToDesktopUseCase
 import com.passmanager.domain.usecase.SendPasswordToDesktopUseCase
 import com.passmanager.security.DesktopPairingSession
@@ -201,6 +202,8 @@ class DesktopLinkViewModel @Inject constructor(
                 try {
                     val title = sendPasswordToDesktopUseCase(request.itemId)
                     showPasswordNotification(title)
+                } catch (_: DesktopRateLimitException) {
+                    // [SecureResponse.RateLimited] already sent — do not send [Error] or desktop shows a false "bug".
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to send password", e)
                     sendErrorSafely(
@@ -213,7 +216,24 @@ class DesktopLinkViewModel @Inject constructor(
                 }
             }
             is SecureRequest.ListItems -> {
-                sendItemListToDesktopUseCase()
+                if (!pairingSession.canAcceptVaultListRequestFromDesktop()) {
+                    pairingSession.sendSecure(
+                        SecureResponse.RateLimited(
+                            appContext.getString(R.string.desktop_rate_limited_list_refresh)
+                        )
+                    )
+                    return
+                }
+                pairingSession.recordVaultListRequestFromDesktop()
+                try {
+                    sendItemListToDesktopUseCase()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to send item list", e)
+                    sendErrorSafely(
+                        appContext.getString(R.string.desktop_error_list_refresh_failed),
+                        "sending item list refresh error"
+                    )
+                }
             }
             is SecureRequest.Heartbeat -> {
                 pairingSession.respondToHeartbeat()

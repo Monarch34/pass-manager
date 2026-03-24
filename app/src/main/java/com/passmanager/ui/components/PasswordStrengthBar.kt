@@ -71,13 +71,19 @@ fun PasswordStrengthBar(
     if (debounced.isEmpty()) return
 
     val strength = remember(debounced) { computeStrength(debounced) }
-    val strengthLabels = listOf(
-        stringResource(R.string.strength_weak),
-        stringResource(R.string.strength_fair),
-        stringResource(R.string.strength_good),
-        stringResource(R.string.strength_strong)
-    )
-    val colors = strengthColors()
+    val weakLabel = stringResource(R.string.strength_weak)
+    val fairLabel = stringResource(R.string.strength_fair)
+    val goodLabel = stringResource(R.string.strength_good)
+    val strongLabel = stringResource(R.string.strength_strong)
+    val strengthLabels = remember(weakLabel, fairLabel, goodLabel, strongLabel) {
+        listOf(weakLabel, fairLabel, goodLabel, strongLabel)
+    }
+    val errorColor = MaterialTheme.colorScheme.error
+    val tertiaryColor = MaterialTheme.colorScheme.tertiary
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val colors = remember(errorColor, tertiaryColor, primaryColor) {
+        listOf(errorColor, StrengthFairColor, tertiaryColor, primaryColor)
+    }
     val active = colors[strength - 1]
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
 

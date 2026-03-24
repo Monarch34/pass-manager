@@ -33,7 +33,13 @@
     <string name="vault_empty_hint">Tap + to add your first</string>
     <string name="vault_no_results">No results for \"%1$s\"</string>
     <string name="vault_empty_message">No items yet. Tap + to add one.</string>
-    <string name="vault_search_hint">Search vault…</string>
+    <string name="vault_search_hint">Search title, URL, or group…</string>
+    <string name="vault_sort_menu_cd">Sort vault list</string>
+    <string name="vault_sort_name_az">Name (A–Z)</string>
+    <string name="vault_sort_date_newest">Date (newest first)</string>
+    <string name="vault_sort_date_oldest">Date (oldest first)</string>
+    <string name="vault_group_all">All</string>
+    <string name="vault_group_filter_label">Group</string>
     <string name="vault_lock_button">Lock vault now</string>
 
     <!-- Item Screens -->
@@ -117,6 +123,9 @@
     <string name="settings_auto_lock_5min">5 minutes</string>
     <string name="settings_auto_lock_15min">15 minutes</string>
     <string name="settings_auto_lock_30min">30 minutes</string>
+    <string name="settings_site_icons_title">Rich site icons</string>
+    <string name="settings_site_icons_subtitle_google">Uses Google’s favicon service for clearer icons. The site address is sent to Google.</string>
+    <string name="settings_site_icons_subtitle_private">Loads each site’s favicon only from that site. Nothing is sent to third parties; some icons may be missing.</string>
     <string name="settings_change_passphrase_title">Change Master Passphrase</string>
     <string name="settings_change_passphrase_subtitle">Re-encrypt your vault key with a new passphrase</string>
     <string name="settings_change_passphrase_sheet_title">Change Passphrase</string>
@@ -183,6 +192,9 @@
     <string name="desktop_error_connection_failed_with_reason">Connection failed: %1$s</string>
     <string name="desktop_error_verification_required">Verification required before sensitive operations</string>
     <string name="desktop_error_password_retrieval_failed">Failed to retrieve password: %1$s</string>
+    <string name="desktop_password_rate_limited">Copied too fast — wait a few seconds between copies. This protects your vault.</string>
+    <string name="desktop_rate_limited_list_refresh">List refresh too frequent. Wait a moment.</string>
+    <string name="desktop_error_list_refresh_failed">Could not refresh the vault list. Try again.</string>
     <string name="desktop_session_vault_locked">Vault locked</string>
     <string name="desktop_session_user_disconnected">User disconnected</string>
     <string name="desktop_session_desktop_disconnected">Desktop disconnected</string>

@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.DropdownMenu
@@ -198,6 +199,42 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
             )
+
+            ListItem(
+                headlineContent = {
+                    Text(
+                        stringResource(R.string.settings_site_icons_title),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                },
+                supportingContent = {
+                    Text(
+                        stringResource(
+                            if (uiState.useGoogleFavicons) {
+                                R.string.settings_site_icons_subtitle_google
+                            } else {
+                                R.string.settings_site_icons_subtitle_private
+                            }
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                leadingContent = {
+                    SettingIconBox(
+                        icon = Icons.Default.Public,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        iconTint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                trailingContent = {
+                    Switch(
+                        checked = uiState.useGoogleFavicons,
+                        onCheckedChange = { viewModel.setUseGoogleFavicons(it) }
+                    )
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
             var dropdownExpanded by remember { mutableStateOf(false) }
             val selectedLabel = autoLockOptions.find { it.first == uiState.autoLockSeconds }?.second

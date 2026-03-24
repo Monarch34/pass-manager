@@ -13,7 +13,7 @@ import com.passmanager.data.db.entity.VaultMetadataEntity
 // without TypeConverters.
 @Database(
     entities = [VaultItemEntity::class, VaultMetadataEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class VaultDatabase : RoomDatabase() {
@@ -50,6 +50,14 @@ abstract class VaultDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE vault_items ADD COLUMN title_iv BLOB")
                 db.execSQL("ALTER TABLE vault_items ADD COLUMN encrypted_address BLOB")
                 db.execSQL("ALTER TABLE vault_items ADD COLUMN address_iv BLOB")
+            }
+        }
+
+        /** Add category and composite indexes to vault_items for faster filtering. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_vault_items_category ON vault_items (category)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_vault_items_category_updated_at ON vault_items (category, updated_at)")
             }
         }
 

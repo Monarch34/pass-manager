@@ -34,7 +34,7 @@ Also needs **Android SDK** ([Android Studio](https://developer.android.com/studi
 
 ### Desktop app (build inside `desktop/`)
 
-Uses **only** the wrapper under `desktop/` — do not expect `./gradlew` at the root to build the desktop binary.
+Separate Gradle project: own wrapper under `desktop/` (recommended). From the **repo root** you can also run the **root** wrapper with `-p desktop` (same JDK); see [docs/BUILD.md](docs/BUILD.md).
 
 ```bash
 cd desktop
@@ -69,8 +69,10 @@ Packaging (e.g. Windows MSI): see [Build → Desktop](#desktop-windows-msi).
   - HKDF-SHA256 session key derivation
   - Safety number for out-of-band MITM verification
   - AES-256-GCM with direction-prefixed monotonic nonce counters (replay protection)
+  - **Vault list refresh** (desktop toolbar): re-requests item metadata from the phone over the same encrypted session; the phone enforces a short cooldown between refreshes
 - **No INTERNET permission** for the vault — LAN only, only during pairing
 - Per-field encrypted title/address columns for fast header rendering
+- **Settings → Rich site icons** — Google favicon helper vs private direct-only loading (Android defaults to helper on; desktop defaults to private)
 
 ---
 
@@ -153,9 +155,11 @@ Requirements: Android Studio (recommended), JDK 17, Android SDK.
 
 minSdk: 26 (Android 8.0) · targetSdk: 35 · Gradle: root `settings.gradle.kts` includes **only** `:app`.
 
+<a id="desktop-windows-msi"></a>
+
 ### Desktop app (`desktop/` directory)
 
-Requirements: JDK 17 (`JAVA_HOME` set). **Always `cd desktop` first** — this is a **second** Gradle build.
+Requirements: JDK 17 (`JAVA_HOME` set). **Second** Gradle build (not `:app`); prefer `cd desktop` or use `gradlew -p desktop` from the repo root.
 
 ```bash
 cd desktop

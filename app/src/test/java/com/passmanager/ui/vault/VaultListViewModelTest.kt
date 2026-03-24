@@ -1,8 +1,10 @@
 package com.passmanager.ui.vault
 
-import app.cash.turbine.test
 import com.passmanager.crypto.cipher.AesGcmCipher
+import kotlinx.coroutines.flow.first
+import com.passmanager.data.preferences.AppPreferences
 import com.passmanager.domain.model.VaultItemHeader
+import com.passmanager.domain.model.VaultSortOrder
 import com.passmanager.domain.repository.VaultRepository
 import com.passmanager.domain.usecase.DecryptItemHeaderUseCase
 import com.passmanager.domain.usecase.DecryptItemUseCase
@@ -44,6 +46,10 @@ class VaultListViewModelTest {
         val decryptHeaderUseCase = mockk<DecryptItemHeaderUseCase>()
         val cipher = mockk<AesGcmCipher>(relaxed = true)
         val vaultLockManager = mockk<VaultLockManager>()
+        val appPreferences = mockk<AppPreferences>()
+        every { appPreferences.useGoogleFavicons } returns flowOf(true)
+        every { appPreferences.vaultListSort } returns flowOf(VaultSortOrder.NAME_ASC)
+        every { appPreferences.vaultGroupFilter } returns flowOf(null)
 
         every { vaultRepo.observeHeaders() } returns flowOf(listOf(h))
         coEvery { decryptHeaderUseCase(any()) } returns DecryptItemHeaderUseCase.Result("Test", "")
@@ -54,15 +60,15 @@ class VaultListViewModelTest {
             decryptUseCase,
             decryptHeaderUseCase,
             cipher,
-            vaultLockManager
+            vaultLockManager,
+            appPreferences
         )
 
-        viewModel.uiState.test {
-            skipItems(1)
-            val state = awaitItem()
-            assertFalse(state.isLoading)
-            assertEquals(listOf(h), state.filteredItems)
-        }
+        viewModel.uiState.first { !it.isLoading && it.filteredItems == listOf(h) }
+        val state = viewModel.uiState.first { it.headerDisplayCache.titles[h.id] == "Test" }
+        assertFalse(state.isLoading)
+        assertEquals(listOf(h), state.filteredItems)
+        assertEquals("Test", state.headerDisplayCache.titles[h.id])
     }
 
     @Test
@@ -72,6 +78,10 @@ class VaultListViewModelTest {
         val decryptHeaderUseCase = mockk<DecryptItemHeaderUseCase>(relaxed = true)
         val cipher = mockk<AesGcmCipher>(relaxed = true)
         val vaultLockManager = mockk<VaultLockManager>()
+        val appPreferences = mockk<AppPreferences>()
+        every { appPreferences.useGoogleFavicons } returns flowOf(true)
+        every { appPreferences.vaultListSort } returns flowOf(VaultSortOrder.NAME_ASC)
+        every { appPreferences.vaultGroupFilter } returns flowOf(null)
 
         every { vaultRepo.observeHeaders() } returns flowOf(emptyList())
         every { vaultLockManager.lockState } returns MutableStateFlow(LockState.Unlocked(ByteArray(32)))
@@ -81,15 +91,13 @@ class VaultListViewModelTest {
             decryptUseCase,
             decryptHeaderUseCase,
             cipher,
-            vaultLockManager
+            vaultLockManager,
+            appPreferences
         )
 
-        viewModel.uiState.test {
-            skipItems(1)
-            viewModel.setSearchQuery("test")
-            val state = awaitItem()
-            assertEquals("test", state.searchQuery)
-        }
+        viewModel.uiState.first { !it.isLoading }
+        viewModel.setSearchQuery("test")
+        assertEquals("test", viewModel.uiState.value.searchQuery)
     }
 
     @Test
@@ -100,6 +108,10 @@ class VaultListViewModelTest {
         val decryptHeaderUseCase = mockk<DecryptItemHeaderUseCase>(relaxed = true)
         val cipher = mockk<AesGcmCipher>(relaxed = true)
         val vaultLockManager = mockk<VaultLockManager>()
+        val appPreferences = mockk<AppPreferences>()
+        every { appPreferences.useGoogleFavicons } returns flowOf(true)
+        every { appPreferences.vaultListSort } returns flowOf(VaultSortOrder.NAME_ASC)
+        every { appPreferences.vaultGroupFilter } returns flowOf(null)
 
         every { vaultRepo.observeHeaders() } returns flowOf(emptyList())
         every { vaultLockManager.lockState } returns lockStateFlow
@@ -110,14 +122,12 @@ class VaultListViewModelTest {
             decryptUseCase,
             decryptHeaderUseCase,
             cipher,
-            vaultLockManager
+            vaultLockManager,
+            appPreferences
         )
 
-        viewModel.uiState.test {
-            skipItems(1)
-            lockStateFlow.value = LockState.ColdLocked
-            val state = awaitItem()
-            assertTrue(state.isLocked)
-        }
+        viewModel.uiState.first { !it.isLoading }
+        lockStateFlow.value = LockState.ColdLocked
+        assertTrue(viewModel.uiState.value.isLocked)
     }
 }
