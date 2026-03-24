@@ -42,6 +42,7 @@ android {
     }
 
     buildTypes {
+        // Production: R8 + resource shrink; sign with keystore.properties when present (else debug keystore — not for store upload).
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -55,6 +56,7 @@ android {
                 signingConfigs.getByName("debug")
             }
         }
+        // Development: faster iteration, no minify, debug signing.
         debug {
             isMinifyEnabled = false
         }

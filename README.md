@@ -49,14 +49,13 @@ Packaging (e.g. Windows MSI): see [Build → Desktop](#desktop-windows-msi).
 - **Included:** both apps’ sources, **both** Gradle wrappers (`gradle/wrapper` at root and `desktop/gradle/wrapper`), Room schemas under `app/schemas/`, tests, docs.
 - **Never commit:** `build/`, `.gradle/`, `local.properties`, keystores, secrets (see `.gitignore`).
 
-**License:** [LICENSE](LICENSE) (MIT). This project is **not accepting pull requests or external commits**.
+**License:** [LICENSE](LICENSE) (MIT).
 
 ### Documentation (read order)
 
 1. **[docs/REPOSITORY_LAYOUT.md](docs/REPOSITORY_LAYOUT.md)** — where Android vs desktop files and Gradle entry points live.  
-2. **[docs/PUBLISHING.md](docs/PUBLISHING.md)** — you ship APK + MSI (or Play); end users only install — no dev tools for them.  
-3. **[docs/BUILD.md](docs/BUILD.md)** — JDK, `local.properties`, commands, desktop pairing quirks.  
-4. **[docs/README.md](docs/README.md)** — index of all docs.
+2. **[docs/BUILD.md](docs/BUILD.md)** — JDK, `local.properties`, development vs production builds, desktop pairing quirks.  
+3. **[docs/README.md](docs/README.md)** — index of all docs.
 
 ---
 

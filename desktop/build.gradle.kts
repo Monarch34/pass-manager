@@ -33,6 +33,7 @@ compose.desktop {
     application {
         mainClass = "com.passmanager.desktop.MainKt"
 
+        // Development: `./gradlew run`. Production Windows installer: `./gradlew packageMsi` (full JDK + WiX on build machine — see docs/BUILD.md).
         nativeDistributions {
             targetFormats(
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,

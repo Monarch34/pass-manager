@@ -13,6 +13,17 @@ Build each from the instructions below; they do not share a single multi-module 
 
 ---
 
+## Development vs production (Gradle targets)
+
+| Goal | Android (`:app`) | Desktop (`desktop/`) |
+|------|------------------|----------------------|
+| **Local development** | `:app:assembleDebug` — no R8 minify, debug signing | `gradlew run` — unpackaged JVM app |
+| **Production-style artifact** | `:app:assembleRelease` — R8 + shrink, signing per `keystore.properties` (see below) | `gradlew packageMsi` — Windows installer (needs full JDK + WiX on the build machine) |
+
+Release APKs intended for **Play Console** must use a **release keystore** (`keystore.properties`), not the fallback debug signing.
+
+---
+
 ## Prerequisites (every clone — read this first)
 
 1. **JDK 17+ (full JDK, not a minimal JRE)**  
@@ -52,7 +63,7 @@ the build is using a **minimal JRE** (common with some editor extensions), not a
 
 ---
 
-## Commands
+## Commands (development)
 
 ```bash
 gradlew --stop
@@ -100,26 +111,28 @@ The desktop allows **one HTTP handshake per desktop run**. A **second** scan ret
 
 ---
 
-## Sharing builds with others (release APK + Windows MSI)
+## Production artifacts (release APK + Windows MSI)
 
-### Android — release APK (sideload)
+These commands run on the **maintainer build machine** only. Output files are what you distribute by your own channels (not documented here).
 
-From the **repository root** (with `local.properties` set for CLI builds):
+### Android — `assembleRelease`
+
+From the **repository root** (with `local.properties` for CLI builds):
 
 ```bash
 ./gradlew :app:assembleRelease
 # Windows: .\gradlew.bat :app:assembleRelease
 ```
 
-**Output file:** `app/build/outputs/apk/release/app-release.apk`
+**Output:** `app/build/outputs/apk/release/app-release.apk`
 
-Send that file to your friends. They must allow **Install unknown apps** (or similar) for the app/browser they use to open the APK.
+For **Play Console**, build **`bundleRelease`** (AAB) and sign with a **release** key.
 
-**Signing:** If you do **not** add `keystore.properties`, the release build is **signed with the debug keystore** (fine for informal sharing; not for Play Console). To use your own key, copy **`keystore.properties.example`** to **`keystore.properties`** (gitignored), fill in paths and passwords, and put the `.keystore` / `.jks` file in the repo root (also gitignored). The next `assembleRelease` will sign with that key.
+**Signing:** With **`keystore.properties`** (copy from **`keystore.properties.example`**, gitignored) present, release is signed with that keystore. If it is **absent**, release is still minified but signed with the **debug** keystore (useful only for local verification — **not** for Play).
 
-### Desktop — Windows MSI
+### Desktop — `packageMsi`
 
-MSI packaging uses **`jpackage`**, which ships with a **full JDK 17+**, not the trimmed **Android Studio `jbr`**. If `packageMsi` fails with **`jpackage.exe` is missing**, point **`JAVA_HOME`** at a full JDK (e.g. [Eclipse Temurin 17](https://adoptium.net/)), restart the terminal, then:
+MSI packaging uses **`jpackage`**, which ships with a **full JDK 17+**, not the trimmed **Android Studio `jbr`**. If `packageMsi` fails with **`jpackage.exe` is missing**, set **`JAVA_HOME`** to a full JDK (e.g. [Eclipse Temurin 17](https://adoptium.net/)), restart the terminal, then:
 
 ```bash
 cd desktop
@@ -127,11 +140,11 @@ cd desktop
 # Windows: gradlew.bat packageMsi
 ```
 
-Compose Desktop also expects the **WiX Toolset** on **`PATH`** for `.msi` (see [Compose Desktop packaging](https://github.com/JetBrains/compose-multiplatform/blob/master/tutorials/Native_distributions_and_local_execution/README.md)). Install [WiX](https://wixtoolset.org/) if Gradle reports a missing WiX / light / candle step.
+**WiX:** the WiX Toolset must be on **`PATH`**. Install [WiX](https://wixtoolset.org/) if Gradle reports missing WiX / light / candle. Packaging is configured in **`desktop/build.gradle.kts`** (`compose.desktop` → `nativeDistributions`).
 
-**Typical output:** `desktop/build/compose/binaries/main/msi/PassManager%20Desktop-1.0.0.msi` (exact folder name may vary slightly by Gradle/Compose version).
+**Typical output:** under `desktop/build/compose/binaries/` → `msi/` (e.g. `PassManager Desktop-1.0.0.msi`; exact path varies by Compose/Gradle version).
 
-Friends run the MSI on Windows; they still need the **Android app** (APK) on the phone for vault + pairing.
+The desktop app is the **LAN companion**; the Android app remains the **vault** and pairing client.
 
 ---
 
