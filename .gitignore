@@ -32,6 +32,7 @@ local.properties
 *.env
 secrets.properties
 **/secrets.properties
+keystore.properties
 *.pem
 *.p12
 # Play / CI service accounts (keep google-services.json if you add Firebase — often committed)

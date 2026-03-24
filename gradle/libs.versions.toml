@@ -39,6 +39,9 @@ coil = "2.7.0"
 # Ktor (HTTP client for desktop pairing)
 ktor = "2.3.12"
 
+# SLF4J: Ktor pulls slf4j-api; R8 requires a binding for release minify
+slf4j = "1.7.36"
+
 # CameraX (QR scanning)
 camerax = "1.3.4"
 
@@ -115,6 +118,9 @@ ktor-client-cio = { group = "io.ktor", name = "ktor-client-cio", version.ref = "
 ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
 ktor-client-websockets = { group = "io.ktor", name = "ktor-client-websockets", version.ref = "ktor" }
 ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
+
+# SLF4J no-op binding (satisfies StaticLoggerBinder for R8; no log output)
+slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
 
 # CameraX
 camerax-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }

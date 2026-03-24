@@ -100,12 +100,48 @@ The desktop allows **one HTTP handshake per desktop run**. A **second** scan ret
 
 ---
 
+## Sharing builds with others (release APK + Windows MSI)
+
+### Android — release APK (sideload)
+
+From the **repository root** (with `local.properties` set for CLI builds):
+
+```bash
+./gradlew :app:assembleRelease
+# Windows: .\gradlew.bat :app:assembleRelease
+```
+
+**Output file:** `app/build/outputs/apk/release/app-release.apk`
+
+Send that file to your friends. They must allow **Install unknown apps** (or similar) for the app/browser they use to open the APK.
+
+**Signing:** If you do **not** add `keystore.properties`, the release build is **signed with the debug keystore** (fine for informal sharing; not for Play Console). To use your own key, copy **`keystore.properties.example`** to **`keystore.properties`** (gitignored), fill in paths and passwords, and put the `.keystore` / `.jks` file in the repo root (also gitignored). The next `assembleRelease` will sign with that key.
+
+### Desktop — Windows MSI
+
+MSI packaging uses **`jpackage`**, which ships with a **full JDK 17+**, not the trimmed **Android Studio `jbr`**. If `packageMsi` fails with **`jpackage.exe` is missing**, point **`JAVA_HOME`** at a full JDK (e.g. [Eclipse Temurin 17](https://adoptium.net/)), restart the terminal, then:
+
+```bash
+cd desktop
+./gradlew packageMsi
+# Windows: gradlew.bat packageMsi
+```
+
+Compose Desktop also expects the **WiX Toolset** on **`PATH`** for `.msi` (see [Compose Desktop packaging](https://github.com/JetBrains/compose-multiplatform/blob/master/tutorials/Native_distributions_and_local_execution/README.md)). Install [WiX](https://wixtoolset.org/) if Gradle reports a missing WiX / light / candle step.
+
+**Typical output:** `desktop/build/compose/binaries/main/msi/PassManager%20Desktop-1.0.0.msi` (exact folder name may vary slightly by Gradle/Compose version).
+
+Friends run the MSI on Windows; they still need the **Android app** (APK) on the phone for vault + pairing.
+
+---
+
 ## Files in repo vs local
 
 | File | In Git? | Purpose |
 |------|---------|---------|
 | `gradle.properties` | Yes | Shared Gradle flags only (no machine paths) |
 | `gradle.properties.example` | Yes | Copy optional `org.gradle.java.home` to **user** `~/.gradle/gradle.properties` |
+| `keystore.properties.example` | Yes | Copy to **`keystore.properties`** for release APK signing (optional) |
 | `local.properties` | **No** | Your SDK path — create locally |
 | `local.properties.example` | Yes | Template / instructions |
 

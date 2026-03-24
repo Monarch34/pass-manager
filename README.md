@@ -150,7 +150,7 @@ Requirements: Android Studio (recommended), JDK 17, Android SDK.
 ```bash
 # From repository root
 ./gradlew :app:assembleDebug
-./gradlew :app:assembleRelease   # needs signing in app/build.gradle.kts
+./gradlew :app:assembleRelease   # optional keystore.properties; else debug-signed (see docs/BUILD.md)
 ```
 
 minSdk: 26 (Android 8.0) · targetSdk: 35 · Gradle: root `settings.gradle.kts` includes **only** `:app`.
