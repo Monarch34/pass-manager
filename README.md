@@ -1,89 +1,67 @@
 # PassManager
 
-A privacy-first, offline password manager delivered as **two separate applications** in one repository:
+Offline password manager: vault and crypto live on the phone. The Windows desktop piece is there for pairing over your LAN and showing items/passwords on a big screen after you’ve verified the session — not a second place your secrets live by default.
 
-| Application | Role | Code & build |
-|-------------|------|----------------|
-| **Android app** | Vault on the phone — encryption, biometric unlock, QR scan to pair | **Repository root** — Gradle module `:app`, sources under `app/` |
-| **Desktop app** | LAN pairing server + UI on the PC — shows QR, receives verified passwords | **`desktop/`** — **its own** Gradle project (`desktop/settings.gradle.kts`, own `gradlew`) |
+There are **two apps** in this repo, and they’re **not** one Gradle multi-module tree. The Android app builds from the **repo root** (`:app`). The desktop app is **`desktop/`**, with its own `settings.gradle.kts` and `gradlew`. Same git repo, two separate builds.
 
-They are **not** one multi-module Android project: each app has its **own** Gradle wrapper and lifecycle. They only share this repo and a documented pairing protocol.
+| | |
+|--|--|
+| **Android** (`app/`) | Vault, Argon2, biometrics, QR scan to pair |
+| **Desktop** (`desktop/`) | Compose UI + small Ktor server for pairing |
 
-**All vault data is encrypted on-device. No cloud. No accounts.**
+Everything stays on device / LAN. No cloud backend, no accounts.
 
 ---
 
-## Quick start (clone → build)
+## Building it
 
-This repository is meant to **build from a clean clone** without committing machine-specific files.
+You need **JDK 17** for both. The Android side also needs the **SDK** — easiest path is [Android Studio](https://developer.android.com/studio) (or install [cmdline-tools](https://developer.android.com/studio#command-tools) if you like pain).
 
-### Shared requirement
+**Android:** open the **repo root** in Studio (the folder with `settings.gradle.kts`), or from a shell:
 
-- **JDK 17** for both apps.
+```bash
+# copy local.properties.example → local.properties and set sdk.dir for CLI builds
+./gradlew :app:assembleDebug          # macOS / Linux
+.\gradlew.bat :app:assembleDebug      # Windows
+```
 
-### Android app (build at repo root)
-
-Also needs **Android SDK** ([Android Studio](https://developer.android.com/studio) or [cmdline-tools](https://developer.android.com/studio#command-tools)).
-
-1. Clone the repo.
-2. **Command-line Gradle only:** copy `local.properties.example` to **`local.properties`** in the **repo root** and set `sdk.dir` (gitignored).
-3. From the **repo root**:
-   - **Windows:** `.\gradlew.bat :app:assembleDebug`
-   - **macOS / Linux:** `./gradlew :app:assembleDebug`
-4. **Android Studio:** open the **repository root** (folder with `settings.gradle.kts` and `app/`). Studio usually creates `local.properties` for you.
-
-### Desktop app (build inside `desktop/`)
-
-Separate Gradle project: own wrapper under `desktop/` (recommended). From the **repo root** you can also run the **root** wrapper with `-p desktop` (same JDK); see [docs/BUILD.md](docs/BUILD.md).
+**Desktop:**
 
 ```bash
 cd desktop
-./gradlew run          # macOS / Linux
-# Windows: desktop\gradlew.bat run
+./gradlew run                         # macOS / Linux
+gradlew.bat run                       # Windows
 ```
 
-Packaging (e.g. Windows MSI): see [Build → Desktop](#desktop-windows-msi).
+You can also run the desktop project from the parent folder with `.\gradlew.bat -p desktop run` — same idea, root wrapper pointed at `desktop/`. Packaging an MSI is covered [below](#desktop-windows-msi) and in [docs/BUILD.md](docs/BUILD.md).
 
-### What belongs in Git
+**Git:** commit sources, wrappers, Room schemas, tests, docs. Don’t commit `build/`, `.gradle/`, `local.properties`, keystores, or anything in `.gitignore` that looks like a secret.
 
-- **Included:** both apps’ sources, **both** Gradle wrappers (`gradle/wrapper` at root and `desktop/gradle/wrapper`), Room schemas under `app/schemas/`, tests, docs.
-- **Never commit:** `build/`, `.gradle/`, `local.properties`, keystores, secrets (see `.gitignore`).
+License: [MIT](LICENSE).
 
-**License:** [LICENSE](LICENSE) (MIT).
-
-### Documentation (read order)
-
-1. **[docs/REPOSITORY_LAYOUT.md](docs/REPOSITORY_LAYOUT.md)** — where Android vs desktop files and Gradle entry points live.  
-2. **[docs/BUILD.md](docs/BUILD.md)** — JDK, `local.properties`, development vs production builds, desktop pairing quirks.  
-3. **[docs/README.md](docs/README.md)** — index of all docs.
+**Docs:** [REPOSITORY_LAYOUT.md](docs/REPOSITORY_LAYOUT.md) for where files sit, [BUILD.md](docs/BUILD.md) for JDK headaches, release builds, and pairing oddities.
 
 ---
 
-## Features
+## What it does
 
-- **AES-256-GCM** encryption for all vault data at rest
-- **Argon2id** key derivation (64 MiB memory, 10 iterations, parallelism 4)
-- **Biometric unlock** via Android Keystore (key invalidated on new enrollment)
-- **Desktop pairing** — securely send passwords from phone to PC over LAN
-  - Ephemeral X25519 ECDH key exchange (new keypair per session)
-  - HKDF-SHA256 session key derivation
-  - Safety number for out-of-band MITM verification
-  - AES-256-GCM with direction-prefixed monotonic nonce counters (replay protection)
-  - **Vault list refresh** (desktop toolbar): re-requests item metadata from the phone over the same encrypted session; the phone enforces a short cooldown between refreshes
-- **No INTERNET permission** for the vault — LAN only, only during pairing
-- Per-field encrypted title/address columns for fast header rendering
-- **Settings → Rich site icons** — Google favicon helper vs private direct-only loading (Android defaults to helper on; desktop defaults to private)
+- **AES-256-GCM** at rest; **Argon2id** for the master key (64 MiB, 10 iterations, parallelism 4).
+- **Biometric unlock** through Android Keystore (new fingerprint enrollment invalidates the key).
+- **Desktop pairing** over LAN: fresh **X25519** each session, **HKDF-SHA256** for the session key, **8-char safety number** so you can spot a MITM before you trust the link. Traffic after that is **AES-GCM** with direction prefixes on the nonces so replays blow up.
+- Toolbar **refresh** on desktop re-fetches vault metadata from the phone; the phone rate-limits how often that’s allowed.
+- Vault build has **no INTERNET permission** — network is for pairing, and that’s LAN-only.
+- Titles/addresses are stored encrypted per field so the list can render without decrypting whole items.
+- **Rich site icons:** Android defaults to Google’s favicon helper; desktop defaults to direct/private fetch. Both can be toggled in settings.
 
 ---
 
-## Repository layout (two apps)
+## Where things live
 
-See **[docs/REPOSITORY_LAYOUT.md](docs/REPOSITORY_LAYOUT.md)** for a full table of root Gradle files, `app/`, and `desktop/`.  
-Short form: **`app/`** = Android; **`desktop/`** = separate Gradle project + **[desktop/README.md](desktop/README.md)**.
+See [docs/REPOSITORY_LAYOUT.md](docs/REPOSITORY_LAYOUT.md) for the full map. Short version: **`app/`** = Android, **`desktop/`** = desktop + [desktop/README.md](desktop/README.md).
 
 ---
 
-## Desktop Pairing Protocol
+## Pairing flow (high level)
 
 ```
 Desktop                                    Phone
@@ -107,93 +85,65 @@ Desktop validates safetyNumber matches ────►
 Session is Active — subsequent messages are AES-GCM with monotonic nonce counters
 ```
 
-### Known limitation — transport security
-
-HTTP/WS transport is **unencrypted** (no TLS). The session key is never transmitted; it is independently derived on both sides via ECDH. A local network attacker could substitute the desktop public key before ECDH runs.
-
-**Mitigation:** The safety number is the guard against this. Always verify the 8-char code matches on both screens before entering the 6-digit pairing code.
+The HTTP/WebSocket leg is **not TLS**. The session key never goes over the wire in the clear — both sides derive it — but someone on your LAN could still try to swap keys before ECDH finishes. That’s why the **safety number** matters: if the 8 characters don’t match on both screens, stop and don’t enter the 6-digit code.
 
 ---
 
-## Security Model
+## Security notes (quick reference)
 
-| Threat | Mitigation |
-|--------|-----------|
-| Physical device theft | Vault encrypted with Argon2id-derived key; biometric or passphrase required |
-| Weak passphrase | Argon2id (64 MiB, 10 iterations) makes offline brute force expensive |
-| Cloud backup exfiltration | `allowBackup=false` + data extraction rules exclude all app data |
-| Screenshot / screen recording | `FLAG_SECURE` in MainActivity |
-| LAN MITM on pairing | Ephemeral ECDH + safety number visual verification + MITM detection on desktop |
-| Replay attacks | Monotonic nonce counters with direction byte; `ReplayAttackException` on reuse |
-| Session key in JVM heap | `SensitiveByteArray` backed by `DirectByteBuffer` (off-heap, GC-immune) |
-| Password `String` in JVM heap | W2 mitigation: password extracted as `ByteArray`, never as `String`; zeroed after use |
-| Too many password requests | Max 20 per session; 10s cooldown per request |
-| Pairing endpoint DoS | Per-IP rate limit on `/v1/pair/handshake` (3s cooldown) |
-| Server exposed on all NICs | Desktop server binds only to detected LAN IP, not `0.0.0.0` |
+| Concern | What we did |
+|---------|-------------|
+| Stolen phone | Vault encrypted; need passphrase or biometric |
+| Weak passphrase | Argon2id makes offline guessing slow |
+| Backup leaking data | `allowBackup=false`, extraction rules lock it down |
+| Screenshots | `FLAG_SECURE` on the sensitive UI |
+| LAN MITM while pairing | ECDH + compare safety number out-of-band (your eyes) |
+| Replay after pairing | Nonces with direction byte; reuse throws |
+| Keys/passwords in heap | Sensitive material uses off-heap buffers / bytes where we could; passwords aren’t carried as `String` in the hot path |
+| Spamming “send password” | Cap per session + cooldown on the phone |
+| Handshake spam | Rate limit on `/v1/pair/handshake` |
+| Desktop listening everywhere | Binds to the chosen LAN address, not `0.0.0.0` |
 
-### Lock states (Android)
-
-| State | Description |
-|-------|-------------|
-| `ColdLocked` | Process start — passphrase required |
-| `WarmLocked` | App backgrounded after passphrase unlock — biometric OR passphrase |
-| `Unlocked` | Vault key in memory only; never persisted |
+**Lock states (Android):** cold start needs passphrase; after backgrounding you get warm lock (biometric or passphrase again); unlocked means the vault key is only in memory and never written to disk.
 
 ---
 
-## Build
+## Build commands (cheat sheet)
 
-### Android app (repo root)
-
-Requirements: Android Studio (recommended), JDK 17, Android SDK.
+Android (from repo root): Android Studio + JDK 17 + SDK.
 
 ```bash
-# From repository root
 ./gradlew :app:assembleDebug
-./gradlew :app:assembleRelease   # optional keystore.properties; else debug-signed (see docs/BUILD.md)
+./gradlew :app:assembleRelease    # see BUILD.md — keystore.properties or debug signing fallback
 ```
 
-minSdk: 26 (Android 8.0) · targetSdk: 35 · Gradle: root `settings.gradle.kts` includes **only** `:app`.
+`minSdk` 26 · `targetSdk` 35 · root `settings.gradle.kts` only includes `:app`.
 
 <a id="desktop-windows-msi"></a>
 
-### Desktop app (`desktop/` directory)
-
-Requirements: JDK 17 (`JAVA_HOME` set). **Second** Gradle build (not `:app`); prefer `cd desktop` or use `gradlew -p desktop` from the repo root.
+Desktop: JDK 17, `JAVA_HOME` sane. Second Gradle project — `cd desktop` or `gradlew -p desktop`.
 
 ```bash
 cd desktop
-./gradlew run           # run unpackaged
-./gradlew packageMsi    # Windows MSI (when configured in desktop/build.gradle.kts)
+./gradlew run
+./gradlew packageMsi    # Windows installer; needs full JDK + WiX on the machine that builds it
 ```
 
 ---
 
-## Tech Stack
+## Stack (versions drift — check Gradle files for truth)
 
-| Component | Library |
-|-----------|---------|
-| Language | Kotlin 2.0.21 |
-| Android UI | Jetpack Compose + Material3 (BOM 2024.09.03) |
-| Desktop UI | Compose Desktop 1.7.3 |
-| DI | Hilt 2.51.1 |
-| Database | Room 2.6.1 |
-| KDF | Argon2kt 1.6.0 (Argon2id) |
-| ECDH | Bouncy Castle 1.78.1 (X25519) |
-| Biometric | androidx.biometric 1.1.0 |
-| Serialization | kotlinx.serialization 1.7.3 (JSON + CBOR) |
-| Network | Ktor 2.3.12 (CIO engine, WebSockets) |
-| QR scanning | ML Kit Barcode 17.3.0 + CameraX 1.3.4 |
+Kotlin 2.0.21, Compose / M3 on Android, Compose Desktop 1.7.3, Hilt, Room 2.6.1, Argon2kt, Bouncy Castle X25519, kotlinx.serialization, Ktor CIO + WebSockets, ML Kit barcode + CameraX.
 
 ---
 
-## Verification Checklist
+## Sanity checks I run after touching crypto or lock flow
 
-1. `./gradlew :app:assembleDebug` must succeed (Android app at repo root)
-2. Force-stop → reopen → only passphrase shown (cold lock)
-3. Background → reopen → biometric option shown (warm lock)
-4. Screenshot on vault screen → blocked by `FLAG_SECURE`
-5. Copy password → wait 30s → paste elsewhere → empty
-6. Enroll new fingerprint → reopen → biometric gone (key invalidated)
-7. `adb backup com.passmanager` → empty backup (`allowBackup=false`)
-8. Pair with desktop → verify safety numbers match on both screens
+1. `:app:assembleDebug` is green.
+2. Kill the app → reopen → passphrase only (cold).
+3. Background → foreground → biometric or passphrase (warm).
+4. Vault screen → screenshot blocked.
+5. Copy password → wait out the clear-clipboard delay → paste is empty.
+6. Add/remove fingerprint → biometric path updates as expected.
+7. `adb backup com.passmanager` doesn’t hand you vault JSON.
+8. Pair with desktop → safety strings match on both sides before trusting.

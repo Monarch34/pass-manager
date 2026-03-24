@@ -1,69 +1,57 @@
 # Building PassManager
 
-**Doc index:** [docs/README.md](README.md) · **Repo layout:** [REPOSITORY_LAYOUT.md](REPOSITORY_LAYOUT.md)
+Index: [docs/README.md](README.md) · [REPOSITORY_LAYOUT.md](REPOSITORY_LAYOUT.md)
+
+You’ve got two Gradle worlds: **Android at the repo root** (`:app` only in `settings.gradle.kts`) and **desktop under `desktop/`** with its own wrapper. They don’t share one multi-module graph — open root in Android Studio for the phone app; treat `desktop/` as its own project when you work there.
 
 ---
 
-This repository contains **two separate applications**:
+## Debug vs release (what to run when)
 
-1. **Android app** — Gradle project at the **repository root** (`:app` module only in `settings.gradle.kts`).
-2. **Desktop app** — **Another** Gradle project entirely under **`desktop/`** (own `settings.gradle.kts` and wrapper).
+Rough map:
 
-Build each from the instructions below; they do not share a single multi-module Gradle graph.
+- **Android day-to-day:** `./gradlew :app:assembleDebug` — no R8 shrink, normal debug signing.
+- **Android “what ships”:** `./gradlew :app:assembleRelease` — minify + shrink. Signing comes from `keystore.properties` if you created it; if not, you still get a minified APK but it’s signed with the **debug** key (fine for smoke-testing, **not** for Play).
+- **Desktop day-to-day:** `cd desktop && ./gradlew run` — runs out of `build/`, no installer.
+- **Desktop installer:** `packageMsi` on Windows — needs a **real** JDK with `jpackage` plus **WiX** on PATH. More below.
 
----
-
-## Development vs production (Gradle targets)
-
-| Goal | Android (`:app`) | Desktop (`desktop/`) |
-|------|------------------|----------------------|
-| **Local development** | `:app:assembleDebug` — no R8 minify, debug signing | `gradlew run` — unpackaged JVM app |
-| **Production-style artifact** | `:app:assembleRelease` — R8 + shrink, signing per `keystore.properties` (see below) | `gradlew packageMsi` — Windows installer (needs full JDK + WiX on the build machine) |
-
-Release APKs intended for **Play Console** must use a **release keystore** (`keystore.properties`), not the fallback debug signing.
+If you’re uploading to Play, use **`bundleRelease`**, your **release** keystore, and whatever Play Console wants besides that.
 
 ---
 
-## Prerequisites (every clone — read this first)
+## Before you blame the code
 
-1. **JDK 17+ (full JDK, not a minimal JRE)**  
-   Android Gradle Plugin needs **`jlink`** (`bin/jlink` / `bin/jlink.exe`).  
-   Recommended: **Android Studio**’s bundled runtime (**`jbr`**) or **Eclipse Temurin 17**.
+**JDK:** AGP wants a **full JDK 17+**, not a random JRE. It calls `jlink` under the hood. Android Studio’s **jbr** is usually fine for Android + `desktop run`. **Temurin 17** (or similar) is the boring safe choice if you want one JDK everywhere.
 
-2. **`JAVA_HOME`**  
-   Point it at that JDK so command-line Gradle and editors behave consistently:
-   - **Windows (PowerShell, persistent):**  
-     `[Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Program Files\Android\Android Studio\jbr", "User")`  
-     (adjust path if Studio is installed elsewhere), then **restart** the terminal / IDE.
-   - **macOS / Linux:** export `JAVA_HOME` in `~/.zshrc` or `~/.bashrc` to your JDK or Studio `jbr`.
+Set **`JAVA_HOME`** to that JDK and restart terminals after you change it. On Windows, something like:
 
-3. **Android SDK**  
-   Install via **Android Studio** → SDK Manager. For **command-line** builds, create **`local.properties`** in the project root (see **`local.properties.example`**).  
-   `local.properties` is **gitignored**.
+```powershell
+[Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Program Files\Android\Android Studio\jbr", "User")
+```
 
-4. **Optional: Gradle JDK override**  
-   If something still picks the wrong Java (e.g. an editor-bundled JRE without `jlink`), copy lines from **`gradle.properties.example`** into  
-   **`%USERPROFILE%\.gradle\gradle.properties`** (Windows) or **`~/.gradle/gradle.properties`** (macOS/Linux).  
-   **Do not** commit machine-specific paths into the project’s `gradle.properties`.
+(tweak the path if Studio lives elsewhere).
 
-5. **Android Studio**  
-   *Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK* → choose **Embedded JDK** or the same **`jbr`** as `JAVA_HOME`.
+**SDK:** For command-line Android builds you need **`local.properties`** in the repo root with `sdk.dir=...` — copy from `local.properties.example`. Android Studio normally creates this when you open the project.
 
-6. After changing JDK: **`gradlew --stop`**, then sync/build again.
+**Wrong Java from the IDE:** If Gradle suddenly can’t find `jlink` and the error path mentions `.cursor` or an extension JRE, your editor picked a minimal runtime. Point `JAVA_HOME` at a full JDK, or copy the snippet from **`gradle.properties.example`** into **your user** `~/.gradle/gradle.properties` (`%USERPROFILE%\.gradle\gradle.properties` on Windows). Don’t put machine paths in the **project** `gradle.properties` — that file is shared.
+
+In Android Studio: *Settings → Build → Gradle → Gradle JDK* should match what you expect.
+
+After JDK changes: `gradlew --stop`, then sync/build again.
 
 ---
 
-## JDK / `jlink` errors
+## That `jlink` error
 
-If you see:
+If you see something like:
 
 `jlink executable ...\.cursor\extensions\redhat.java...\jre\...\jlink.exe does not exist`
 
-the build is using a **minimal JRE** (common with some editor extensions), not a full JDK. Fix **`JAVA_HOME`** and/or **`gradle.properties.example`** override as above.
+Gradle isn’t using a JDK. Fix `JAVA_HOME` / user `gradle.properties` as above.
 
 ---
 
-## Commands (development)
+## Android — usual commands
 
 ```bash
 gradlew --stop
@@ -71,91 +59,68 @@ gradlew :app:assembleDebug
 gradlew :app:testDebugUnitTest
 ```
 
-Requires **`local.properties`** with `sdk.dir=...` for CLI builds (see **`local.properties.example`**).
+(`.\gradlew.bat` on Windows.) You still need `local.properties` for CLI builds.
 
 ---
 
-## Desktop app (Compose Desktop)
+## Desktop — run it
 
-The desktop app is **not** the Android `:app` module. Build it using **either** of these (same JDK as Android: `JAVA_HOME` / Studio **`jbr`**):
-
-**Option A — use the desktop wrapper (recommended):**
+Not the `:app` module. From `desktop/`:
 
 ```bash
 cd desktop
-./gradlew run              # macOS / Linux
-# Windows: gradlew.bat run
+./gradlew run              # Unix
+gradlew.bat run            # Windows
 ```
 
-**Option B — from repo root, reuse root wrapper with `-p`:**
+Or from repo root: `.\gradlew.bat -p desktop run` / `./gradlew -p desktop run`.
 
-```bash
-# Windows (PowerShell / cmd, from repo root)
-.\gradlew.bat -p desktop run
+### Phone can’t connect (weird 172.30.x.x)
 
-# macOS / Linux
-./gradlew -p desktop run
-```
+If the phone times out to **`172.30.240.x`**-style addresses, the QR was probably built from a **Hyper-V / WSL virtual NIC**, not your Wi‑Fi. The app tries to prefer real LAN ranges (`192.168…`, `10…`, `172.16–31…`), but you still need the PC and phone on the **same network**, Windows **Firewall** allowing inbound on the pairing port (or an allow rule for PassManager Desktop), and a QR that shows an IP the phone can actually route to. Restart desktop after you change Wi‑Fi.
 
-The **`desktop/`** directory includes its own **`gradlew` / `gradlew.bat`** and **`gradle/wrapper/`** so the desktop app can be built like a standalone project.
+### “Challenge required” / second scan dies
 
-### Desktop pairing: connect timeout to `172.30.x.x` or similar
-
-If the phone logs **`ConnectTimeoutException`** to an address like **`172.30.240.x`**, the QR was built with a **WSL / Hyper-V virtual NIC** IP, not your Wi‑Fi IP. The desktop app **skips** common virtual interfaces and **prefers** `192.168.x.x` / `10.x.x.x` / `172.16–31.x.x` on real adapters.
-
-**You still need:** PC and phone on the **same LAN**, Windows **Firewall** allowing inbound TCP on the pairing port (or allow the PassManager Desktop app), and the QR must show a reachable IP (check the desktop window / regenerate by restarting the desktop app after network changes).
-
-### “Challenge required” / `HandshakeResponse` parse errors
-
-The desktop allows **one HTTP handshake per desktop run**. A **second** scan returns **409** with `{ "error": "already_paired" }` (no `challenge` field). The app shows a clear message: **restart the desktop app** and scan the **new** QR. If the first attempt failed after the HTTP step, restart the desktop before scanning again.
+Only **one** HTTP handshake per desktop process. Scan again without restarting and you’ll get **409** `already_paired` — no challenge in the body. **Restart the desktop app**, get a fresh QR, scan that.
 
 ---
 
-## Production artifacts (release APK + Windows MSI)
+## Release APK and MSI (build machine only)
 
-These commands run on the **maintainer build machine** only. Output files are what you distribute by your own channels (not documented here).
+Outputs are yours to handle however you like; this file only describes **how to produce** them.
 
-### Android — `assembleRelease`
-
-From the **repository root** (with `local.properties` for CLI builds):
+**Android release** (repo root, `local.properties` in place):
 
 ```bash
 ./gradlew :app:assembleRelease
 # Windows: .\gradlew.bat :app:assembleRelease
 ```
 
-**Output:** `app/build/outputs/apk/release/app-release.apk`
+APK lands in `app/build/outputs/apk/release/app-release.apk`. For Play, also `bundleRelease` and sign properly.
 
-For **Play Console**, build **`bundleRelease`** (AAB) and sign with a **release** key.
+**Signing:** `keystore.properties` in the repo root (see `keystore.properties.example`) → release uses your keystore. No file → still minified, but **debug-signed**.
 
-**Signing:** With **`keystore.properties`** (copy from **`keystore.properties.example`**, gitignored) present, release is signed with that keystore. If it is **absent**, release is still minified but signed with the **debug** keystore (useful only for local verification — **not** for Play).
-
-### Desktop — `packageMsi`
-
-MSI packaging uses **`jpackage`**, which ships with a **full JDK 17+**, not the trimmed **Android Studio `jbr`**. If `packageMsi` fails with **`jpackage.exe` is missing**, set **`JAVA_HOME`** to a full JDK (e.g. [Eclipse Temurin 17](https://adoptium.net/)), restart the terminal, then:
+**Windows MSI:** `jpackage` lives in a **full** JDK. Android Studio’s **jbr** often **doesn’t** ship `jpackage`, so point `JAVA_HOME` at something like [Eclipse Temurin 17](https://adoptium.net/), new shell, then:
 
 ```bash
 cd desktop
 ./gradlew packageMsi
-# Windows: gradlew.bat packageMsi
 ```
 
-**WiX:** the WiX Toolset must be on **`PATH`**. Install [WiX](https://wixtoolset.org/) if Gradle reports missing WiX / light / candle. Packaging is configured in **`desktop/build.gradle.kts`** (`compose.desktop` → `nativeDistributions`).
+WiX has to be on **PATH** ([wixtoolset.org](https://wixtoolset.org/)) — Gradle will complain about `light`/`candle` if it isn’t. Packaging knobs live in **`desktop/build.gradle.kts`** under `compose.desktop` → `nativeDistributions`.
 
-**Typical output:** under `desktop/build/compose/binaries/` → `msi/` (e.g. `PassManager Desktop-1.0.0.msi`; exact path varies by Compose/Gradle version).
-
-The desktop app is the **LAN companion**; the Android app remains the **vault** and pairing client.
+The `.msi` shows up under `desktop/build/compose/binaries/…/msi/` (exact subfolder varies with Compose/Gradle). Remember: desktop is the **companion**; the vault stays on Android.
 
 ---
 
-## Files in repo vs local
+## Files worth knowing about
 
-| File | In Git? | Purpose |
-|------|---------|---------|
-| `gradle.properties` | Yes | Shared Gradle flags only (no machine paths) |
-| `gradle.properties.example` | Yes | Copy optional `org.gradle.java.home` to **user** `~/.gradle/gradle.properties` |
-| `keystore.properties.example` | Yes | Copy to **`keystore.properties`** for release APK signing (optional) |
-| `local.properties` | **No** | Your SDK path — create locally |
-| `local.properties.example` | Yes | Template / instructions |
+| File | In git? | Notes |
+|------|---------|--------|
+| `gradle.properties` | yes | Shared flags, no secrets |
+| `gradle.properties.example` | yes | Hints for *user* `~/.gradle/gradle.properties` |
+| `keystore.properties.example` | yes | Template → copy to `keystore.properties` (ignored) |
+| `local.properties` | **no** | SDK path, local only |
+| `local.properties.example` | yes | What to put in `local.properties` |
 
-Do **not** commit `gradle/gradle-daemon-jvm.properties` if Gradle regenerates it; it is gitignored and can fight with your chosen JDK.
+If Gradle creates `gradle/gradle-daemon-jvm.properties`, don’t commit it — it’s ignored and can fight your JDK choice.

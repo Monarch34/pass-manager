@@ -1,77 +1,61 @@
 # Repository layout
 
-This monorepo holds **two independent Gradle projects** (Android + desktop). They do **not** share a single `settings.gradle.kts`.
+Two Gradle projects, one git repo. They don’t share a root `settings.gradle.kts` — that’s the main thing to internalize.
 
----
+## Repo root = Android
 
-## 1. Repository root — Android Gradle project
+Open this folder in Android Studio. It loads **only** `:app`; `desktop/` is invisible to that Gradle import.
 
-These files configure **only** the Android app (`:app`). Opening the repo root in Android Studio loads this project.
+| Path | What it is |
+|------|------------|
+| `settings.gradle.kts` | `include(":app")` — no desktop module |
+| `build.gradle.kts` | Plugin versions (`apply false`); not the Android application module |
+| `gradle.properties` | Heap, AndroidX flags — safe to commit |
+| `gradle.properties.example` | Copy bits to **your** `~/.gradle/gradle.properties` if Java is wrong |
+| `gradle/libs.versions.toml` | Android dependency versions |
+| `gradle/wrapper/*`, `gradlew*` | Wrapper for **root** / Android builds |
+| `local.properties.example` | Copy → `local.properties` with `sdk.dir` (that file stays local) |
+| `LICENSE`, `README.md` | Legal + project front door |
 
-| Path | Role |
-|------|------|
-| `settings.gradle.kts` | Includes `:app` only. **Does not** include `desktop/`. |
-| `build.gradle.kts` | Root **plugin** versions (`apply false`); no Android `application` plugin here. |
-| `gradle.properties` | JVM heap, AndroidX, Kotlin style — **safe to commit** (no machine paths). |
-| `gradle.properties.example` | Copy snippets to **user** `~/.gradle/gradle.properties` if JDK is wrong — see comments inside. |
-| `gradle/libs.versions.toml` | Version catalog for **Android** dependencies. |
-| `gradle/wrapper/*` | Gradle Wrapper for the **Android** project. |
-| `gradlew`, `gradlew.bat` | Run Android builds from repo root. |
-| `local.properties.example` | Template for **`local.properties`** (SDK path) — copy to repo root; file is gitignored. |
-| `LICENSE` | Project license. |
-| `README.md` | Product overview, quick start, protocol & security. |
+Stuff that should never be committed: `build/`, `.gradle/`, `local.properties`, and whatever else `.gitignore` lists for secrets and IDE junk.
 
-**Generated / local (never commit):** `build/`, `.gradle/`, `local.properties`, `.idea/` (optional ignore).
+## `app/` — the phone app
 
----
+| Path | What it is |
+|------|------------|
+| `app/build.gradle.kts` | The actual Android `application` module |
+| `app/proguard-rules.pro` | R8 rules for release |
+| `app/schemas/` | Room exported JSON — **do** commit when the schema changes |
+| `app/src/main/` | Kotlin, resources, manifest |
+| `app/src/test/` | JVM unit tests |
+| `app/src/androidTest/` | Instrumented tests |
 
-## 2. `app/` — Android application module
+`app/build/` is generated; ignore it.
 
-| Path | Role |
-|------|------|
-| `app/build.gradle.kts` | Android application plugin, dependencies, `compileSdk`, etc. |
-| `app/proguard-rules.pro` | R8 / ProGuard rules for **release**. |
-| `app/schemas/` | Room **exported** JSON schemas (`exportSchema = true`) — commit these. |
-| `app/src/main/` | Production code, resources, manifest. |
-| `app/src/test/` | JVM unit tests. |
-| `app/src/androidTest/` | Instrumented tests. |
+## `desktop/` — Windows (and theoretically other) desktop
 
-**Generated:** `app/build/` (gitignored).
+Think of it as a mini-repo: its own `settings.gradle.kts`, `gradle/`, `gradlew*`, and `libs.versions.toml`. None of that is wired into the Android root project.
 
----
+| Path | What it is |
+|------|------------|
+| `desktop/build.gradle.kts` | Compose Desktop app + `nativeDistributions` (MSI, etc.) |
+| `desktop/src/main/kotlin/` | UI, Ktor server, crypto glue |
+| `desktop/src/main/resources/` | Fonts, static bits |
 
-## 3. `desktop/` — Desktop Gradle project (separate)
+Again, `desktop/build/` and `desktop/.gradle/` are throwaway.
 
-Treat `desktop/` as its **own** repository-style project: own wrapper, own catalog, own `settings.gradle.kts`.
+There’s a short [desktop/README.md](../desktop/README.md) in that folder too.
 
-| Path | Role |
-|------|------|
-| `desktop/settings.gradle.kts` | Desktop root project name & config. |
-| `desktop/build.gradle.kts` | Compose Desktop / JVM application. |
-| `desktop/gradle/libs.versions.toml` | Version catalog for **desktop** (independent from root). |
-| `desktop/gradle/wrapper/*` | Gradle Wrapper for **desktop** (may differ from Android). |
-| `desktop/gradlew`, `desktop/gradlew.bat` | Run desktop builds **from `desktop/`** (or `../gradlew -p desktop` from root). |
-| `desktop/src/main/kotlin/` | Desktop UI + Ktor server + JVM crypto. |
-| `desktop/src/main/resources/` | Fonts, etc. |
+## `docs/`
 
-**Generated:** `desktop/build/`, `desktop/.gradle/` (gitignored).
+Markdown only — nothing here participates in a build.
 
-See also **[desktop/README.md](../desktop/README.md)**.
+## Commands at a glance
 
----
+| | |
+|--|--|
+| Android debug APK | From root: `./gradlew :app:assembleDebug` (`.\gradlew.bat` on Windows) |
+| Unit tests | `./gradlew :app:testDebugUnitTest` |
+| Desktop run | `cd desktop && ./gradlew run` |
 
-## 4. `docs/` — Human-readable docs only
-
-No build logic here. Safe to read offline.
-
----
-
-## 5. Quick command reference
-
-| Goal | Where to run | Command |
-|------|----------------|---------|
-| Android debug APK | Repo root | `./gradlew :app:assembleDebug` (Windows: `.\gradlew.bat …`) |
-| Android unit tests | Repo root | `./gradlew :app:testDebugUnitTest` |
-| Desktop run | `desktop/` | `./gradlew run` (Windows: `gradlew.bat run`) |
-
-Full detail: **[BUILD.md](BUILD.md)**.
+Details and release/MSI steps: **[BUILD.md](BUILD.md)**.

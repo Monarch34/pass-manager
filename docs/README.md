@@ -1,8 +1,6 @@
-# PassManager documentation
+# Docs in this folder
 
-| Document | Purpose |
-|----------|---------|
-| **[REPOSITORY_LAYOUT.md](REPOSITORY_LAYOUT.md)** | **Start here** to see where Android vs desktop files live, what is Gradle config vs source, and what is generated. |
-| **[BUILD.md](BUILD.md)** | JDK / Android SDK / `local.properties`, **development vs production** Gradle targets, desktop run vs MSI, pairing quirks. |
+- **[REPOSITORY_LAYOUT.md](REPOSITORY_LAYOUT.md)** — Where the Android project ends and the desktop one begins, which `gradlew` does what, and what’s generated vs hand-written.
+- **[BUILD.md](BUILD.md)** — JDK/SDK setup, debug vs release, MSI packaging, and the pairing issues people actually hit on real networks.
 
-The main project overview, features, and security notes stay in the root **[README.md](../README.md)**.
+The story of what PassManager *is* (features, threat model, pairing sketch) lives in the root **[README.md](../README.md)**.
