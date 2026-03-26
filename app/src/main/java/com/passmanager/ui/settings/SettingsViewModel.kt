@@ -1,5 +1,6 @@
 package com.passmanager.ui.settings
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -13,7 +14,9 @@ import com.passmanager.domain.usecase.WrongPassphraseException
 import com.passmanager.security.VaultLockManager
 import com.passmanager.security.biometric.BiometricHelper
 import com.passmanager.ui.common.UserMessage
+import coil.imageLoader
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -40,6 +43,7 @@ data class SettingsUiState(
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val metadataRepository: MetadataRepository,
     private val enableBiometricUseCase: EnableBiometricUseCase,
     private val appPreferences: AppPreferences,
@@ -130,9 +134,15 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    @OptIn(coil.annotation.ExperimentalCoilApi::class)
     fun setUseGoogleFavicons(enabled: Boolean) {
         viewModelScope.launch {
             appPreferences.setUseGoogleFavicons(enabled)
+            if (!enabled) {
+                val loader = context.imageLoader
+                loader.memoryCache?.clear()
+                loader.diskCache?.clear()
+            }
         }
     }
 

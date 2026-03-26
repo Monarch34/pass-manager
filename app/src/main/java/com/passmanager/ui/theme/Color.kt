@@ -49,6 +49,7 @@ val CategoryLoginTint = Color(0xFF0D9488)
 val CategoryCardTint = Color(0xFFB45309)
 val CategoryNoteTint = Color(0xFF7C3AED)
 val CategoryIdentityTint = Color(0xFF0284C7)
+val CategoryBankTint = Color(0xFF059669)
 
 val StrengthFairColor = Color(0xFFFF8F00)
 

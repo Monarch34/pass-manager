@@ -2,7 +2,7 @@ package com.passmanager.desktop.server
 
 import com.passmanager.desktop.crypto.EncryptedChannel
 import com.passmanager.desktop.crypto.SensitiveByteArray
-import com.passmanager.desktop.model.ItemSummary
+import com.passmanager.protocol.ItemSummary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

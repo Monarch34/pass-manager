@@ -1,6 +1,6 @@
 # Docs in this folder
 
-- **[REPOSITORY_LAYOUT.md](REPOSITORY_LAYOUT.md)** — Where the Android project ends and the desktop one begins, which `gradlew` does what, and what’s generated vs hand-written.
-- **[BUILD.md](BUILD.md)** — JDK/SDK setup, debug vs release, MSI packaging, and the pairing issues people actually hit on real networks.
+- **[BUILD.md](BUILD.md)** — Building Android and desktop, JDK, SDK, local files, release signing, MSI.
+- **[REPOSITORY_LAYOUT.md](REPOSITORY_LAYOUT.md)** — Directory layout and Gradle entry points.
 
-The story of what PassManager *is* (features, threat model, pairing sketch) lives in the root **[README.md](../README.md)**.
+Project overview and security: root **[README.md](../README.md)**.

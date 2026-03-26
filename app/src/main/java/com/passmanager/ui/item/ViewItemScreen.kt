@@ -64,9 +64,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.passmanager.domain.model.DecryptedVaultItem
 import com.passmanager.domain.model.ItemCategory
 import com.passmanager.ui.components.ErrorSnackbarEffect
 import com.passmanager.ui.components.FaviconImage
+import com.passmanager.ui.item.formatExpiryMmYy
+import com.passmanager.ui.item.parseExpiryMmYyToMonthYear
 import kotlinx.coroutines.launch
 
 enum class ViewItemPresentation {
@@ -319,6 +322,8 @@ fun ViewItemScreen(
             uiState.item != null -> {
                 val item = uiState.item!!
                 val category = ItemCategory.fromString(uiState.category)
+                val isCard = uiState.category.equals("card", ignoreCase = true)
+                val isBank = uiState.category.equals("bank", ignoreCase = true)
 
                 Column(
                     modifier = Modifier
@@ -332,7 +337,7 @@ fun ViewItemScreen(
                         .padding(padding)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    // ── Item header ────────────────────────────────────────────
+                    // Item header
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -340,7 +345,6 @@ fun ViewItemScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // Avatar
                         Box(
                             modifier = Modifier
                                 .size(60.dp)
@@ -372,7 +376,6 @@ fun ViewItemScreen(
                             }
                         }
 
-                        // Title + category chip — this is the only place the name appears
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
                                 text = item.title,
@@ -404,14 +407,76 @@ fun ViewItemScreen(
 
                     Spacer(Modifier.height(8.dp))
 
-                    // ── Fields cards ────────────────────────────────────────────
+                    // Fields
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        if (item.username.isNotBlank()) {
+                        if (isCard) {
+                            CardViewFields(item = item, snackbarHostState = snackbarHostState)
+                        } else {
+                            // Default + Bank fields
+                            val usernameLabel = if (isBank) stringResource(R.string.item_account_number_hint)
+                                else stringResource(R.string.item_username_hint)
+                            val addressLabel = if (isBank) stringResource(R.string.item_bank_name_hint)
+                                else stringResource(R.string.item_address_hint)
+
+                            if (item.username.isNotBlank()) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = MaterialTheme.shapes.large,
+                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    tonalElevation = 1.dp
+                                ) {
+                                    FieldBlock(
+                                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+                                        label = usernameLabel,
+                                        onCopy = {
+                                            view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                                            scope.launch {
+                                                copyToClipboard(context, "Username", item.username)
+                                                snackbarHostState.showSnackbar(context.getString(R.string.item_username_copied))
+                                            }
+                                        }
+                                    ) {
+                                        Text(
+                                            text = item.username,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (item.address.isNotBlank()) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = MaterialTheme.shapes.large,
+                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    tonalElevation = 1.dp
+                                ) {
+                                    FieldBlock(
+                                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+                                        label = addressLabel,
+                                        onCopy = {
+                                            view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                                            scope.launch {
+                                                copyToClipboard(context, "Address", item.address)
+                                                snackbarHostState.showSnackbar(context.getString(R.string.item_address_copied))
+                                            }
+                                        }
+                                    ) {
+                                        Text(
+                                            text = item.address,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+                            }
+
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = MaterialTheme.shapes.large,
@@ -420,96 +485,44 @@ fun ViewItemScreen(
                             ) {
                                 FieldBlock(
                                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                                    label = stringResource(R.string.item_username_hint),
+                                    label = stringResource(R.string.item_password_hint),
                                     onCopy = {
                                         view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
                                         scope.launch {
-                                            copyToClipboard(context, "Username", item.username)
-                                            snackbarHostState.showSnackbar(context.getString(R.string.item_username_copied))
+                                            copyToClipboard(
+                                                context,
+                                                "Password",
+                                                item.password,
+                                                clearAfterMs = 15_000L,
+                                                scope = scope
+                                            )
+                                            snackbarHostState.showSnackbar(context.getString(R.string.item_password_copied))
                                         }
-                                    }
-                                ) {
-                                    Text(
-                                        text = item.username,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-                        }
-
-                        if (item.address.isNotBlank()) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = MaterialTheme.shapes.large,
-                                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                tonalElevation = 1.dp
-                            ) {
-                                FieldBlock(
-                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                                    label = stringResource(R.string.item_address_hint),
-                                    onCopy = {
-                                        view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                                        scope.launch {
-                                            copyToClipboard(context, "Address", item.address)
-                                            snackbarHostState.showSnackbar(context.getString(R.string.item_address_copied))
-                                        }
-                                    }
-                                ) {
-                                    Text(
-                                        text = item.address,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-                        }
-
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.large,
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            tonalElevation = 1.dp
-                        ) {
-                            FieldBlock(
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                                label = stringResource(R.string.item_password_hint),
-                                onCopy = {
-                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                                    scope.launch {
-                                        copyToClipboard(
-                                            context,
-                                            "Password",
-                                            item.password,
-                                            clearAfterMs = 15_000L,
-                                            scope = scope
-                                        )
-                                        snackbarHostState.showSnackbar(context.getString(R.string.item_password_copied))
-                                    }
-                                },
-                                extraTrailing = {
-                                    IconButton(onClick = viewModel::togglePasswordVisible) {
-                                        Icon(
-                                            imageVector = if (uiState.passwordVisible) Icons.Default.VisibilityOff
-                                            else Icons.Default.Visibility,
-                                            contentDescription = if (uiState.passwordVisible)
-                                                stringResource(R.string.action_hide)
-                                            else
-                                                stringResource(R.string.action_show)
-                                        )
-                                    }
-                                }
-                            ) {
-                                Text(
-                                    text = if (uiState.passwordVisible) item.password
-                                    else "•".repeat(minOf(item.password.length, 24)),
-                                    style = if (uiState.passwordVisible) {
-                                        MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace)
-                                    } else {
-                                        MaterialTheme.typography.bodyLarge
                                     },
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
+                                    extraTrailing = {
+                                        IconButton(onClick = viewModel::togglePasswordVisible) {
+                                            Icon(
+                                                imageVector = if (uiState.passwordVisible) Icons.Default.VisibilityOff
+                                                else Icons.Default.Visibility,
+                                                contentDescription = if (uiState.passwordVisible)
+                                                    stringResource(R.string.action_hide)
+                                                else
+                                                    stringResource(R.string.action_show)
+                                            )
+                                        }
+                                    }
+                                ) {
+                                    Text(
+                                        text = if (uiState.passwordVisible) item.password
+                                        else "\u2022".repeat(minOf(item.password.length, 24)),
+                                        style = if (uiState.passwordVisible) {
+                                            MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace)
+                                        } else {
+                                            MaterialTheme.typography.bodyLarge
+                                        },
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
                             }
                         }
 
@@ -537,6 +550,159 @@ fun ViewItemScreen(
 
                     Spacer(Modifier.height(24.dp))
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CardViewFields(
+    item: DecryptedVaultItem,
+    snackbarHostState: SnackbarHostState
+) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
+    var cardNumberVisible by remember { mutableStateOf(false) }
+    var cvcVisible by remember { mutableStateOf(false) }
+
+    if (item.cardNumber.isNotBlank()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 1.dp
+        ) {
+            FieldBlock(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+                label = stringResource(R.string.item_card_number_hint),
+                onCopy = {
+                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                    scope.launch {
+                        copyToClipboard(
+                            context,
+                            "Card number",
+                            item.cardNumber.filter { it.isDigit() },
+                            clearAfterMs = 15_000L,
+                            scope = scope
+                        )
+                        snackbarHostState.showSnackbar(context.getString(R.string.item_card_number_copied))
+                    }
+                },
+                extraTrailing = {
+                    IconButton(onClick = { cardNumberVisible = !cardNumberVisible }) {
+                        Icon(
+                            imageVector = if (cardNumberVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null
+                        )
+                    }
+                }
+            ) {
+                val displayNumber = if (cardNumberVisible) {
+                    item.cardNumber.filter { it.isDigit() }.chunked(4).joinToString(" ")
+                } else {
+                    val digits = item.cardNumber.filter { it.isDigit() }
+                    val last4 = digits.takeLast(4).ifEmpty { "••••" }
+                    "\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 $last4"
+                }
+                Text(
+                    text = displayNumber,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+
+    if (item.cardholderName.isNotBlank()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 1.dp
+        ) {
+            FieldBlock(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+                label = stringResource(R.string.item_cardholder_hint),
+                onCopy = {
+                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                    scope.launch {
+                        copyToClipboard(context, "Cardholder", item.cardholderName)
+                        snackbarHostState.showSnackbar(context.getString(R.string.item_cardholder_copied))
+                    }
+                }
+            ) {
+                Text(
+                    text = item.cardholderName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+
+    if (item.cardExpiry.isNotBlank()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 1.dp
+        ) {
+            FieldBlock(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+                label = stringResource(R.string.item_expiry_hint),
+                onCopy = {
+                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                    scope.launch {
+                        copyToClipboard(context, "Expiry", item.cardExpiry)
+                        snackbarHostState.showSnackbar(context.getString(R.string.item_expiry_copied))
+                    }
+                }
+            ) {
+                val expiryText = parseExpiryMmYyToMonthYear(item.cardExpiry)?.let { (m, y) ->
+                    formatExpiryMmYy(m, y)
+                } ?: item.cardExpiry
+                Text(
+                    text = expiryText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+
+    if (item.cardCvc.isNotBlank()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 1.dp
+        ) {
+            FieldBlock(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+                label = stringResource(R.string.item_cvc_hint),
+                onCopy = {
+                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                    scope.launch {
+                        copyToClipboard(context, "CVC", item.cardCvc, clearAfterMs = 15_000L, scope = scope)
+                        snackbarHostState.showSnackbar(context.getString(R.string.item_cvc_copied))
+                    }
+                },
+                extraTrailing = {
+                    IconButton(onClick = { cvcVisible = !cvcVisible }) {
+                        Icon(
+                            imageVector = if (cvcVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null
+                        )
+                    }
+                }
+            ) {
+                Text(
+                    text = if (cvcVisible) item.cardCvc else "\u2022".repeat(item.cardCvc.length),
+                    style = if (cvcVisible) MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace)
+                    else MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
         }
     }

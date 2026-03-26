@@ -23,7 +23,12 @@ class SaveVaultItemUseCase @Inject constructor(
         address: String = "",
         password: String,
         notes: String,
-        category: String = "login"
+        category: String = "login",
+        cardholderName: String = "",
+        cardNumber: String = "",
+        cardCvc: String = "",
+        cardExpiry: String = "",
+        previousPasswords: List<String> = emptyList()
     ): String {
         val vaultKey = vaultLockManager.requireUnlockedKey()
         val metadata = metadataRepository.get() ?: error("Vault not set up")
@@ -35,7 +40,12 @@ class SaveVaultItemUseCase @Inject constructor(
             username = username,
             address = address,
             password = password,
-            notes = notes
+            notes = notes,
+            cardholderName = cardholderName,
+            cardNumber = cardNumber,
+            cardCvc = cardCvc,
+            cardExpiry = cardExpiry,
+            previousPasswords = previousPasswords
         )
         val json = Json.encodeToString(item)
         val plaintext = json.toByteArray(Charsets.UTF_8)

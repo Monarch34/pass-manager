@@ -99,6 +99,8 @@ class VaultRepositoryImpl @Inject constructor(
 
     override suspend fun deleteById(id: String) = dao.deleteById(id)
 
+    override suspend fun deleteByIds(ids: List<String>) = dao.deleteByIds(ids)
+
     override suspend fun isVaultEmpty(): Boolean = dao.count() == 0
 
     private fun VaultItemEntity.toDomain() = VaultItem(

@@ -31,7 +31,10 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -46,19 +49,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import com.passmanager.R
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.passmanager.security.biometric.BiometricHelper
+import com.passmanager.ui.common.clearAllFocus
 import com.passmanager.ui.common.resolve
 import com.passmanager.ui.common.UserMessage
 import com.passmanager.ui.components.ErrorSnackbarEffect
@@ -236,9 +244,23 @@ fun SettingsScreen(
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-            var dropdownExpanded by remember { mutableStateOf(false) }
-            val selectedLabel = autoLockOptions.find { it.first == uiState.autoLockSeconds }?.second
+            var autoLockDropdownExpanded by remember { mutableStateOf(false) }
+            var autoLockAnchorWidthPx by remember { mutableIntStateOf(0) }
+            val density = LocalDensity.current
+            val focusManager = LocalFocusManager.current
+            val autoLockMenuWidthDp =
+                if (autoLockAnchorWidthPx > 0) {
+                    with(density) { autoLockAnchorWidthPx.toDp() }
+                } else {
+                    200.dp
+                }
+            val selectedAutoLockLabel = autoLockOptions.find { it.first == uiState.autoLockSeconds }?.second
                 ?: "${uiState.autoLockSeconds}s"
+
+            fun dismissAutoLockMenu() {
+                autoLockDropdownExpanded = false
+                focusManager.clearAllFocus()
+            }
 
             ListItem(
                 headlineContent = {
@@ -246,7 +268,7 @@ fun SettingsScreen(
                 },
                 supportingContent = {
                     Text(
-                        stringResource(R.string.settings_auto_lock_subtitle, selectedLabel),
+                        stringResource(R.string.settings_auto_lock_subtitle, selectedAutoLockLabel),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -257,42 +279,61 @@ fun SettingsScreen(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         iconTint = MaterialTheme.colorScheme.secondary
                     )
-                }
-            )
-
-            ExposedDropdownMenuBox(
-                expanded = dropdownExpanded,
-                onExpandedChange = { dropdownExpanded = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-            ) {
-                OutlinedTextField(
-                    value = selectedLabel,
-                    onValueChange = {},
-                    readOnly = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
-                    shape = MaterialTheme.shapes.small,
-                    modifier = Modifier
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth()
-                )
-                // Material3 1.3.x (Compose BOM 2024.09) exposes DropdownMenu here; ExposedDropdownMenu() is added in newer material3.
-                DropdownMenu(
-                    expanded = dropdownExpanded,
-                    onDismissRequest = { dropdownExpanded = false }
-                ) {
-                    autoLockOptions.forEach { (seconds, label) ->
-                        DropdownMenuItem(
-                            text = { Text(label) },
-                            onClick = {
-                                viewModel.setAutoLockTimeout(seconds)
-                                dropdownExpanded = false
+                },
+                trailingContent = {
+                    ExposedDropdownMenuBox(
+                        expanded = autoLockDropdownExpanded,
+                        onExpandedChange = { expanded ->
+                            autoLockDropdownExpanded = expanded
+                            if (!expanded) focusManager.clearAllFocus()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(min = 168.dp, max = 280.dp)
+                            .onGloballyPositioned { coordinates ->
+                                val w = coordinates.size.width
+                                if (w > 0) autoLockAnchorWidthPx = w
                             }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedAutoLockLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            singleLine = true,
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = autoLockDropdownExpanded)
+                            },
+                            shape = MaterialTheme.shapes.medium,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            ),
+                            textStyle = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                         )
+                        DropdownMenu(
+                            expanded = autoLockDropdownExpanded,
+                            onDismissRequest = { dismissAutoLockMenu() },
+                            modifier = Modifier
+                                .widthIn(min = autoLockMenuWidthDp, max = autoLockMenuWidthDp)
+                                .heightIn(max = 280.dp)
+                        ) {
+                            autoLockOptions.forEach { (seconds, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        viewModel.setAutoLockTimeout(seconds)
+                                        dismissAutoLockMenu()
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
-            }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
         }
     }
 

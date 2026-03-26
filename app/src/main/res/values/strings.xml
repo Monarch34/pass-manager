@@ -41,6 +41,10 @@
     <string name="vault_group_all">All</string>
     <string name="vault_group_filter_label">Group</string>
     <string name="vault_lock_button">Lock vault now</string>
+    <string name="vault_item_count">%1$d items</string>
+    <string name="vault_selected_count">%1$d selected</string>
+    <string name="vault_delete_selected_title">Delete items?</string>
+    <string name="vault_delete_selected_message">Delete %1$d selected items? This cannot be undone.</string>
 
     <!-- Item Screens -->
     <string name="item_add_title">Add item</string>
@@ -75,6 +79,36 @@
     <string name="item_not_found">Item not found</string>
     <string name="item_decrypt_failed">Failed to decrypt item</string>
     <string name="item_delete_failed">Failed to delete item</string>
+    <string name="item_cardholder_hint">Cardholder name</string>
+    <string name="item_card_number_hint">Card number</string>
+    <string name="item_cvc_hint">CVC</string>
+    <string name="item_expiry_hint">Expiry (MM/YY)</string>
+    <string name="item_expiry_month">Month</string>
+    <string name="item_expiry_year">Year</string>
+    <string name="item_card_number_invalid_16">Card number must be 16 digits</string>
+    <string name="item_validation_title_required">Title is required</string>
+    <string name="item_validation_password_required">Password is required</string>
+    <string name="item_card_pan_progress">%1$d / 16 digits</string>
+    <string name="item_card_pan_fifteen">15 digits — standard cards use 16 digits</string>
+    <string name="item_card_cvc_hint_validation">Usually 3 or 4 digits</string>
+    <string name="item_expiry_invalid">Enter a valid expiry (month 01–12)</string>
+    <string name="item_expiry_required">Expiry (MM/YY) is required</string>
+    <string name="item_cardholder_copied">Cardholder name copied</string>
+    <string name="item_card_number_copied">Card number copied</string>
+    <string name="item_cvc_copied">CVC copied — clears in 15s</string>
+    <string name="item_expiry_copied">Expiry copied</string>
+    <string name="item_card_number_required">Card number is required</string>
+    <string name="item_account_number_hint">Account number</string>
+    <string name="item_bank_name_hint">Bank name / branch</string>
+    <string name="bank_rule_length">6–12 characters (letters &amp; numbers)</string>
+    <string name="bank_rule_pin_exact">6-digit PIN (numbers only)</string>
+    <string name="bank_rule_uppercase">Contains uppercase letter</string>
+    <string name="bank_rule_lowercase">Contains lowercase letter</string>
+    <string name="bank_rule_digit">Contains a digit</string>
+    <string name="bank_rule_no_consecutive">No 3+ consecutive characters (abc, 123)</string>
+    <string name="bank_rule_no_repeating">No 3+ repeating characters (aaa, 111)</string>
+    <string name="bank_rule_not_reused">Not one of last 4 passwords</string>
+    <string name="bank_password_invalid">Password does not meet bank requirements</string>
 
     <!-- Password Generator -->
     <string name="generator_title">Generator</string>

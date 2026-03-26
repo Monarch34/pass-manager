@@ -1,4 +1,4 @@
-package com.passmanager.crypto.channel
+package com.passmanager.protocol
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

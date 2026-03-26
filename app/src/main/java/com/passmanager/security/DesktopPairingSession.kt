@@ -4,9 +4,9 @@ import android.util.Base64
 import android.util.Log
 import com.passmanager.agent.DesktopPairingClient
 import com.passmanager.crypto.channel.EncryptedChannel
-import com.passmanager.crypto.channel.PairingQrPayload
-import com.passmanager.crypto.channel.SecureRequest
-import com.passmanager.crypto.channel.SecureResponse
+import com.passmanager.protocol.PairingQrPayload
+import com.passmanager.protocol.SecureRequest
+import com.passmanager.protocol.SecureResponse
 import com.passmanager.crypto.ecdh.X25519KeyExchange
 import com.passmanager.crypto.kdf.HkdfSha256
 import com.passmanager.crypto.util.SensitiveByteArray

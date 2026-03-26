@@ -1,23 +1,23 @@
 # Repository layout
 
-Two Gradle projects, one git repo. They don’t share a root `settings.gradle.kts` — that’s the main thing to internalize.
+The repository has **two** application Gradle builds (Android root + `desktop/`) and a **`protocol/`** library included by **composite build** from both.
 
-## Repo root = Android
+## Repository root (Android)
 
-Open this folder in Android Studio. It loads **only** `:app`; `desktop/` is invisible to that Gradle import.
+Opening the repository root in Android Studio imports **`:app`** only. `desktop/` is not part of that project.
 
 | Path | What it is |
 |------|------------|
-| `settings.gradle.kts` | `include(":app")` — no desktop module |
+| `settings.gradle.kts` | `include(":app")` + `includeBuild("protocol")` with dependency substitution |
 | `build.gradle.kts` | Plugin versions (`apply false`); not the Android application module |
 | `gradle.properties` | Heap, AndroidX flags — safe to commit |
-| `gradle.properties.example` | Copy bits to **your** `~/.gradle/gradle.properties` if Java is wrong |
+| `gradle.properties.example` | Optional snippets for the user’s `~/.gradle/gradle.properties` |
 | `gradle/libs.versions.toml` | Android dependency versions |
 | `gradle/wrapper/*`, `gradlew*` | Wrapper for **root** / Android builds |
 | `local.properties.example` | Copy → `local.properties` with `sdk.dir` (that file stays local) |
-| `LICENSE`, `README.md` | Legal + project front door |
+| `LICENSE`, `README.md` | License and project overview |
 
-Stuff that should never be committed: `build/`, `.gradle/`, `local.properties`, and whatever else `.gitignore` lists for secrets and IDE junk.
+Do not commit: `build/`, `.gradle/`, `local.properties`, and paths excluded by `.gitignore` (secrets, IDE files, etc.).
 
 ## `app/` — the phone app
 
@@ -32,30 +32,34 @@ Stuff that should never be committed: `build/`, `.gradle/`, `local.properties`, 
 
 `app/build/` is generated; ignore it.
 
-## `desktop/` — Windows (and theoretically other) desktop
+## `protocol/` (shared pairing messages)
 
-Think of it as a mini-repo: its own `settings.gradle.kts`, `gradle/`, `gradlew*`, and `libs.versions.toml`. None of that is wired into the Android root project.
+Kotlin JVM module: `HandshakeRequest` / `SecureRequest` / `SecureResponse` / `PairingQrPayload`, and `SecureMessageCbor`. Built when you build `:app` or desktop; sources live only here (not duplicated under `app/` or `desktop/`).
+
+| Path | What it is |
+|------|------------|
+| `protocol/settings.gradle.kts` | Standalone settings; `rootProject.name = "passmanager-protocol"` |
+| `protocol/build.gradle.kts` | `kotlin("jvm")`, kotlinx-serialization CBOR; `group` / `version` set the Maven coordinates |
+
+## `desktop/` (desktop application)
+
+Separate Gradle project: `settings.gradle.kts`, `gradle/`, `gradlew*`, and `libs.versions.toml`. Includes `includeBuild("../protocol")` like the Android root.
 
 | Path | What it is |
 |------|------------|
 | `desktop/build.gradle.kts` | Compose Desktop app + `nativeDistributions` (MSI, etc.) |
+| `desktop/gradle.properties.example` | Optional `org.gradle.java.home` for `packageMsi` (full JDK; copy to `gradle.properties`, gitignored) |
 | `desktop/src/main/kotlin/` | UI, Ktor server, crypto glue |
-| `desktop/src/main/resources/` | Fonts, static bits |
+| `desktop/src/main/resources/` | Fonts and static resources |
 
-Again, `desktop/build/` and `desktop/.gradle/` are throwaway.
+`desktop/build/` and `desktop/.gradle/` are build outputs (gitignored).
 
-There’s a short [desktop/README.md](../desktop/README.md) in that folder too.
+See [desktop/README.md](../desktop/README.md).
 
 ## `docs/`
 
-Markdown only — nothing here participates in a build.
+Documentation only; not part of any Gradle build.
 
-## Commands at a glance
+## Build commands
 
-| | |
-|--|--|
-| Android debug APK | From root: `./gradlew :app:assembleDebug` (`.\gradlew.bat` on Windows) |
-| Unit tests | `./gradlew :app:testDebugUnitTest` |
-| Desktop run | `cd desktop && ./gradlew run` |
-
-Details and release/MSI steps: **[BUILD.md](BUILD.md)**.
+See **[BUILD.md](BUILD.md)**.

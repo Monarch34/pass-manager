@@ -1,5 +1,9 @@
 package com.passmanager.crypto.channel
 
+import com.passmanager.protocol.ItemSummary
+import com.passmanager.protocol.SecureMessageCbor
+import com.passmanager.protocol.SecureRequest
+import com.passmanager.protocol.SecureResponse
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

@@ -2,7 +2,7 @@ package com.passmanager.domain.usecase
 
 import android.content.Context
 import com.passmanager.R
-import com.passmanager.crypto.channel.SecureResponse
+import com.passmanager.protocol.SecureResponse
 import com.passmanager.domain.repository.VaultRepository
 import com.passmanager.security.DesktopPairingSession
 import dagger.hilt.android.qualifiers.ApplicationContext

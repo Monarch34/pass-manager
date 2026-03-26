@@ -18,6 +18,7 @@ release/
 
 # Gradle files
 .gradle/
+**/.gradle/
 build/
 
 # Do not commit: Gradle 8.8+ `updateDaemonJvm` output conflicts with org.gradle.java.home / IDE JDK.
@@ -25,6 +26,11 @@ gradle/gradle-daemon-jvm.properties
 
 # Local configuration file (SDK path — machine-specific)
 local.properties
+
+# Desktop: full JDK path for packageMsi (copy from desktop/gradle.properties.example)
+desktop/gradle.properties
+# Desktop: isolated Gradle home used only by package-msi.cmd (avoids ~/.gradle overriding java.home)
+desktop/.gradle-packaging-userhome/
 
 # Environment and secrets (never commit)
 .env

@@ -17,3 +17,9 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "passmanager-desktop"
+
+includeBuild("../protocol") {
+    dependencySubstitution {
+        substitute(module("com.passmanager:passmanager-protocol")).using(project(":"))
+    }
+}

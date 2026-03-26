@@ -153,8 +153,13 @@ fun MainTabNavHost(
                 val maxSheetHeight = (configuration.screenHeightDp * 0.70f).dp
 
                 VaultListScreen(
-                    onNavigateToAddItem = {
-                        navController.navigate(Screen.AddEditItem.createRoute(null))
+                    onNavigateToAddItem = { filterCategory ->
+                        navController.navigate(
+                            Screen.AddEditItem.createRoute(
+                                itemId = null,
+                                initialCategory = filterCategory?.name?.lowercase()
+                            )
+                        )
                     },
                     onNavigateToViewItem = { itemId -> viewItemSheetId = itemId },
                     onNavigateToSettings = {
@@ -226,6 +231,11 @@ fun MainTabNavHost(
                 popExitTransition = { fadeOut(tween(250)) + slideOutHorizontally(tween(250)) { it } },
                 arguments = listOf(
                     navArgument("itemId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("initialCategory") {
                         type = NavType.StringType
                         nullable = true
                         defaultValue = null

@@ -9,9 +9,9 @@ import androidx.core.app.NotificationCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.passmanager.R
-import com.passmanager.crypto.channel.PairingQrPayload
-import com.passmanager.crypto.channel.SecureRequest
-import com.passmanager.crypto.channel.SecureResponse
+import com.passmanager.protocol.PairingQrPayload
+import com.passmanager.protocol.SecureRequest
+import com.passmanager.protocol.SecureResponse
 import com.passmanager.domain.usecase.ConnectToDesktopUseCase
 import com.passmanager.domain.usecase.DesktopRateLimitException
 import com.passmanager.domain.usecase.SendItemListToDesktopUseCase

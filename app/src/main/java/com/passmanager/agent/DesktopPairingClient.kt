@@ -1,11 +1,11 @@
 package com.passmanager.agent
 
 import com.passmanager.crypto.channel.EncryptedChannel
-import com.passmanager.crypto.channel.HandshakeRequest
-import com.passmanager.crypto.channel.HandshakeResponse
-import com.passmanager.crypto.channel.SecureMessageCbor
-import com.passmanager.crypto.channel.SecureRequest
-import com.passmanager.crypto.channel.SecureResponse
+import com.passmanager.protocol.HandshakeRequest
+import com.passmanager.protocol.HandshakeResponse
+import com.passmanager.protocol.SecureMessageCbor
+import com.passmanager.protocol.SecureRequest
+import com.passmanager.protocol.SecureResponse
 import com.passmanager.domain.usecase.DesktopHandshakeException
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body

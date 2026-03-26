@@ -45,7 +45,9 @@ data class VaultListUiState(
     val categoryFilter: ItemCategory? = null,
     val isLocked: Boolean = false,
     val isLoading: Boolean = true,
-    val useGoogleFavicons: Boolean = AppPreferences.DEFAULT_USE_GOOGLE_FAVICONS
+    val useGoogleFavicons: Boolean = AppPreferences.DEFAULT_USE_GOOGLE_FAVICONS,
+    val selectedIds: Set<String> = emptySet(),
+    val isSelectionMode: Boolean = false
 )
 
 private data class VaultListPipelineResult(
@@ -85,15 +87,20 @@ class VaultListViewModel @Inject constructor(
             vaultRepository.observeHeaders().collect { headers ->
                 _items.value = headers
                 _uiState.update { it.copy(items = headers, isLoading = false) }
-                decryptHeaders(headers)
+                if (vaultLockManager.lockState.value is LockState.Unlocked) {
+                    decryptHeaders(headers)
+                }
             }
         }
         viewModelScope.launch {
             vaultLockManager.lockState.collect { state ->
-                if (state !is LockState.Unlocked) {
-                    _uiState.update { it.copy(isLocked = true) }
+                val locked = state !is LockState.Unlocked
+                _uiState.update { it.copy(isLocked = locked) }
+                if (locked) {
                     _headerCache.value = VaultListHeaderCache()
                     _decryptCacheKey.value = emptyMap()
+                } else {
+                    decryptHeaders(_items.value)
                 }
             }
         }
@@ -239,6 +246,37 @@ class VaultListViewModel @Inject constructor(
     fun setCategoryFilter(category: ItemCategory?) {
         viewModelScope.launch {
             appPreferences.setVaultGroupFilter(category)
+        }
+    }
+
+    fun enterSelectionMode(id: String) {
+        _uiState.update { it.copy(selectedIds = setOf(id), isSelectionMode = true) }
+    }
+
+    fun toggleSelection(id: String) {
+        _uiState.update { state ->
+            val newIds = if (id in state.selectedIds) state.selectedIds - id else state.selectedIds + id
+            state.copy(
+                selectedIds = newIds,
+                isSelectionMode = newIds.isNotEmpty()
+            )
+        }
+    }
+
+    fun clearSelection() {
+        _uiState.update { it.copy(selectedIds = emptySet(), isSelectionMode = false) }
+    }
+
+    fun deleteSelected() {
+        val ids = _uiState.value.selectedIds.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                vaultRepository.deleteByIds(ids)
+                clearSelection()
+            } catch (e: Exception) {
+                Log.e("VaultListViewModel", "Batch delete failed", e)
+            }
         }
     }
 

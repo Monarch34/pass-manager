@@ -55,7 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.passmanager.desktop.model.ItemSummary
+import com.passmanager.protocol.ItemSummary
 import com.passmanager.desktop.ui.theme.CategoryCardTint
 import com.passmanager.desktop.ui.theme.CategoryIdentityTint
 import com.passmanager.desktop.ui.theme.CategoryLoginTint

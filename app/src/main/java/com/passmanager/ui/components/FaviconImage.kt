@@ -59,13 +59,11 @@ private fun FaviconPlaceholder(modifier: Modifier = Modifier) {
  * Loads a site favicon for display next to vault items.
  *
  * When [useGoogleFavicons] is true: tries Google’s favicon service first, then
- * `https://{domain}/favicon.ico`. When false: only the direct URL (no third party).
+ * `https://{domain}/favicon.ico`. When false: shows [fallback] only (no network).
  * If loading fails, [fallback] is shown.
  *
  * Uses [rememberAsyncImagePainter] instead of nested [SubcomposeAsyncImage] to cut
  * main-thread subcomposition cost when many rows are visible.
- *
- * @param suppressNetworkImage When true, skips Coil and shows [fallback] (e.g. while a list is scrolling).
  */
 @Composable
 fun FaviconImage(
@@ -73,17 +71,11 @@ fun FaviconImage(
     useGoogleFavicons: Boolean,
     modifier: Modifier = Modifier,
     size: Dp = 30.dp,
-    suppressNetworkImage: Boolean = false,
     fallback: @Composable () -> Unit
 ) {
     val domain = remember(url) { extractDomain(url.trim()) }
 
-    if (domain == null) {
-        fallback()
-        return
-    }
-
-    if (suppressNetworkImage) {
+    if (domain == null || !useGoogleFavicons) {
         fallback()
         return
     }
@@ -104,9 +96,7 @@ fun FaviconImage(
         Size(Dimension.Pixels(decodePx), Dimension.Pixels(decodePx))
     }
 
-    var tryDirectOnly by remember(domain, useGoogleFavicons) {
-        mutableStateOf(!useGoogleFavicons)
-    }
+    var tryDirectOnly by remember(domain) { mutableStateOf(false) }
 
     val dataUrl = if (tryDirectOnly) directIcoUrl else primaryUrl
     val request = remember(dataUrl, coilSize) {
@@ -121,11 +111,8 @@ fun FaviconImage(
 
     val painter = rememberAsyncImagePainter(model = request)
 
-    LaunchedEffect(painter.state, useGoogleFavicons, tryDirectOnly) {
-        if (useGoogleFavicons &&
-            !tryDirectOnly &&
-            painter.state is AsyncImagePainter.State.Error
-        ) {
+    LaunchedEffect(painter.state, tryDirectOnly) {
+        if (!tryDirectOnly && painter.state is AsyncImagePainter.State.Error) {
             tryDirectOnly = true
         }
     }
@@ -134,7 +121,7 @@ fun FaviconImage(
         .size(size)
         .clip(RoundedCornerShape(25))
 
-    when (val state = painter.state) {
+    when (painter.state) {
         is AsyncImagePainter.State.Success -> {
             Image(
                 painter = painter,
@@ -144,7 +131,7 @@ fun FaviconImage(
             )
         }
         is AsyncImagePainter.State.Error -> {
-            if (tryDirectOnly || !useGoogleFavicons) {
+            if (tryDirectOnly) {
                 fallback()
             } else {
                 FaviconPlaceholder(clipMod)

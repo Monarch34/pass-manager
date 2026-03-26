@@ -1,0 +1,15 @@
+# Fix "jpackage.exe is missing" when Gradle uses Android Studio JBR (not a full JDK).
+#
+# 1. Install JDK 17: https://adoptium.net/ (Eclipse Temurin).
+# 2. Copy this file to `gradle.properties` in this folder.
+# 3. Set the path (forward slashes work on Windows).
+#
+# If you also set org.gradle.java.home in %USERPROFILE%\.gradle\gradle.properties (e.g. to Studio JBR
+# for Android), that file wins over this one. On Windows, run `package-msi.cmd` instead of plain
+# gradlew packageMsi — it uses a local Gradle home so this path is honored.
+#
+# org.gradle.java.home=C:/Program Files/Eclipse Adoptium/jdk-17.0.18.8-hotspot
+#
+# 4. package-msi.cmd   (recommended on Windows if ~/.gradle sets java.home)
+#    — or: gradlew.bat --stop && gradlew.bat packageMsi
+# WiX: optional on PATH; Compose can download WiX (see build log).

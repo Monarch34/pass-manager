@@ -35,7 +35,9 @@ fun SecureTextField(
     imeAction: ImeAction = ImeAction.Done,
     onImeAction: (() -> Unit)? = null,
     shape: Shape = MaterialTheme.shapes.medium,
-    colors: TextFieldColors? = null
+    colors: TextFieldColors? = null,
+    isError: Boolean = false,
+    supportingText: (@Composable () -> Unit)? = null
 ) {
     var visible by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
@@ -64,6 +66,8 @@ fun SecureTextField(
         },
         shape = shape,
         colors = colors ?: OutlinedTextFieldDefaults.colors(),
+        isError = isError,
+        supportingText = supportingText,
         modifier = modifier
     )
 }

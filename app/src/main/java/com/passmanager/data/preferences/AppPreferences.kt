@@ -29,7 +29,7 @@ class AppPreferences @Inject constructor(
         private val VAULT_GROUP_FILTER = stringPreferencesKey("vault_group_filter")
         const val DEFAULT_AUTO_LOCK_SECONDS = 300 // 5 minutes
         /** Default true preserves historical behavior (Google helper + direct fallback). */
-        const val DEFAULT_USE_GOOGLE_FAVICONS = true
+        const val DEFAULT_USE_GOOGLE_FAVICONS = false
     }
 
     val autoLockTimeoutSeconds: Flow<Int> = context.dataStore.data.map { preferences ->

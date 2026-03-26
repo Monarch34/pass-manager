@@ -1,7 +1,7 @@
 package com.passmanager.domain.usecase
 
-import com.passmanager.crypto.channel.ItemSummary
-import com.passmanager.crypto.channel.SecureResponse
+import com.passmanager.protocol.ItemSummary
+import com.passmanager.protocol.SecureResponse
 import com.passmanager.domain.repository.VaultRepository
 import com.passmanager.security.DesktopPairingSession
 import kotlinx.coroutines.Dispatchers

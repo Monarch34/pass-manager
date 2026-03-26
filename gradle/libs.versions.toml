@@ -54,7 +54,6 @@ bouncycastle = "1.78.1"
 # Testing
 junit = "4.13.2"
 junitVersion = "1.2.1"
-espressoCore = "3.6.1"
 turbine = "1.1.0"
 mockk = "1.13.12"
 coroutinesTest = "1.8.1"
@@ -107,7 +106,6 @@ argon2kt = { group = "com.lambdapioneer.argon2kt", name = "argon2kt", version.re
 
 # Serialization
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
-kotlinx-serialization-cbor = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-cbor", version.ref = "kotlinxSerialization" }
 
 # Image loading
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
@@ -136,12 +134,10 @@ bouncycastle-provider = { group = "org.bouncycastle", name = "bcprov-jdk18on", v
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
-androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

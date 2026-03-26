@@ -2,14 +2,14 @@ package com.passmanager.desktop.server
 
 import com.passmanager.desktop.crypto.EncryptedChannel
 import com.passmanager.desktop.crypto.HkdfSha256
-import com.passmanager.desktop.crypto.SecureMessageCbor
 import com.passmanager.desktop.crypto.SensitiveByteArray
 import com.passmanager.desktop.crypto.X25519KeyExchange
-import com.passmanager.desktop.model.HandshakeRequest
-import com.passmanager.desktop.model.HandshakeResponse
-import com.passmanager.desktop.model.PairingQrPayload
-import com.passmanager.desktop.model.SecureRequest
-import com.passmanager.desktop.model.SecureResponse
+import com.passmanager.protocol.HandshakeRequest
+import com.passmanager.protocol.HandshakeResponse
+import com.passmanager.protocol.PairingQrPayload
+import com.passmanager.protocol.SecureMessageCbor
+import com.passmanager.protocol.SecureRequest
+import com.passmanager.protocol.SecureResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install

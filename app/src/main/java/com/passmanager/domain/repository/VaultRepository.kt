@@ -40,5 +40,6 @@ interface VaultRepository {
         addressIv: ByteArray?
     )
     suspend fun deleteById(id: String)
+    suspend fun deleteByIds(ids: List<String>)
     suspend fun isVaultEmpty(): Boolean
 }

@@ -22,8 +22,8 @@ import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import com.passmanager.desktop.clipboard.ClipboardManager
 import com.passmanager.desktop.preferences.DesktopPreferences
-import com.passmanager.desktop.model.SecureRequest
-import com.passmanager.desktop.model.SecureResponse
+import com.passmanager.protocol.SecureRequest
+import com.passmanager.protocol.SecureResponse
 import com.passmanager.desktop.server.DesktopSessionManager
 import com.passmanager.desktop.server.DesktopSessionState
 import com.passmanager.desktop.server.PairingServer

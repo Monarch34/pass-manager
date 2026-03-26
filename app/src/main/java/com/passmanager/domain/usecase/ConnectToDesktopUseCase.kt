@@ -1,7 +1,7 @@
 package com.passmanager.domain.usecase
 
-import com.passmanager.crypto.channel.PairingQrPayload
-import com.passmanager.crypto.channel.PROTOCOL_V1
+import com.passmanager.protocol.PROTOCOL_V1
+import com.passmanager.protocol.PairingQrPayload
 import com.passmanager.security.DesktopPairingSession
 import com.passmanager.security.PairingSessionState
 import javax.inject.Inject

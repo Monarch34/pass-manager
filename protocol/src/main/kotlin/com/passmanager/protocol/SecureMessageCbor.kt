@@ -1,16 +1,14 @@
 @file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
 
-package com.passmanager.crypto.channel
+package com.passmanager.protocol
 
 import kotlinx.serialization.cbor.Cbor
 
 /**
  * CBOR serialization for [SecureRequest] / [SecureResponse] over the encrypted WebSocket.
- * Binary format avoids UTF-8 decoding entire payloads into [String] and encodes passwords as raw bytes.
  */
-internal object SecureMessageCbor {
+object SecureMessageCbor {
     val cbor: Cbor = Cbor {
-        // Include default field values so peers with identical schema always round-trip predictably.
         encodeDefaults = true
     }
 

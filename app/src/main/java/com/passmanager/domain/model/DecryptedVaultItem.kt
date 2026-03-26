@@ -20,5 +20,10 @@ data class DecryptedVaultItem(
     /** Website URL or other address for this login (optional). */
     val address: String = "",
     val password: String,
-    val notes: String
+    val notes: String,
+    val cardholderName: String = "",
+    val cardNumber: String = "",
+    val cardCvc: String = "",
+    val cardExpiry: String = "",
+    val previousPasswords: List<String> = emptyList()
 )

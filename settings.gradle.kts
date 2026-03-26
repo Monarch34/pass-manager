@@ -1,6 +1,7 @@
 /**
- * Android application root. Only `:app` is included.
- * Desktop: separate build in `desktop/` — see `desktop/settings.gradle.kts`.
+ * Android application root: `include(":app")`.
+ * Shared `protocol/` is an included composite build (pairing CBOR + DTOs).
+ * Desktop: separate project in `desktop/` — see `desktop/settings.gradle.kts`.
  */
 pluginManagement {
     repositories {
@@ -25,3 +26,9 @@ dependencyResolutionManagement {
 
 rootProject.name = "PassManager"
 include(":app")
+
+includeBuild("protocol") {
+    dependencySubstitution {
+        substitute(module("com.passmanager:passmanager-protocol")).using(project(":"))
+    }
+}
