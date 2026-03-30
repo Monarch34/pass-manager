@@ -133,6 +133,8 @@ fun OnboardingScreen(
                             onImeAction = {
                                 if (!uiState.isLoading) {
                                     viewModel.createVault(passphrase.toCharArray(), confirm.toCharArray())
+                                    passphrase = ""
+                                    confirm = ""
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
@@ -147,6 +149,8 @@ fun OnboardingScreen(
                     onClick = {
                         focusManager.clearFocus()
                         viewModel.createVault(passphrase.toCharArray(), confirm.toCharArray())
+                        passphrase = ""
+                        confirm = ""
                     },
                     isLoading = uiState.isLoading,
                     enabled = passphrase.isNotEmpty() && confirm.isNotEmpty(),

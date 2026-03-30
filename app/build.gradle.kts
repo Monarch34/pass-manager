@@ -69,12 +69,44 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // BouncyCastle + jspecify (transitive) both ship this path on newer JDK metadata jars
+            pickFirsts += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
+        // AGP 8.5+: uncompressed JNI + 16 KB zip alignment for Play / 16 KB page-size devices
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
+    sourceSets {
+        getByName("androidTest") {
+            assets.srcDir(layout.buildDirectory.dir("generated/roomAndroidTestAssets"))
+        }
+    }
+}
+
+// MigrationTestHelper expects assets under schemas/<pkg path>/; KSP exports to schemas/<single dotted dir>/
+val copyRoomTestSchemas by tasks.registering(Copy::class) {
+    from(layout.projectDirectory.dir("schemas/com.passmanager.data.db.VaultDatabase"))
+    into(
+        layout.buildDirectory.dir(
+            "generated/roomAndroidTestAssets/schemas/com/passmanager/data/db/VaultDatabase"
+        )
+    )
+    include("*.json")
+}
+
+tasks.configureEach {
+    if (name.startsWith("merge") && name.contains("AndroidTest", ignoreCase = true) &&
+        name.contains("Assets", ignoreCase = true)
+    ) {
+        dependsOn(copyRoomTestSchemas)
     }
 }
 
@@ -93,7 +125,6 @@ dependencies {
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
-
     // Compose
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)
@@ -101,6 +132,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    // Full Material icon font (larger APK). To shrink: replace usages with material-icons-core glyphs only.
     implementation(libs.androidx.material.icons.extended)
 
     // Activity + Navigation
@@ -162,6 +194,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.room.testing)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }

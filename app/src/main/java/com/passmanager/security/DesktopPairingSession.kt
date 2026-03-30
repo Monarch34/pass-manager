@@ -1,9 +1,12 @@
 package com.passmanager.security
 
 import android.util.Base64
-import android.util.Log
+import com.passmanager.BuildConfig
 import com.passmanager.agent.DesktopPairingClient
 import com.passmanager.crypto.channel.EncryptedChannel
+import com.passmanager.domain.model.DesktopPairingConstants
+import com.passmanager.domain.model.PairingSessionState
+import com.passmanager.domain.port.DesktopPairingPort
 import com.passmanager.protocol.PairingQrPayload
 import com.passmanager.protocol.SecureRequest
 import com.passmanager.protocol.SecureResponse
@@ -19,54 +22,41 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
-sealed interface PairingSessionState {
-    data object Idle : PairingSessionState
-    data object Pairing : PairingSessionState
-    data class Verifying(
-        val code: String,
-        val desktopIp: String,
-        val attemptsRemaining: Int = MAX_VERIFY_ATTEMPTS,
-        val expiresAtMs: Long = 0L,
-        /** 8-char hex fingerprint of both public keys. User should verify this matches the desktop. */
-        val safetyNumber: String = ""
-    ) : PairingSessionState {
-        companion object {
-            const val MAX_VERIFY_ATTEMPTS = 3
-        }
-    }
-    data class Active(
-        val desktopIp: String,
-        val passwordsSent: Int,
-        val lastItemTitle: String?
-    ) : PairingSessionState
-    data class Ended(val reason: String) : PairingSessionState
-    data class Error(val message: String) : PairingSessionState
-}
+import io.ktor.client.HttpClient
 
 /**
  * Manages the lifecycle of a single ephemeral desktop pairing session.
  * Holds all transient crypto state (keypairs, session key, channel) in memory.
  * Everything is zeroed on session end.
  *
- * W1 mitigation: rate limits password requests (max [MAX_PW_PER_SESSION] per session,
- * min [PW_COOLDOWN_MS] between requests).
+ * W1 mitigation: rate limits password requests (see [DesktopPairingConstants.MAX_PW_PER_SESSION],
+ * [DesktopPairingConstants.PW_COOLDOWN_MS]).
  *
- * Desktop-initiated vault list refreshes are limited by [VAULT_LIST_COOLDOWN_MS]
+ * Desktop-initiated vault list refreshes are limited by [DesktopPairingConstants.VAULT_LIST_COOLDOWN_MS]
  * so the phone is not spammed; the initial list push after verification is not gated by this.
  */
 @Singleton
-class DesktopPairingSession @Inject constructor() {
+class DesktopPairingSession @Inject constructor(
+    private val clientProvider: Provider<DesktopPairingClient>
+) : DesktopPairingPort {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val _state = MutableStateFlow<PairingSessionState>(PairingSessionState.Idle)
     val state: StateFlow<PairingSessionState> = _state.asStateFlow()
+
+    private val sessionLock = Any()
 
     private var keyExchange: X25519KeyExchange? = null
     private var sessionKey: SensitiveByteArray? = null
@@ -78,24 +68,34 @@ class DesktopPairingSession @Inject constructor() {
     private var verifyTimeoutJob: Job? = null
 
     private var pendingSafetyNumber: String = ""
-
-    private var passwordsSentThisSession = 0
-    private var lastPasswordRequestTimeMs = 0L
     private var lastItemTitle: String? = null
-
-    /** Last time the desktop asked for [SecureRequest.ListItems] (not the post-verify auto-push). */
-    private var lastVaultListRequestFromDesktopMs = 0L
-
-    // Exposed for the pairing flow to read
     var desktopIp: String? = null; private set
     var desktopPort: Int = 0; private set
 
-    /**
-     * Phase 1: Parse QR payload, generate ephemeral keypair, perform ECDH handshake.
-     * Returns the channel and client for Phase 2.
-     */
+    private val rateLimiter = DesktopSessionRateLimiter(
+        maxPasswords = DesktopPairingConstants.MAX_PW_PER_SESSION,
+        passwordCooldownMs = DesktopPairingConstants.PW_COOLDOWN_MS,
+        vaultListCooldownMs = DesktopPairingConstants.VAULT_LIST_COOLDOWN_MS
+    )
+
+    override val pairingState: StateFlow<PairingSessionState>
+        get() = state
+
+    override val isPairing: StateFlow<Boolean> = _state
+        .map { it is PairingSessionState.Pairing }
+        .stateIn(
+            scope = scope,
+            started = SharingStarted.Eagerly,
+            initialValue = _state.value is PairingSessionState.Pairing
+        )
+
+    override suspend fun connectAndPair(qrPayload: PairingQrPayload) {
+        val result = startPairing(qrPayload)
+        completePairing(result.channel, result.client)
+    }
+
     suspend fun startPairing(qrPayload: PairingQrPayload): PairingStartResult {
-        cleanup()
+        synchronized(sessionLock) { cleanupLocked() }
         _state.value = PairingSessionState.Pairing
 
         desktopIp = qrPayload.ip
@@ -104,7 +104,7 @@ class DesktopPairingSession @Inject constructor() {
         val kx = X25519KeyExchange()
         keyExchange = kx
 
-        val pairingClient = DesktopPairingClient()
+        val pairingClient = clientProvider.get()
         client = pairingClient
 
         val phonePubBytes = kx.publicKeyBytes.copyOf()
@@ -122,9 +122,8 @@ class DesktopPairingSession @Inject constructor() {
                 qrPayload.token
             )
 
-            // ECDH → shared secret → HKDF → session key
             val sharedSecret = kx.deriveSharedSecret(desktopPubBytes)
-            kx.close() // zero private key immediately
+            kx.close()
             keyExchange = null
 
             val salt = combinePubKeys(phonePubBytes, desktopPubBytes)
@@ -137,10 +136,10 @@ class DesktopPairingSession @Inject constructor() {
             )
             sharedSecret.fill(0)
 
-            sessionKey = SensitiveByteArray.directFrom(derivedKey) // zeroes derivedKey
+            sessionKey = SensitiveByteArray.directFrom(derivedKey)
 
             val ch = EncryptedChannel(
-                sessionKey = sessionKey!!.copyBytes(), // EncryptedChannel zeros this copy immediately
+                sessionKey = sessionKey!!.copyBytes(),
                 sendDirection = EncryptedChannel.Direction.PHONE_TO_DESKTOP
             )
             channel = ch
@@ -157,12 +156,6 @@ class DesktopPairingSession @Inject constructor() {
         }
     }
 
-    /**
-     * Phase 2: Open WebSocket, generate 6-digit verification code, transition to
-     * [PairingSessionState.Verifying]. The code is displayed on the phone for the
-     * user to type on the desktop. Actual session activation happens when
-     * [handleVerifyRequest] receives the correct code.
-     */
     suspend fun completePairing(
         channel: EncryptedChannel,
         pairingClient: DesktopPairingClient,
@@ -172,14 +165,12 @@ class DesktopPairingSession @Inject constructor() {
 
         val verified = CompletableDeferred<Unit>()
 
-        // Generate random 6-digit code
-        val code = String.format("%06d", SecureRandom().nextInt(1_000_000))
+        val code = String.format("%06d", secureRandom.nextInt(1_000_000))
 
         sessionJob = scope.launch {
             try {
                 pairingClient.runSecureSession(ip, port, channel) {
-                    // WebSocket is open — transition to Verifying and signal caller
-                    val expiresAt = System.currentTimeMillis() + VERIFY_CODE_TIMEOUT_MS
+                    val expiresAt = System.currentTimeMillis() + DesktopPairingConstants.VERIFY_CODE_TIMEOUT_MS
                     _state.value = PairingSessionState.Verifying(
                         code = code,
                         desktopIp = ip,
@@ -187,14 +178,13 @@ class DesktopPairingSession @Inject constructor() {
                         expiresAtMs = expiresAt,
                         safetyNumber = pendingSafetyNumber
                     )
-                    // Start code expiry timer
                     verifyTimeoutJob = scope.launch {
-                        delay(VERIFY_CODE_TIMEOUT_MS)
+                        delay(DesktopPairingConstants.VERIFY_CODE_TIMEOUT_MS)
                         if (_state.value is PairingSessionState.Verifying) {
                             try {
                                 sendSecure(SecureResponse.VerifyFailed("Code expired", 0))
                             } catch (e: Exception) {
-                                Log.w(TAG, "Failed to send verify timeout", e)
+                                logDebug("Failed to send verify timeout", e)
                             }
                             endSession("Verification code expired")
                         }
@@ -216,7 +206,6 @@ class DesktopPairingSession @Inject constructor() {
             throw e
         }
 
-        // Auto-end session if the WebSocket closes unexpectedly
         sessionJob?.invokeOnCompletion { cause ->
             val currentState = _state.value
             if (currentState is PairingSessionState.Active ||
@@ -229,10 +218,6 @@ class DesktopPairingSession @Inject constructor() {
         }
     }
 
-    /**
-     * Handles a verification code attempt from the desktop.
-     * Returns true if the code matches and session is now Active.
-     */
     suspend fun handleVerifyRequest(receivedCode: String): Boolean {
         val currentState = _state.value
         if (currentState !is PairingSessionState.Verifying) return false
@@ -240,10 +225,8 @@ class DesktopPairingSession @Inject constructor() {
         if (receivedCode == currentState.code) {
             sendSecure(SecureResponse.VerifyOk(safetyNumber = pendingSafetyNumber))
 
-            passwordsSentThisSession = 0
-            lastPasswordRequestTimeMs = 0L
+            rateLimiter.reset()
             lastItemTitle = null
-            lastVaultListRequestFromDesktopMs = 0L
 
             _state.value = PairingSessionState.Active(
                 desktopIp = currentState.desktopIp,
@@ -267,9 +250,6 @@ class DesktopPairingSession @Inject constructor() {
         }
     }
 
-    /**
-     * Clears terminal UI states so the user can scan again without staying on Error/Ended.
-     */
     fun resetToIdleIfTerminal() {
         when (_state.value) {
             is PairingSessionState.Error, is PairingSessionState.Ended -> {
@@ -279,81 +259,76 @@ class DesktopPairingSession @Inject constructor() {
         }
     }
 
-    /**
-     * Resets crypto and UI state after a failed pairing attempt (stuck in [PairingSessionState.Pairing]).
-     */
-    fun abortPairing(reason: String) {
-        sessionJob?.cancel()
-        inactivityJob?.cancel()
-        verifyTimeoutJob?.cancel()
-        sessionJob = null
-        inactivityJob = null
-        verifyTimeoutJob = null
+    override fun abortPairing(reason: String) {
         _state.value = PairingSessionState.Error(reason)
-        cleanup()
+        synchronized(sessionLock) { cleanupLocked() }
     }
 
-    fun canSendPassword(): Boolean {
+    override fun canSendPassword(): Boolean {
         if (_state.value !is PairingSessionState.Active) return false
-        if (passwordsSentThisSession >= MAX_PW_PER_SESSION) return false
-        val now = System.currentTimeMillis()
-        if (now - lastPasswordRequestTimeMs < PW_COOLDOWN_MS) return false
-        return true
+        return rateLimiter.canSendPassword()
     }
 
     fun canAcceptVaultListRequestFromDesktop(): Boolean {
         if (_state.value !is PairingSessionState.Active) return false
-        val now = System.currentTimeMillis()
-        return now - lastVaultListRequestFromDesktopMs >= VAULT_LIST_COOLDOWN_MS
+        return rateLimiter.canAcceptVaultListRequest()
     }
 
     fun recordVaultListRequestFromDesktop() {
-        lastVaultListRequestFromDesktopMs = System.currentTimeMillis()
+        rateLimiter.recordVaultListRequest()
         resetInactivityTimer()
     }
 
-    fun recordPasswordSent(itemTitle: String) {
-        passwordsSentThisSession++
-        lastPasswordRequestTimeMs = System.currentTimeMillis()
+    override fun recordPasswordSent(itemTitle: String) {
+        val sent = rateLimiter.recordPasswordSent()
         lastItemTitle = itemTitle
         resetInactivityTimer()
 
         val ip = desktopIp ?: return
         _state.value = PairingSessionState.Active(
             desktopIp = ip,
-            passwordsSent = passwordsSentThisSession,
+            passwordsSent = sent,
             lastItemTitle = lastItemTitle
         )
 
-        if (passwordsSentThisSession >= MAX_PW_PER_SESSION) {
+        if (sent >= DesktopPairingConstants.MAX_PW_PER_SESSION) {
             scope.launch { endSession("Session password limit reached") }
         }
     }
 
-    suspend fun sendSecure(response: SecureResponse) {
+    sealed interface ReceiveResult {
+        data class Success(val request: SecureRequest) : ReceiveResult
+        data object ConnectionClosed : ReceiveResult
+        data class Error(val cause: Exception) : ReceiveResult
+    }
+
+    override suspend fun sendSecure(response: SecureResponse) {
         client?.sendSecure(response)
     }
 
-    suspend fun receiveSecureRequest(): SecureRequest? {
+    suspend fun receiveSecureRequest(): ReceiveResult {
         return try {
-            client?.receiveSecureRequest()
+            val request = client?.receiveSecureRequest()
+            if (request != null) ReceiveResult.Success(request)
+            else ReceiveResult.ConnectionClosed
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to receive secure request", e)
-            null
+            logDebug("Failed to receive secure request", e)
+            ReceiveResult.Error(e)
         }
     }
 
     suspend fun endSession(reason: String = "User disconnected") {
         _state.value = PairingSessionState.Ended(reason)
+        val clientRef = synchronized(sessionLock) { client }
         try {
-            client?.sendSecure(SecureResponse.DisconnectAck)
+            clientRef?.sendSecure(SecureResponse.DisconnectAck)
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to send disconnect ack", e)
+            logDebug("Failed to send disconnect ack", e)
         }
-        cleanup()
+        synchronized(sessionLock) { cleanupLocked() }
     }
 
-    private fun cleanup() {
+    private fun cleanupLocked() {
         inactivityJob?.cancel()
         sessionJob?.cancel()
         verifyTimeoutJob?.cancel()
@@ -371,32 +346,25 @@ class DesktopPairingSession @Inject constructor() {
         keyExchange?.close()
         keyExchange = null
 
-        // Capture client reference before nulling to avoid race condition
         val clientRef = client
         client = null
         if (clientRef != null) {
             scope.launch {
                 try {
-                    clientRef.close()
+                    withTimeout(CLIENT_CLOSE_TIMEOUT_MS) { clientRef.close() }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to close desktop client", e)
+                    logDebug("Failed to close desktop client", e)
                 }
             }
         }
 
-        passwordsSentThisSession = 0
-        lastPasswordRequestTimeMs = 0L
+        rateLimiter.reset()
         lastItemTitle = null
-        lastVaultListRequestFromDesktopMs = 0L
         pendingSafetyNumber = ""
         desktopIp = null
         desktopPort = 0
     }
 
-    /**
-     * Responds to a heartbeat request from the desktop.
-     * Resets the inactivity timer (heartbeat proves the desktop is alive).
-     */
     suspend fun respondToHeartbeat() {
         resetInactivityTimer()
         sendSecure(SecureResponse.HeartbeatAck(ts = System.currentTimeMillis()))
@@ -405,17 +373,11 @@ class DesktopPairingSession @Inject constructor() {
     private fun resetInactivityTimer() {
         inactivityJob?.cancel()
         inactivityJob = scope.launch {
-            delay(INACTIVITY_TIMEOUT_MS)
+            delay(DesktopPairingConstants.INACTIVITY_TIMEOUT_MS)
             endSession("Inactivity timeout")
         }
     }
 
-    /**
-     * Deterministic ordering: compare byte-by-byte (lexicographic) so the same
-     * two keys always produce the same salt regardless of JVM run or hash collisions.
-     * contentHashCode() is NOT used — it is non-deterministic across JVM restarts
-     * and prone to collisions.
-     */
     private fun combinePubKeys(a: ByteArray, b: ByteArray): ByteArray {
         val combined = ByteArray(a.size + b.size)
         val aFirst = compareArrays(a, b) <= 0
@@ -427,8 +389,9 @@ class DesktopPairingSession @Inject constructor() {
     }
 
     /**
-     * SHA-256(min(a,b) || max(a,b)) → first 4 bytes → 8 uppercase hex chars.
-     * Shown on both phone and desktop so the user can visually confirm no MITM occurred.
+     * 32-bit fingerprint (8 hex chars). Sufficient for LAN-only pairing where
+     * the QR code is the primary trust anchor; this is a secondary visual check.
+     * Not comparable to Signal-grade safety numbers (which use 60+ digits).
      */
     private fun computeSafetyNumber(phonePub: ByteArray, desktopPub: ByteArray): String {
         val combined = combinePubKeys(phonePub, desktopPub)
@@ -445,22 +408,21 @@ class DesktopPairingSession @Inject constructor() {
         return a.size - b.size
     }
 
+    private fun logDebug(message: String, throwable: Throwable? = null) {
+        if (BuildConfig.DEBUG) {
+            android.util.Log.w(TAG, message, throwable)
+        }
+    }
+
     companion object {
         private const val TAG = "DesktopPairingSession"
+        private const val CLIENT_CLOSE_TIMEOUT_MS = 5_000L
         private val SESSION_INFO = "passmanager-v1".toByteArray()
-        const val INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000L
-        const val VERIFY_CODE_TIMEOUT_MS = 15_000L
-        const val MAX_PW_PER_SESSION = 20
-        const val PW_COOLDOWN_MS = 10_000L
-        /** Min interval between desktop `list_items` requests. */
-        const val VAULT_LIST_COOLDOWN_MS = 2_000L
+        private val secureRandom = SecureRandom()
     }
 }
 
-data class PairingStartResult(
+class PairingStartResult(
     val channel: EncryptedChannel,
     val client: DesktopPairingClient
-) {
-    override fun equals(other: Any?): Boolean = this === other
-    override fun hashCode(): Int = System.identityHashCode(this)
-}
+)

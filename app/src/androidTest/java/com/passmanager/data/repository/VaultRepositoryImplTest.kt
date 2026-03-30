@@ -5,7 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.passmanager.crypto.model.EncryptedData
 import com.passmanager.data.db.VaultDatabase
-import com.passmanager.domain.model.VaultItem
+import com.passmanager.domain.model.ItemCategory
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -37,23 +37,30 @@ class VaultRepositoryImplTest {
     }
 
     @Test
-    fun observeAll_returnsEmptyInitially() = runTest {
-        val items = repository.observeAll().first()
-        assertTrue(items.isEmpty())
+    fun observeHeaders_returnsEmptyInitially() = runTest {
+        val headers = repository.observeHeaders().first()
+        assertTrue(headers.isEmpty())
     }
 
     @Test
-    fun insertAndObserve_returnsInsertedItem() = runTest {
+    fun insertAndObserveHeaders_returnsInsertedRow() = runTest {
         repository.insert(
             id = "1",
             encryptedData = EncryptedData(ByteArray(16), ByteArray(12)),
             keyVersion = 1,
-            createdAt = 1000L
+            createdAt = 1000L,
+            category = ItemCategory.LOGIN,
+            encryptedTitle = null,
+            titleIv = null,
+            encryptedAddress = null,
+            addressIv = null
         )
-        val items = repository.observeAll().first()
-        assertEquals(1, items.size)
-        assertEquals("1", items[0].id)
-        assertEquals(1000L, items[0].createdAt)
+        val headers = repository.observeHeaders().first()
+        assertEquals(1, headers.size)
+        val h = headers[0]
+        assertEquals("1", h.id)
+        assertEquals(1000L, h.updatedAt)
+        assertEquals(ItemCategory.LOGIN, h.category)
     }
 
     @Test
@@ -68,7 +75,12 @@ class VaultRepositoryImplTest {
             id = "2",
             encryptedData = EncryptedData(ByteArray(16), ByteArray(12)),
             keyVersion = 1,
-            createdAt = 2000L
+            createdAt = 2000L,
+            category = ItemCategory.LOGIN,
+            encryptedTitle = null,
+            titleIv = null,
+            encryptedAddress = null,
+            addressIv = null
         )
         val item = repository.getById("2")
         assertEquals("2", item?.id)
@@ -80,7 +92,12 @@ class VaultRepositoryImplTest {
             id = "3",
             encryptedData = EncryptedData(ByteArray(16), ByteArray(12)),
             keyVersion = 1,
-            createdAt = 3000L
+            createdAt = 3000L,
+            category = ItemCategory.LOGIN,
+            encryptedTitle = null,
+            titleIv = null,
+            encryptedAddress = null,
+            addressIv = null
         )
         repository.deleteById("3")
         val item = repository.getById("3")
@@ -98,7 +115,12 @@ class VaultRepositoryImplTest {
             id = "4",
             encryptedData = EncryptedData(ByteArray(16), ByteArray(12)),
             keyVersion = 1,
-            createdAt = 4000L
+            createdAt = 4000L,
+            category = ItemCategory.LOGIN,
+            encryptedTitle = null,
+            titleIv = null,
+            encryptedAddress = null,
+            addressIv = null
         )
         assertEquals(false, repository.isVaultEmpty())
     }

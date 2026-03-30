@@ -9,14 +9,12 @@ import androidx.fragment.app.FragmentActivity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.crypto.Cipher
 import javax.inject.Inject
+import javax.inject.Singleton
 
-/**
- * Wraps [BiometricPrompt] for enrolling and authenticating with biometrics.
- */
+@Singleton
 class BiometricHelper @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    /** Returns true if the device supports strong biometrics and has enrolled credentials. */
     fun canUseBiometric(): Boolean {
         val manager = BiometricManager.from(context)
         return manager.canAuthenticate(BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
@@ -41,6 +39,7 @@ class BiometricHelper @Inject constructor(
         val executor = ContextCompat.getMainExecutor(activity)
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                if (activity.isDestroyed) return
                 val authenticatedCipher = result.cryptoObject?.cipher
                 if (authenticatedCipher != null) {
                     onSuccess(authenticatedCipher)
@@ -50,10 +49,12 @@ class BiometricHelper @Inject constructor(
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                if (activity.isDestroyed) return
                 onError(errString.toString())
             }
 
             override fun onAuthenticationFailed() {
+                if (activity.isDestroyed) return
                 onFail()
             }
         }
@@ -66,7 +67,6 @@ class BiometricHelper @Inject constructor(
             .setAllowedAuthenticators(BIOMETRIC_STRONG)
             .build()
 
-        // The correct order is (PromptInfo, CryptoObject)
         prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
     }
 }

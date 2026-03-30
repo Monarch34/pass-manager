@@ -1,6 +1,7 @@
 package com.passmanager.crypto.channel
 
 import com.passmanager.crypto.util.SensitiveByteArray
+import com.passmanager.domain.exception.ReplayAttackException
 import java.io.Closeable
 import java.nio.ByteBuffer
 import javax.crypto.Cipher
@@ -139,4 +140,3 @@ class EncryptedChannel(
     }
 }
 
-class ReplayAttackException(message: String) : SecurityException(message)

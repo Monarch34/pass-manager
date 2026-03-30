@@ -1,21 +1,25 @@
 package com.passmanager.navigation
 
-import android.net.Uri
+import java.net.URLEncoder
 
 sealed class Screen(val route: String) {
-    object Onboarding : Screen("onboarding")
-    object Lock : Screen("lock")
-    /** Bottom tabs: vault graph + desktop link (after unlock). */
-    object Main : Screen("main")
-    object VaultList : Screen("vault_list")
-    object AddEditItem : Screen("add_edit_item?itemId={itemId}&initialCategory={initialCategory}") {
-        /** [initialCategory] is the enum name lowercased (e.g. `login`, `card`) when adding with a vault filter. */
+    data object Onboarding : Screen("onboarding")
+    data object Lock : Screen("lock")
+    data object Main : Screen("main")
+    data object VaultList : Screen("vault_list")
+    data object AddEditItem : Screen("add_edit_item/{itemId}?initialCategory={initialCategory}") {
+        /** Path segment when adding an item — not a vault row id. */
+        const val NEW_ITEM_ROUTE_ID = "new"
+
         fun createRoute(itemId: String? = null, initialCategory: String? = null): String {
-            val id = itemId?.let { Uri.encode(it) } ?: ""
+            val id = itemId?.let { URLEncoder.encode(it, "UTF-8") } ?: NEW_ITEM_ROUTE_ID
             val cat = initialCategory ?: ""
-            return "add_edit_item?itemId=$id&initialCategory=$cat"
+            return "add_edit_item/$id?initialCategory=$cat"
         }
     }
-    object PasswordGenerator : Screen("password_generator")
-    object Settings : Screen("settings")
+    data object PasswordGenerator : Screen("password_generator")
+    data object DesktopLink : Screen("desktop_link")
+
+    data object DrawerGenerator : Screen("password_generator_drawer")
+    data object DrawerSettings : Screen("settings_drawer")
 }

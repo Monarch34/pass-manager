@@ -1,26 +1,23 @@
 package com.passmanager.ui.vault
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.passmanager.crypto.cipher.AesGcmCipher
-import com.passmanager.crypto.model.EncryptedData
 import com.passmanager.domain.model.ItemCategory
 import com.passmanager.domain.model.VaultItemHeader
 import com.passmanager.domain.model.VaultSortOrder
-import com.passmanager.data.preferences.AppPreferences
-import com.passmanager.domain.repository.VaultRepository
-import com.passmanager.domain.usecase.DecryptItemHeaderUseCase
-import com.passmanager.domain.usecase.DecryptItemUseCase
-import com.passmanager.security.LockState
-import com.passmanager.security.VaultLockManager
+import com.passmanager.domain.port.AppSettingsDefaults
+import com.passmanager.domain.port.AppSettingsPort
+import com.passmanager.ui.common.AppLogger
+import com.passmanager.ui.common.UserMessage
+import com.passmanager.domain.usecase.DeleteVaultItemsByIdsUseCase
+import com.passmanager.domain.usecase.ObserveVaultHeadersUseCase
+import com.passmanager.domain.usecase.ProcessVaultListHeadersUseCase
+import com.passmanager.R
+import com.passmanager.domain.model.LockState
+import com.passmanager.domain.port.LockStateProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,10 +28,19 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
+import androidx.compose.runtime.Immutable
 import javax.inject.Inject
 
+/** One-shot error presented as a snackbar from the vault list. */
+sealed interface VaultListError {
+    val message: UserMessage
+    /** Partial header decryption failure during a batch decrypt. */
+    data class DecryptWarning(override val message: UserMessage) : VaultListError
+    /** Batch delete operation failure. */
+    data class DeleteFailed(override val message: UserMessage) : VaultListError
+}
+
+@Immutable
 data class VaultListUiState(
     val items: List<VaultItemHeader> = emptyList(),
     val searchQuery: String = "",
@@ -45,11 +51,14 @@ data class VaultListUiState(
     val categoryFilter: ItemCategory? = null,
     val isLocked: Boolean = false,
     val isLoading: Boolean = true,
-    val useGoogleFavicons: Boolean = AppPreferences.DEFAULT_USE_GOOGLE_FAVICONS,
+    val useGoogleFavicons: Boolean = AppSettingsDefaults.USE_GOOGLE_FAVICONS,
     val selectedIds: Set<String> = emptySet(),
-    val isSelectionMode: Boolean = false
+    val isSelectionMode: Boolean = false,
+    /** One-shot snackbar for both decrypt failures and delete failures. */
+    val error: VaultListError? = null
 )
 
+@Immutable
 private data class VaultListPipelineResult(
     val filteredSorted: List<VaultItemHeader>,
     val sortOrder: VaultSortOrder,
@@ -57,50 +66,54 @@ private data class VaultListPipelineResult(
     val headerCache: VaultListHeaderCache
 )
 
-private const val MAX_CONCURRENT_HEADER_DECRYPT = 4
-
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class VaultListViewModel @Inject constructor(
-    private val vaultRepository: VaultRepository,
-    private val decryptItemUseCase: DecryptItemUseCase,
-    private val decryptItemHeaderUseCase: DecryptItemHeaderUseCase,
-    private val cipher: AesGcmCipher,
-    private val vaultLockManager: VaultLockManager,
-    private val appPreferences: AppPreferences
+    private val observeVaultHeadersUseCase: ObserveVaultHeadersUseCase,
+    private val deleteVaultItemsByIdsUseCase: DeleteVaultItemsByIdsUseCase,
+    processVaultListHeadersUseCase: ProcessVaultListHeadersUseCase,
+    private val lockStateProvider: LockStateProvider,
+    private val appSettings: AppSettingsPort
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(VaultListUiState())
     val uiState: StateFlow<VaultListUiState> = _uiState.asStateFlow()
 
-    private val _headerCache = MutableStateFlow(VaultListHeaderCache())
-
-    /** Tracks [VaultItemHeader.updatedAt] used when title/address were last decrypted per id. */
-    private val _decryptCacheKey = MutableStateFlow<Map<String, Long>>(emptyMap())
+    private val decryptionManager = VaultListDecryptionManager(processVaultListHeadersUseCase)
 
     private val _searchQuery = MutableStateFlow("")
     private val _items = MutableStateFlow<List<VaultItemHeader>>(emptyList())
-    private var decryptJob: Job? = null
 
     init {
+        // Forward decrypt warnings into _uiState
+        decryptionManager.decryptWarning
+            .onEach { msg ->
+                if (msg != null) {
+                    _uiState.update {
+                        it.copy(error = VaultListError.DecryptWarning(msg))
+                    }
+                    decryptionManager.clearWarning()
+                }
+            }.launchIn(viewModelScope)
+
         viewModelScope.launch {
-            vaultRepository.observeHeaders().collect { headers ->
+            observeVaultHeadersUseCase().collect { headers ->
                 _items.value = headers
                 _uiState.update { it.copy(items = headers, isLoading = false) }
-                if (vaultLockManager.lockState.value is LockState.Unlocked) {
-                    decryptHeaders(headers)
+                if (lockStateProvider.lockState.value is LockState.Unlocked) {
+                    decryptionManager.decryptHeaders(headers, viewModelScope)
                 }
             }
         }
         viewModelScope.launch {
-            vaultLockManager.lockState.collect { state ->
+            lockStateProvider.lockState.collect { state ->
                 val locked = state !is LockState.Unlocked
                 _uiState.update { it.copy(isLocked = locked) }
                 if (locked) {
-                    _headerCache.value = VaultListHeaderCache()
-                    _decryptCacheKey.value = emptyMap()
+                    decryptionManager.clearCache()
+                    _uiState.update { it.copy(error = null) }
                 } else {
-                    decryptHeaders(_items.value)
+                    decryptionManager.decryptHeaders(_items.value, viewModelScope)
                 }
             }
         }
@@ -110,9 +123,9 @@ class VaultListViewModel @Inject constructor(
         combine(
             _items,
             _searchQuery.debounce(300),
-            _headerCache,
-            appPreferences.vaultListSort,
-            appPreferences.vaultGroupFilter
+            decryptionManager.headerCache,
+            appSettings.vaultListSort,
+            appSettings.vaultGroupFilter
         ) { items, query, headerCache, sortOrder, groupFilter ->
             val filtered = filterBySearchAndGroup(items, query, headerCache, groupFilter)
             val sorted = sortVaultItems(filtered, sortOrder, headerCache.titles)
@@ -129,108 +142,9 @@ class VaultListViewModel @Inject constructor(
                 }
             }
             .launchIn(viewModelScope)
-        appPreferences.useGoogleFavicons
+        appSettings.useGoogleFavicons
             .onEach { useGoogle -> _uiState.update { it.copy(useGoogleFavicons = useGoogle) } }
             .launchIn(viewModelScope)
-    }
-
-    private fun decryptHeaders(headers: List<VaultItemHeader>) {
-        decryptJob?.cancel()
-        decryptJob = viewModelScope.launch(Dispatchers.Default) {
-            val currentIds = headers.map { it.id }.toSet()
-            val prev = _headerCache.value
-            val titles = prev.titles.toMutableMap()
-            val addresses = prev.addresses.toMutableMap()
-            val keys = _decryptCacheKey.value.toMutableMap()
-
-            // Prune entries for items that were deleted
-            titles.keys.retainAll(currentIds)
-            addresses.keys.retainAll(currentIds)
-            keys.keys.retainAll(currentIds)
-
-            // Only process headers whose cache is stale or missing
-            val stale = headers.filter { h ->
-                keys[h.id] != h.updatedAt || h.id !in titles
-            }
-            if (stale.isEmpty()) {
-                _headerCache.value = VaultListHeaderCache(titles, addresses)
-                _decryptCacheKey.value = keys
-                return@launch
-            }
-
-            data class HeaderResult(
-                val id: String,
-                val title: String,
-                val address: String,
-                val updatedAt: Long
-            )
-
-            val decryptSemaphore = Semaphore(MAX_CONCURRENT_HEADER_DECRYPT)
-            coroutineScope {
-                stale.map { header ->
-                    async {
-                        decryptSemaphore.withPermit {
-                            try {
-                                if (header.encryptedTitle != null) {
-                                    // Fast path: decrypt only the small per-field blobs
-                                    val r = decryptItemHeaderUseCase(header)
-                                    HeaderResult(
-                                        id = header.id,
-                                        title = r.title ?: "",
-                                        address = r.address ?: "",
-                                        updatedAt = header.updatedAt
-                                    )
-                                } else {
-                                    // Legacy path: fall back to full blob decryption, then backfill
-                                    val fullItem = vaultRepository.getById(header.id)
-                                    if (fullItem == null) {
-                                        null
-                                    } else {
-                                        val decrypted = decryptItemUseCase(fullItem)
-
-                                        // Backfill header columns so future loads use the fast path
-                                        val vaultKey = vaultLockManager.requireUnlockedKey()
-                                        val titleBytes = decrypted.title.toByteArray(Charsets.UTF_8)
-                                        val encTitle = cipher.encrypt(titleBytes, vaultKey)
-                                        titleBytes.fill(0)
-
-                                        val encAddress = if (decrypted.address.isNotEmpty()) {
-                                            val addrBytes = decrypted.address.toByteArray(Charsets.UTF_8)
-                                            cipher.encrypt(addrBytes, vaultKey).also { addrBytes.fill(0) }
-                                        } else null
-
-                                        vaultRepository.updateHeaderColumns(
-                                            id = header.id,
-                                            encryptedTitle = encTitle.ciphertext,
-                                            titleIv = encTitle.iv,
-                                            encryptedAddress = encAddress?.ciphertext,
-                                            addressIv = encAddress?.iv
-                                        )
-
-                                        HeaderResult(
-                                            id = header.id,
-                                            title = decrypted.title,
-                                            address = decrypted.address,
-                                            updatedAt = header.updatedAt
-                                        )
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Log.e("VaultListViewModel", "Failed to decrypt header ${header.id}", e)
-                                null
-                            }
-                        }
-                    }
-                }.awaitAll().filterNotNull().forEach { r ->
-                    titles[r.id]    = r.title
-                    addresses[r.id] = r.address
-                    keys[r.id]      = r.updatedAt
-                }
-            }
-
-            _headerCache.value = VaultListHeaderCache(HashMap(titles), HashMap(addresses))
-            _decryptCacheKey.value = keys
-        }
     }
 
     fun setSearchQuery(query: String) {
@@ -239,13 +153,13 @@ class VaultListViewModel @Inject constructor(
 
     fun setSortOrder(order: VaultSortOrder) {
         viewModelScope.launch {
-            appPreferences.setVaultListSort(order)
+            appSettings.setVaultListSort(order)
         }
     }
 
     fun setCategoryFilter(category: ItemCategory?) {
         viewModelScope.launch {
-            appPreferences.setVaultGroupFilter(category)
+            appSettings.setVaultGroupFilter(category)
         }
     }
 
@@ -272,16 +186,23 @@ class VaultListViewModel @Inject constructor(
         if (ids.isEmpty()) return
         viewModelScope.launch {
             try {
-                vaultRepository.deleteByIds(ids)
+                deleteVaultItemsByIdsUseCase(ids)
                 clearSelection()
             } catch (e: Exception) {
-                Log.e("VaultListViewModel", "Batch delete failed", e)
+                AppLogger.e("VaultListViewModel", "Batch delete failed", e)
+                _uiState.update {
+                    it.copy(error = VaultListError.DeleteFailed(UserMessage.Resource(R.string.vault_delete_failed)))
+                }
             }
         }
     }
 
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
     fun lock() {
-        vaultLockManager.lock()
+        lockStateProvider.lock()
     }
 }
 
@@ -292,17 +213,16 @@ private fun filterBySearchAndGroup(
     groupFilter: ItemCategory?
 ): List<VaultItemHeader> {
     return items.filter { item ->
-        val groupOk = groupFilter == null || ItemCategory.fromString(item.category) == groupFilter
+        val groupOk = groupFilter == null || item.category == groupFilter
         if (!groupOk) return@filter false
         if (query.isBlank()) return@filter true
         val q = query.trim()
         val title = headerCache.titles[item.id].orEmpty()
         val address = headerCache.addresses[item.id].orEmpty()
-        val cat = ItemCategory.fromString(item.category)
         title.contains(q, ignoreCase = true) ||
             address.contains(q, ignoreCase = true) ||
-            cat.label.contains(q, ignoreCase = true) ||
-            item.category.contains(q, ignoreCase = true)
+            item.category.label.contains(q, ignoreCase = true) ||
+            item.category.dbKey.contains(q, ignoreCase = true)
     }
 }
 

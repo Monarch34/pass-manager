@@ -9,8 +9,6 @@ import com.passmanager.data.db.dao.VaultMetadataDao
 import com.passmanager.data.db.entity.VaultItemEntity
 import com.passmanager.data.db.entity.VaultMetadataEntity
 
-// Room 2.6+ natively handles ByteArray (BLOB) and ByteArray? (nullable BLOB)
-// without TypeConverters.
 @Database(
     entities = [VaultItemEntity::class, VaultMetadataEntity::class],
     version = 7,
@@ -53,19 +51,6 @@ abstract class VaultDatabase : RoomDatabase() {
             }
         }
 
-        /** Add category and composite indexes to vault_items for faster filtering. */
-        val MIGRATION_6_7 = object : Migration(6, 7) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_vault_items_category ON vault_items (category)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_vault_items_category_updated_at ON vault_items (category, updated_at)")
-            }
-        }
-
-        /**
-         * Drop desktop_wrapped_pairing_secret and desktop_pairing_iv columns.
-         * SQLite < 3.35.0 (API < 34) doesn't support ALTER TABLE DROP COLUMN,
-         * so we recreate the table.
-         */
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -90,6 +75,13 @@ abstract class VaultDatabase : RoomDatabase() {
                 )
                 db.execSQL("DROP TABLE vault_metadata")
                 db.execSQL("ALTER TABLE vault_metadata_new RENAME TO vault_metadata")
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_vault_items_category ON vault_items (category)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_vault_items_category_updated_at ON vault_items (category, updated_at)")
             }
         }
     }

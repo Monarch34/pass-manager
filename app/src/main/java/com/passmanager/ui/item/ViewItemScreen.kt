@@ -5,7 +5,6 @@ import com.passmanager.ui.util.copyToClipboard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,9 +17,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -56,7 +53,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -64,12 +60,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.passmanager.domain.model.DecryptedVaultItem
 import com.passmanager.domain.model.ItemCategory
-import com.passmanager.ui.components.ErrorSnackbarEffect
+import com.passmanager.domain.model.ItemPayload
+import com.passmanager.ui.common.resolve
+import com.passmanager.ui.components.ConfirmDeleteDialog
 import com.passmanager.ui.components.FaviconImage
-import com.passmanager.ui.item.formatExpiryMmYy
-import com.passmanager.ui.item.parseExpiryMmYyToMonthYear
+import com.passmanager.ui.model.icon
+import com.passmanager.ui.model.tint
+import com.passmanager.domain.validation.formatExpiryMmYy
+import com.passmanager.domain.validation.parseExpiryMmYyToMonthYear
 import kotlinx.coroutines.launch
 
 enum class ViewItemPresentation {
@@ -103,118 +102,26 @@ fun ViewItemScreen(
         if (uiState.isDeleted) onNavigateBack()
     }
 
-    ErrorSnackbarEffect(
-        error = uiState.error,
-        onErrorShown = { viewModel.clearError() },
-        snackbarHostState = snackbarHostState
-    )
+    // Snackbar only when an error occurs while content is shown (e.g. delete failed).
+    // Load/decrypt errors use inline UI so the message is not cleared immediately by snackbar.
+    LaunchedEffect(uiState.error, uiState.payload) {
+        val err = uiState.error ?: return@LaunchedEffect
+        if (uiState.payload != null) {
+            snackbarHostState.showSnackbar(err.resolve(context))
+            viewModel.clearError()
+        }
+    }
 
     if (showDeleteDialog) {
-        Dialog(onDismissRequest = { showDeleteDialog = false }) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .widthIn(max = 420.dp),
-                    shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    tonalElevation = 3.dp,
-                    shadowElevation = 6.dp
-                ) {
-                    BoxWithConstraints(Modifier.fillMaxWidth()) {
-                        val stackButtons = maxWidth < 340.dp
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 24.dp, vertical = 22.dp),
-                            horizontalAlignment = Alignment.Start
-                        ) {
-                            Text(
-                                text = stringResource(R.string.item_delete_confirm_title),
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Start
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                text = stringResource(R.string.item_delete_confirm_message),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Start
-                            )
-                            Spacer(Modifier.height(24.dp))
-                            if (stackButtons) {
-                                Column(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    OutlinedButton(
-                                        onClick = { showDeleteDialog = false },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .heightIn(min = 48.dp)
-                                    ) {
-                                        Text(stringResource(R.string.cancel))
-                                    }
-                                    Button(
-                                        onClick = {
-                                            showDeleteDialog = false
-                                            viewModel.delete()
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .heightIn(min = 48.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.error,
-                                            contentColor = MaterialTheme.colorScheme.onError
-                                        )
-                                    ) {
-                                        Text(stringResource(R.string.item_delete_button))
-                                    }
-                                }
-                            } else {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    OutlinedButton(
-                                        onClick = { showDeleteDialog = false },
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .heightIn(min = 48.dp)
-                                    ) {
-                                        Text(stringResource(R.string.cancel))
-                                    }
-                                    Button(
-                                        onClick = {
-                                            showDeleteDialog = false
-                                            viewModel.delete()
-                                        },
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .heightIn(min = 48.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.error,
-                                            contentColor = MaterialTheme.colorScheme.onError
-                                        )
-                                    ) {
-                                        Text(stringResource(R.string.item_delete_button))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        ConfirmDeleteDialog(
+            title = stringResource(R.string.item_delete_confirm_title),
+            message = stringResource(R.string.item_delete_confirm_message),
+            onConfirm = {
+                showDeleteDialog = false
+                viewModel.delete()
+            },
+            onDismiss = { showDeleteDialog = false }
+        )
     }
 
     val rootModifier = when (presentation) {
@@ -245,7 +152,7 @@ fun ViewItemScreen(
             }
         },
         bottomBar = {
-            if (uiState.item != null) {
+            if (uiState.payload != null) {
                 Surface(
                     color = MaterialTheme.colorScheme.background,
                     tonalElevation = 3.dp
@@ -319,11 +226,38 @@ fun ViewItemScreen(
                 }
             }
 
-            uiState.item != null -> {
-                val item = uiState.item!!
-                val category = ItemCategory.fromString(uiState.category)
-                val isCard = uiState.category.equals("card", ignoreCase = true)
-                val isBank = uiState.category.equals("bank", ignoreCase = true)
+            !uiState.isLoading && uiState.payload == null && uiState.error != null -> {
+                val err = uiState.error!!
+                Column(
+                    modifier = Modifier
+                        .then(
+                            if (presentation == ViewItemPresentation.Sheet) {
+                                Modifier.fillMaxWidth().heightIn(min = 200.dp)
+                            } else {
+                                Modifier.fillMaxSize()
+                            }
+                        )
+                        .padding(padding)
+                        .padding(horizontal = 24.dp, vertical = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = err.resolve(),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    OutlinedButton(onClick = onNavigateBack) {
+                        Text(stringResource(R.string.action_back))
+                    }
+                }
+            }
+
+            uiState.payload != null -> {
+                val payload = uiState.payload ?: return@Scaffold
+                val category = uiState.category
 
                 Column(
                     modifier = Modifier
@@ -338,6 +272,10 @@ fun ViewItemScreen(
                         .verticalScroll(rememberScrollState()),
                 ) {
                     // Item header
+                    val faviconUrl = when (payload) {
+                        is ItemPayload.Login -> payload.address
+                        else -> ""
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -352,33 +290,23 @@ fun ViewItemScreen(
                                 .background(category.tint.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (item.address.isNotBlank()) {
+                            if (faviconUrl.isNotBlank()) {
                                 FaviconImage(
-                                    url = item.address,
+                                    url = faviconUrl,
                                     useGoogleFavicons = uiState.useGoogleFavicons,
                                     size = 60.dp,
                                     fallback = {
-                                        Icon(
-                                            category.icon,
-                                            contentDescription = null,
-                                            tint = category.tint,
-                                            modifier = Modifier.size(30.dp)
-                                        )
+                                        Icon(category.icon, contentDescription = null, tint = category.tint, modifier = Modifier.size(30.dp))
                                     }
                                 )
                             } else {
-                                Icon(
-                                    category.icon,
-                                    contentDescription = null,
-                                    tint = category.tint,
-                                    modifier = Modifier.size(30.dp)
-                                )
+                                Icon(category.icon, contentDescription = null, tint = category.tint, modifier = Modifier.size(30.dp))
                             }
                         }
 
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
-                                text = item.title,
+                                text = payload.title,
                                 style = MaterialTheme.typography.headlineSmall,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -390,160 +318,47 @@ fun ViewItemScreen(
                                     .background(category.tint.copy(alpha = 0.10f))
                                     .padding(horizontal = 10.dp, vertical = 5.dp)
                             ) {
-                                Icon(
-                                    category.icon,
-                                    contentDescription = null,
-                                    tint = category.tint,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Text(
-                                    text = category.label,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = category.tint
-                                )
+                                Icon(category.icon, contentDescription = null, tint = category.tint, modifier = Modifier.size(15.dp))
+                                Text(text = category.label, style = MaterialTheme.typography.labelMedium, color = category.tint)
                             }
                         }
                     }
 
                     Spacer(Modifier.height(8.dp))
 
-                    // Fields
+                    // Category-specific fields
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        if (isCard) {
-                            CardViewFields(item = item, snackbarHostState = snackbarHostState)
-                        } else {
-                            // Default + Bank fields
-                            val usernameLabel = if (isBank) stringResource(R.string.item_account_number_hint)
-                                else stringResource(R.string.item_username_hint)
-                            val addressLabel = if (isBank) stringResource(R.string.item_bank_name_hint)
-                                else stringResource(R.string.item_address_hint)
-
-                            if (item.username.isNotBlank()) {
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = MaterialTheme.shapes.large,
-                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                    tonalElevation = 1.dp
-                                ) {
-                                    FieldBlock(
-                                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                                        label = usernameLabel,
-                                        onCopy = {
-                                            view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                                            scope.launch {
-                                                copyToClipboard(context, "Username", item.username)
-                                                snackbarHostState.showSnackbar(context.getString(R.string.item_username_copied))
-                                            }
-                                        }
-                                    ) {
-                                        Text(
-                                            text = item.username,
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (item.address.isNotBlank()) {
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = MaterialTheme.shapes.large,
-                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                    tonalElevation = 1.dp
-                                ) {
-                                    FieldBlock(
-                                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                                        label = addressLabel,
-                                        onCopy = {
-                                            view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                                            scope.launch {
-                                                copyToClipboard(context, "Address", item.address)
-                                                snackbarHostState.showSnackbar(context.getString(R.string.item_address_copied))
-                                            }
-                                        }
-                                    ) {
-                                        Text(
-                                            text = item.address,
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                }
-                            }
-
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = MaterialTheme.shapes.large,
-                                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                tonalElevation = 1.dp
-                            ) {
-                                FieldBlock(
-                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                                    label = stringResource(R.string.item_password_hint),
-                                    onCopy = {
-                                        view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                                        scope.launch {
-                                            copyToClipboard(
-                                                context,
-                                                "Password",
-                                                item.password,
-                                                clearAfterMs = 15_000L,
-                                                scope = scope
-                                            )
-                                            snackbarHostState.showSnackbar(context.getString(R.string.item_password_copied))
-                                        }
-                                    },
-                                    extraTrailing = {
-                                        IconButton(onClick = viewModel::togglePasswordVisible) {
-                                            Icon(
-                                                imageVector = if (uiState.passwordVisible) Icons.Default.VisibilityOff
-                                                else Icons.Default.Visibility,
-                                                contentDescription = if (uiState.passwordVisible)
-                                                    stringResource(R.string.action_hide)
-                                                else
-                                                    stringResource(R.string.action_show)
-                                            )
-                                        }
-                                    }
-                                ) {
-                                    Text(
-                                        text = if (uiState.passwordVisible) item.password
-                                        else "\u2022".repeat(minOf(item.password.length, 24)),
-                                        style = if (uiState.passwordVisible) {
-                                            MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace)
-                                        } else {
-                                            MaterialTheme.typography.bodyLarge
-                                        },
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
+                        when (payload) {
+                            is ItemPayload.Login -> LoginViewFields(
+                                payload = payload, uiState = uiState, viewModel = viewModel, snackbarHostState = snackbarHostState
+                            )
+                            is ItemPayload.Card -> CardViewFields(
+                                payload = payload, snackbarHostState = snackbarHostState
+                            )
+                            is ItemPayload.Bank -> BankViewFields(
+                                payload = payload, uiState = uiState, viewModel = viewModel, snackbarHostState = snackbarHostState
+                            )
+                            is ItemPayload.SecureNote -> { /* only notes, rendered below */ }
+                            is ItemPayload.Identity -> IdentityViewFields(
+                                payload = payload, snackbarHostState = snackbarHostState
+                            )
                         }
 
-                        if (item.notes.isNotBlank()) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = MaterialTheme.shapes.large,
-                                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                tonalElevation = 1.dp
+                        if (payload.notes.isNotBlank()) {
+                            FieldBlock(
+                                label = stringResource(R.string.item_notes_hint),
+                                onCopy = null
                             ) {
-                                FieldBlock(
-                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                                    label = stringResource(R.string.item_notes_hint),
-                                    onCopy = null
-                                ) {
-                                    Text(
-                                        text = item.notes,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
+                                Text(
+                                    text = payload.notes,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
                             }
                         }
                     }
@@ -555,9 +370,121 @@ fun ViewItemScreen(
     }
 }
 
+// ── Login fields ─────────────────────────────────
+
+@Composable
+private fun LoginViewFields(
+    payload: ItemPayload.Login,
+    uiState: ViewItemUiState,
+    viewModel: ViewItemViewModel,
+    snackbarHostState: SnackbarHostState
+) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
+
+    if (payload.username.isNotBlank()) {
+        FieldBlock(
+            label = stringResource(R.string.item_username_hint),
+            onCopy = {
+                view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                scope.launch {
+                    copyToClipboard(
+                        context, "Username", payload.username,
+                        clearAfterMs = 15_000L, scope = scope
+                    )
+                    snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
+                }
+            }
+        ) {
+            Text(text = payload.username, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+
+    if (payload.address.isNotBlank()) {
+        FieldBlock(
+            label = stringResource(R.string.item_address_hint),
+            onCopy = {
+                view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                scope.launch {
+                    copyToClipboard(
+                        context, "Address", payload.address,
+                        clearAfterMs = 15_000L, scope = scope
+                    )
+                    snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
+                }
+            }
+        ) {
+            Text(text = payload.address, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+
+    PasswordField(
+        password = payload.password, passwordVisible = uiState.passwordVisible,
+        onToggle = viewModel::togglePasswordVisible, snackbarHostState = snackbarHostState
+    )
+}
+
+// ── Bank fields ──────────────────────────────────
+
+@Composable
+private fun BankViewFields(
+    payload: ItemPayload.Bank,
+    uiState: ViewItemUiState,
+    viewModel: ViewItemViewModel,
+    snackbarHostState: SnackbarHostState
+) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
+
+    if (payload.accountNumber.isNotBlank()) {
+        FieldBlock(
+            label = stringResource(R.string.item_account_number_hint),
+            onCopy = {
+                view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                scope.launch {
+                    copyToClipboard(
+                        context, "Account", payload.accountNumber,
+                        clearAfterMs = 15_000L, scope = scope
+                    )
+                    snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
+                }
+            }
+        ) {
+            Text(text = payload.accountNumber, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+
+    if (payload.bankName.isNotBlank()) {
+        FieldBlock(
+            label = stringResource(R.string.item_bank_name_hint),
+            onCopy = {
+                view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                scope.launch {
+                    copyToClipboard(
+                        context, "Bank", payload.bankName,
+                        clearAfterMs = 15_000L, scope = scope
+                    )
+                    snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
+                }
+            }
+        ) {
+            Text(text = payload.bankName, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+
+    PasswordField(
+        password = payload.password, passwordVisible = uiState.passwordVisible,
+        onToggle = viewModel::togglePasswordVisible, snackbarHostState = snackbarHostState
+    )
+}
+
+// ── Card fields ──────────────────────────────────
+
 @Composable
 private fun CardViewFields(
-    item: DecryptedVaultItem,
+    payload: ItemPayload.Card,
     snackbarHostState: SnackbarHostState
 ) {
     val context = LocalContext.current
@@ -566,182 +493,217 @@ private fun CardViewFields(
     var cardNumberVisible by remember { mutableStateOf(false) }
     var cvcVisible by remember { mutableStateOf(false) }
 
-    if (item.cardNumber.isNotBlank()) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 1.dp
+    if (payload.cardNumber.isNotBlank()) {
+        FieldBlock(
+            label = stringResource(R.string.item_card_number_hint),
+            onCopy = {
+                view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                scope.launch {
+                    copyToClipboard(context, "Card number", payload.cardNumber.filter { it.isDigit() }, clearAfterMs = 15_000L, scope = scope)
+                    snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
+                }
+            },
+            extraTrailing = {
+                IconButton(onClick = { cardNumberVisible = !cardNumberVisible }) {
+                    Icon(imageVector = if (cardNumberVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = null)
+                }
+            }
         ) {
+            val displayNumber = if (cardNumberVisible) {
+                payload.cardNumber.filter { it.isDigit() }.chunked(4).joinToString(" ")
+            } else {
+                val digits = payload.cardNumber.filter { it.isDigit() }
+                val last4 = digits.takeLast(4).ifEmpty { "••••" }
+                "\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 $last4"
+            }
+            Text(text = displayNumber, style = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace), color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+
+    if (payload.cardholderName.isNotBlank()) {
+        FieldBlock(
+            label = stringResource(R.string.item_cardholder_hint),
+            onCopy = {
+                view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                scope.launch {
+                    copyToClipboard(
+                        context, "Cardholder", payload.cardholderName,
+                        clearAfterMs = 15_000L, scope = scope
+                    )
+                    snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
+                }
+            }
+        ) {
+            Text(text = payload.cardholderName, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+
+    if (payload.cardExpiry.isNotBlank()) {
+        FieldBlock(
+            label = stringResource(R.string.item_expiry_hint),
+            onCopy = {
+                view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                scope.launch {
+                    copyToClipboard(
+                        context, "Expiry", payload.cardExpiry,
+                        clearAfterMs = 15_000L, scope = scope
+                    )
+                    snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
+                }
+            }
+        ) {
+            val expiryText = parseExpiryMmYyToMonthYear(payload.cardExpiry)?.let { (m, y) -> formatExpiryMmYy(m, y) } ?: payload.cardExpiry
+            Text(text = expiryText, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+
+    if (payload.cardCvc.isNotBlank()) {
+        FieldBlock(
+            label = stringResource(R.string.item_cvc_hint),
+            onCopy = {
+                view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                scope.launch {
+                    copyToClipboard(context, "CVC", payload.cardCvc, clearAfterMs = 15_000L, scope = scope)
+                    snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
+                }
+            },
+            extraTrailing = {
+                IconButton(onClick = { cvcVisible = !cvcVisible }) {
+                    Icon(imageVector = if (cvcVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = null)
+                }
+            }
+        ) {
+            Text(
+                text = if (cvcVisible) payload.cardCvc else "\u2022".repeat(payload.cardCvc.length),
+                style = if (cvcVisible) MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace) else MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+// ── Identity fields ──────────────────────────────
+
+@Composable
+private fun IdentityViewFields(
+    payload: ItemPayload.Identity,
+    snackbarHostState: SnackbarHostState
+) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
+
+    val fields = listOf(
+        stringResource(R.string.identity_first_name) to payload.firstName,
+        stringResource(R.string.identity_last_name)  to payload.lastName,
+        stringResource(R.string.identity_email)       to payload.email,
+        stringResource(R.string.identity_phone)       to payload.phone,
+        stringResource(R.string.item_address_hint)    to payload.address,
+        stringResource(R.string.identity_company)     to payload.company
+    )
+
+    for ((label, value) in fields) {
+        if (value.isNotBlank()) {
             FieldBlock(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                label = stringResource(R.string.item_card_number_hint),
+                label = label,
                 onCopy = {
                     view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
                     scope.launch {
                         copyToClipboard(
-                            context,
-                            "Card number",
-                            item.cardNumber.filter { it.isDigit() },
-                            clearAfterMs = 15_000L,
-                            scope = scope
+                            context, label, value,
+                            clearAfterMs = 15_000L, scope = scope
                         )
-                        snackbarHostState.showSnackbar(context.getString(R.string.item_card_number_copied))
-                    }
-                },
-                extraTrailing = {
-                    IconButton(onClick = { cardNumberVisible = !cardNumberVisible }) {
-                        Icon(
-                            imageVector = if (cardNumberVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = null
-                        )
+                        snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
                     }
                 }
             ) {
-                val displayNumber = if (cardNumberVisible) {
-                    item.cardNumber.filter { it.isDigit() }.chunked(4).joinToString(" ")
-                } else {
-                    val digits = item.cardNumber.filter { it.isDigit() }
-                    val last4 = digits.takeLast(4).ifEmpty { "••••" }
-                    "\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 $last4"
-                }
-                Text(
-                    text = displayNumber,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Text(text = value, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
             }
         }
     }
+}
 
-    if (item.cardholderName.isNotBlank()) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 1.dp
-        ) {
-            FieldBlock(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                label = stringResource(R.string.item_cardholder_hint),
-                onCopy = {
-                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                    scope.launch {
-                        copyToClipboard(context, "Cardholder", item.cardholderName)
-                        snackbarHostState.showSnackbar(context.getString(R.string.item_cardholder_copied))
-                    }
-                }
-            ) {
-                Text(
-                    text = item.cardholderName,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
+// ── Shared password field ────────────────────────
 
-    if (item.cardExpiry.isNotBlank()) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 1.dp
-        ) {
-            FieldBlock(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                label = stringResource(R.string.item_expiry_hint),
-                onCopy = {
-                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                    scope.launch {
-                        copyToClipboard(context, "Expiry", item.cardExpiry)
-                        snackbarHostState.showSnackbar(context.getString(R.string.item_expiry_copied))
-                    }
-                }
-            ) {
-                val expiryText = parseExpiryMmYyToMonthYear(item.cardExpiry)?.let { (m, y) ->
-                    formatExpiryMmYy(m, y)
-                } ?: item.cardExpiry
-                Text(
-                    text = expiryText,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
+@Composable
+private fun PasswordField(
+    password: String,
+    passwordVisible: Boolean,
+    onToggle: () -> Unit,
+    snackbarHostState: SnackbarHostState
+) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
 
-    if (item.cardCvc.isNotBlank()) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 1.dp
-        ) {
-            FieldBlock(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                label = stringResource(R.string.item_cvc_hint),
-                onCopy = {
-                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                    scope.launch {
-                        copyToClipboard(context, "CVC", item.cardCvc, clearAfterMs = 15_000L, scope = scope)
-                        snackbarHostState.showSnackbar(context.getString(R.string.item_cvc_copied))
-                    }
-                },
-                extraTrailing = {
-                    IconButton(onClick = { cvcVisible = !cvcVisible }) {
-                        Icon(
-                            imageVector = if (cvcVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = null
-                        )
-                    }
+    if (password.isNotBlank()) {
+        FieldBlock(
+            label = stringResource(R.string.item_password_hint),
+            onCopy = {
+                view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                scope.launch {
+                    copyToClipboard(context, "Password", password, clearAfterMs = 15_000L, scope = scope)
+                    snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
                 }
-            ) {
-                Text(
-                    text = if (cvcVisible) item.cardCvc else "\u2022".repeat(item.cardCvc.length),
-                    style = if (cvcVisible) MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace)
-                    else MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+            },
+            extraTrailing = {
+                IconButton(onClick = onToggle) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = if (passwordVisible) stringResource(R.string.action_hide) else stringResource(R.string.action_show)
+                    )
+                }
             }
+        ) {
+            Text(
+                text = if (passwordVisible) password else "\u2022".repeat(minOf(password.length, 24)),
+                style = if (passwordVisible) MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace) else MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }
 
 @Composable
 private fun FieldBlock(
-    modifier: Modifier = Modifier,
     label: String,
     onCopy: (() -> Unit)?,
     extraTrailing: (@Composable () -> Unit)? = null,
     value: @Composable () -> Unit
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 18.dp)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 1.dp
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(Modifier.height(6.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 20.dp)
         ) {
-            Box(modifier = Modifier.weight(1f)) {
-                value()
-            }
-            extraTrailing?.invoke()
-            if (onCopy != null) {
-                IconButton(onClick = onCopy) {
-                    Icon(
-                        Icons.Default.ContentCopy,
-                        contentDescription = stringResource(R.string.action_copy, label),
-                        modifier = Modifier.size(20.dp)
-                    )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    value()
+                }
+                extraTrailing?.invoke()
+                if (onCopy != null) {
+                    IconButton(onClick = onCopy) {
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            contentDescription = stringResource(R.string.action_copy, label),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }

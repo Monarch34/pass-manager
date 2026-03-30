@@ -3,6 +3,7 @@ package com.passmanager.data.db.entity
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.passmanager.crypto.util.contentEqualsNullable
 
 @Entity(tableName = "vault_metadata")
 data class VaultMetadataEntity(
@@ -28,13 +29,11 @@ data class VaultMetadataEntity(
     @ColumnInfo(name = "biometric_enabled")
     val biometricEnabled: Int,
 
-    // Nullable BLOBs — Room 2.6+ stores these as nullable BLOB natively
     @ColumnInfo(name = "biometric_wrapped_key")
     val biometricWrappedKey: ByteArray?,
 
     @ColumnInfo(name = "biometric_wrapper_iv")
-    val biometricWrapperIv: ByteArray?,
-
+    val biometricWrapperIv: ByteArray?
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -46,14 +45,8 @@ data class VaultMetadataEntity(
             kdfSalt.contentEquals(other.kdfSalt) &&
             kdfParamsJson == other.kdfParamsJson &&
             biometricEnabled == other.biometricEnabled &&
-            nullableByteArrayEquals(biometricWrappedKey, other.biometricWrappedKey) &&
-            nullableByteArrayEquals(biometricWrapperIv, other.biometricWrapperIv)
-    }
-
-    private fun nullableByteArrayEquals(a: ByteArray?, b: ByteArray?): Boolean {
-        if (a == null) return b == null
-        if (b == null) return false
-        return a.contentEquals(b)
+            biometricWrappedKey.contentEqualsNullable(other.biometricWrappedKey) &&
+            biometricWrapperIv.contentEqualsNullable(other.biometricWrapperIv)
     }
 
     override fun hashCode(): Int {

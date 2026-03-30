@@ -1,5 +1,5 @@
 // Shared LAN pairing message types + CBOR codec. Consumed by :app (composite) and desktop (composite).
-// Versions: keep aligned with ../gradle/libs.versions.toml (Kotlin, kotlinx-serialization).
+// Keep Kotlin + kotlinx-serialization versions aligned with ../gradle/libs.versions.toml.
 plugins {
     kotlin("jvm") version "2.0.21"
     kotlin("plugin.serialization") version "2.0.21"

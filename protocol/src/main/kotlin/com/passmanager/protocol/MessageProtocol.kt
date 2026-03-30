@@ -59,11 +59,15 @@ sealed interface SecureResponse {
 
     @Serializable
     @SerialName("items")
-    data class Items(val items: List<ItemSummary>) : SecureResponse
+    data class Items(val items: List<ItemSummary>, val failedCount: Int = 0) : SecureResponse
 
     @Serializable
     @SerialName("password")
-    data class Password(val itemId: String, val password: ByteArray) : SecureResponse
+    data class Password(val itemId: String, val password: ByteArray) : SecureResponse {
+        override fun toString(): String = "Password(itemId=$itemId, password=[REDACTED ${password.size}B])"
+        override fun equals(other: Any?) = this === other
+        override fun hashCode() = System.identityHashCode(this)
+    }
 
     @Serializable
     @SerialName("heartbeat_ack")

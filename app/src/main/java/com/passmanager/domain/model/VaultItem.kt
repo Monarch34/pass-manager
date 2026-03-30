@@ -8,5 +8,5 @@ data class VaultItem(
     val keyVersion: Int,
     val createdAt: Long,
     val updatedAt: Long,
-    val category: String = "login"
+    val category: ItemCategory
 )

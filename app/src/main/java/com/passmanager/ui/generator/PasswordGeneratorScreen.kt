@@ -261,7 +261,7 @@ fun PasswordGeneratorScreen(
                             onClick = {
                                 if (uiState.password.isNotEmpty()) {
                                     view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                                    copyToClipboard(context, "Password", uiState.password)
+                                    copyToClipboard(context, "Password", uiState.password, clearAfterMs = 15_000L, scope = scope)
                                     scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.generator_copied)) }
                                 }
                             },

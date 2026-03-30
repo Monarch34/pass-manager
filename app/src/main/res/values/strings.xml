@@ -45,6 +45,8 @@
     <string name="vault_selected_count">%1$d selected</string>
     <string name="vault_delete_selected_title">Delete items?</string>
     <string name="vault_delete_selected_message">Delete %1$d selected items? This cannot be undone.</string>
+    <string name="vault_list_decrypt_partial">Some items could not be decrypted</string>
+    <string name="vault_delete_failed">Could not delete selected items</string>
 
     <!-- Item Screens -->
     <string name="item_add_title">Add item</string>
@@ -68,9 +70,7 @@
     <string name="item_delete_confirm_message">This action cannot be undone.</string>
     <string name="item_copy_username">Copy username</string>
     <string name="item_copy_password">Copy password</string>
-    <string name="item_password_copied">Password copied — clears in 15s</string>
-    <string name="item_username_copied">Username copied</string>
-    <string name="item_address_copied">Address copied</string>
+    <string name="item_clipboard_copied_clears">Copied — clears in 15s</string>
     <string name="item_generate_password">Generate</string>
     <string name="item_title_required">Title is required</string>
     <string name="item_password_required">Password is required</string>
@@ -93,10 +93,6 @@
     <string name="item_card_cvc_hint_validation">Usually 3 or 4 digits</string>
     <string name="item_expiry_invalid">Enter a valid expiry (month 01–12)</string>
     <string name="item_expiry_required">Expiry (MM/YY) is required</string>
-    <string name="item_cardholder_copied">Cardholder name copied</string>
-    <string name="item_card_number_copied">Card number copied</string>
-    <string name="item_cvc_copied">CVC copied — clears in 15s</string>
-    <string name="item_expiry_copied">Expiry copied</string>
     <string name="item_card_number_required">Card number is required</string>
     <string name="item_account_number_hint">Account number</string>
     <string name="item_bank_name_hint">Bank name / branch</string>
@@ -109,6 +105,16 @@
     <string name="bank_rule_no_repeating">No 3+ repeating characters (aaa, 111)</string>
     <string name="bank_rule_not_reused">Not one of last 4 passwords</string>
     <string name="bank_password_invalid">Password does not meet bank requirements</string>
+
+    <!-- Identity -->
+    <string name="identity_first_name">First name</string>
+    <string name="identity_last_name">Last name</string>
+    <string name="identity_email">Email</string>
+    <string name="identity_phone">Phone</string>
+    <string name="identity_company">Company</string>
+
+    <!-- Secure Note -->
+    <string name="note_form_hint">Use the Notes field above to store your secure text.</string>
 
     <!-- Password Generator -->
     <string name="generator_title">Generator</string>
@@ -173,6 +179,14 @@
     <string name="settings_error_biometric_disable">Failed to disable biometric</string>
     <string name="settings_wrong_current_passphrase">Incorrect current passphrase</string>
     <string name="settings_passphrase_change_failed">Failed to change passphrase</string>
+    <!-- Debug-only: demo vault seeding (Settings) -->
+    <string name="settings_debug_section">DEVELOPMENT</string>
+    <string name="settings_debug_seed_demo_title">Load demo items</string>
+    <string name="settings_debug_seed_demo_subtitle">Adds 6 items per category (30 total). Unlock the vault first.</string>
+    <string name="settings_debug_seed_demo_done">Added %1$d demo items</string>
+    <string name="settings_debug_seed_demo_locked">Unlock the vault first</string>
+    <string name="settings_debug_seed_demo_failed">Could not add demo items</string>
+    <string name="settings_debug_seed_demo_action">Add</string>
 
     <!-- Common -->
     <string name="action_back">Back</string>
@@ -187,12 +201,13 @@
     <string name="error_unknown">An unexpected error occurred</string>
     <string name="error_biometric_invalidated">Biometric keys were invalidated. Please unlock with your passphrase.</string>
 
-    <!-- Drawer navigation -->
+    <!-- Navigation -->
     <string name="nav_open_drawer">Open navigation menu</string>
-    <string name="nav_vault">Vault</string>
-    <string name="nav_generator">Generator</string>
-    <string name="nav_desktop">Desktop Link</string>
     <string name="nav_settings">Settings</string>
+    <string name="drawer_vault">Vault</string>
+    <string name="drawer_generator">Generator</string>
+    <string name="drawer_desktop_link">Desktop Link</string>
+    <string name="drawer_settings">Settings</string>
 
     <!-- Desktop link -->
     <string name="desktop_link_title">Desktop link</string>
@@ -223,15 +238,17 @@
     <string name="desktop_error_unreachable">Desktop app not reachable. Make sure it is running.</string>
     <string name="desktop_error_timeout">Connection timed out. Try again.</string>
     <string name="desktop_error_invalid_qr">Invalid QR code. Make sure you are scanning the PassManager QR.</string>
-    <string name="desktop_error_connection_failed_with_reason">Connection failed: %1$s</string>
+    <string name="desktop_error_pairing_failed">Connection failed. Try again.</string>
+    <string name="desktop_error_password_send_failed">Could not send password. Try again.</string>
     <string name="desktop_error_verification_required">Verification required before sensitive operations</string>
-    <string name="desktop_error_password_retrieval_failed">Failed to retrieve password: %1$s</string>
     <string name="desktop_password_rate_limited">Copied too fast — wait a few seconds between copies. This protects your vault.</string>
     <string name="desktop_rate_limited_list_refresh">List refresh too frequent. Wait a moment.</string>
     <string name="desktop_error_list_refresh_failed">Could not refresh the vault list. Try again.</string>
     <string name="desktop_session_vault_locked">Vault locked</string>
     <string name="desktop_session_user_disconnected">User disconnected</string>
     <string name="desktop_session_desktop_disconnected">Desktop disconnected</string>
+    <string name="desktop_session_connection_closed">Connection closed</string>
+    <string name="desktop_session_connection_error">Connection error</string>
 
     <!-- Desktop agent service -->
     <string name="desktop_agent_channel_name">Desktop link</string>

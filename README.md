@@ -1,6 +1,6 @@
 # PassManager
 
-**Build:** [docs/BUILD.md](docs/BUILD.md)
+**Build:** [docs/BUILD.md](docs/BUILD.md) · **Usage:** [docs/USAGE.md](docs/USAGE.md)
 
 PassManager keeps the vault and cryptography on the phone. The Windows desktop application provides LAN pairing and a larger UI after the session is verified; it is not intended as a second vault backend.
 
@@ -84,9 +84,9 @@ The HTTP/WebSocket leg is **not TLS**. The session key never goes over the wire 
 
 ---
 
-## Dependencies (verify versions in Gradle catalogs)
+## Dependencies
 
-Kotlin 2.0.21, Compose / M3 on Android, Compose Desktop 1.7.3, Hilt, Room 2.6.1, Argon2kt, Bouncy Castle X25519, kotlinx.serialization, Ktor CIO + WebSockets, ML Kit barcode + CameraX.
+Pinned in **`gradle/libs.versions.toml`** (Kotlin, Compose BOM, Hilt, Room, Ktor, CameraX, ML Kit, etc.). Update versions there and sync Gradle.
 
 ---
 

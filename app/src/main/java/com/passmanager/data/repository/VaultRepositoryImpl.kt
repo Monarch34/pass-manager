@@ -2,7 +2,10 @@ package com.passmanager.data.repository
 
 import com.passmanager.crypto.model.EncryptedData
 import com.passmanager.data.db.dao.VaultItemDao
+import com.passmanager.data.db.dao.VaultItemHeaderProjection
 import com.passmanager.data.db.entity.VaultItemEntity
+import com.passmanager.domain.model.HeaderEncryption
+import com.passmanager.domain.model.ItemCategory
 import com.passmanager.domain.model.VaultItem
 import com.passmanager.domain.model.VaultItemHeader
 import com.passmanager.domain.repository.VaultRepository
@@ -14,11 +17,11 @@ class VaultRepositoryImpl @Inject constructor(
     private val dao: VaultItemDao
 ) : VaultRepository {
 
-    override fun observeAll(): Flow<List<VaultItem>> =
-        dao.observeAll().map { entities -> entities.map { it.toDomain() } }
-
     override fun observeHeaders(): Flow<List<VaultItemHeader>> =
         dao.observeHeaders().map { projections -> projections.map { it.toHeader() } }
+
+    override suspend fun getHeaders(): List<VaultItemHeader> =
+        dao.getHeaders().map { it.toHeader() }
 
     override fun observeById(id: String): Flow<VaultItem?> =
         dao.observeById(id).map { it?.toDomain() }
@@ -31,11 +34,8 @@ class VaultRepositoryImpl @Inject constructor(
         encryptedData: EncryptedData,
         keyVersion: Int,
         createdAt: Long,
-        category: String,
-        encryptedTitle: ByteArray?,
-        titleIv: ByteArray?,
-        encryptedAddress: ByteArray?,
-        addressIv: ByteArray?
+        category: ItemCategory,
+        headerEncryption: HeaderEncryption?
     ) {
         dao.insert(
             VaultItemEntity(
@@ -45,11 +45,11 @@ class VaultRepositoryImpl @Inject constructor(
                 keyVersion = keyVersion,
                 createdAt = createdAt,
                 updatedAt = createdAt,
-                category = category,
-                encryptedTitle = encryptedTitle,
-                titleIv = titleIv,
-                encryptedAddress = encryptedAddress,
-                addressIv = addressIv
+                category = category.dbKey,
+                encryptedTitle = headerEncryption?.title?.ciphertext,
+                titleIv = headerEncryption?.title?.iv,
+                encryptedAddress = headerEncryption?.address?.ciphertext,
+                addressIv = headerEncryption?.address?.iv
             )
         )
     }
@@ -59,41 +59,30 @@ class VaultRepositoryImpl @Inject constructor(
         encryptedData: EncryptedData,
         keyVersion: Int,
         updatedAt: Long,
-        category: String?,
-        encryptedTitle: ByteArray?,
-        titleIv: ByteArray?,
-        encryptedAddress: ByteArray?,
-        addressIv: ByteArray?
+        category: ItemCategory,
+        headerEncryption: HeaderEncryption
     ) {
-        val existing = dao.getById(id) ?: error("Item $id not found")
-        dao.update(
-            existing.copy(
-                encryptedData = encryptedData.ciphertext,
-                dataIv = encryptedData.iv,
-                keyVersion = keyVersion,
-                updatedAt = updatedAt,
-                category = category ?: existing.category,
-                encryptedTitle = encryptedTitle,
-                titleIv = titleIv,
-                encryptedAddress = encryptedAddress,
-                addressIv = addressIv
-            )
+        dao.updateDirectly(
+            id = id,
+            ed = encryptedData.ciphertext,
+            div = encryptedData.iv,
+            kv = keyVersion,
+            ua = updatedAt,
+            cat = category.dbKey,
+            et = headerEncryption.title.ciphertext,
+            tiv = headerEncryption.title.iv,
+            ea = headerEncryption.address?.ciphertext,
+            aiv = headerEncryption.address?.iv
         )
     }
 
-    override suspend fun updateHeaderColumns(
-        id: String,
-        encryptedTitle: ByteArray,
-        titleIv: ByteArray,
-        encryptedAddress: ByteArray?,
-        addressIv: ByteArray?
-    ) {
+    override suspend fun updateHeaderColumns(id: String, headerEncryption: HeaderEncryption) {
         dao.updateHeaderColumns(
             id = id,
-            et = encryptedTitle,
-            tiv = titleIv,
-            ea = encryptedAddress,
-            aiv = addressIv
+            et = headerEncryption.title.ciphertext,
+            tiv = headerEncryption.title.iv,
+            ea = headerEncryption.address?.ciphertext,
+            aiv = headerEncryption.address?.iv
         )
     }
 
@@ -109,16 +98,16 @@ class VaultRepositoryImpl @Inject constructor(
         keyVersion = keyVersion,
         createdAt = createdAt,
         updatedAt = updatedAt,
-        category = category
+        category = ItemCategory.fromString(category)
     )
 
-    private fun com.passmanager.data.db.dao.VaultItemHeaderProjection.toHeader() = VaultItemHeader(
+    private fun VaultItemHeaderProjection.toHeader() = VaultItemHeader(
         id = id,
         encryptedTitle = encryptedTitle,
         titleIv = titleIv,
         encryptedAddress = encryptedAddress,
         addressIv = addressIv,
-        category = category,
+        category = ItemCategory.fromString(category),
         updatedAt = updatedAt
     )
 }

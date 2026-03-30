@@ -1,36 +1,21 @@
 package com.passmanager.domain.usecase
 
-import android.content.Context
-import com.passmanager.R
 import com.passmanager.protocol.SecureResponse
 import com.passmanager.domain.repository.VaultRepository
-import com.passmanager.security.DesktopPairingSession
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.passmanager.domain.port.DesktopPairingPort
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import com.passmanager.domain.exception.DesktopRateLimitException
 
-/**
- * Decrypts a single password from the vault and sends it to the desktop
- * through the encrypted pairing channel.
- *
- * W1 mitigation: respects [DesktopPairingSession] rate limits.
- * W2 mitigation: uses [DecryptPasswordBytesUseCase] to extract password as ByteArray.
- */
 class SendPasswordToDesktopUseCase @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val vaultRepository: VaultRepository,
     private val decryptPasswordBytesUseCase: DecryptPasswordBytesUseCase,
-    private val session: DesktopPairingSession
+    private val session: DesktopPairingPort
 ) {
-    /**
-     * @return the title of the item whose password was sent, for notification display
-     */
     suspend operator fun invoke(itemId: String): String = withContext(Dispatchers.Default) {
         if (!session.canSendPassword()) {
-            session.sendSecure(
-                SecureResponse.RateLimited(context.getString(R.string.desktop_password_rate_limited))
-            )
+            session.sendSecure(SecureResponse.RateLimited("Password request rate limited"))
             throw DesktopRateLimitException()
         }
 
@@ -49,5 +34,3 @@ class SendPasswordToDesktopUseCase @Inject constructor(
         }
     }
 }
-
-class DesktopRateLimitException : Exception("Password request rate limited")

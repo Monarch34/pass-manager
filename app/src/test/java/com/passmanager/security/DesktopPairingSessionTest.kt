@@ -1,5 +1,8 @@
 package com.passmanager.security
 
+import com.passmanager.domain.model.DesktopPairingConstants
+import com.passmanager.domain.model.PairingSessionState
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -8,6 +11,10 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import io.mockk.mockk
+import io.mockk.every
+import javax.inject.Provider
+import com.passmanager.agent.DesktopPairingClient
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DesktopPairingSessionTest {
@@ -16,7 +23,10 @@ class DesktopPairingSessionTest {
 
     @Before
     fun setup() {
-        session = DesktopPairingSession()
+        val client = mockk<DesktopPairingClient>(relaxed = true)
+        val provider = mockk<Provider<DesktopPairingClient>>()
+        every { provider.get() } returns client
+        session = DesktopPairingSession(provider)
     }
 
     @Test
@@ -36,7 +46,7 @@ class DesktopPairingSessionTest {
         assertTrue(session.canAcceptVaultListRequestFromDesktop())
         session.recordVaultListRequestFromDesktop()
         assertFalse(session.canAcceptVaultListRequestFromDesktop())
-        setLastVaultListRequestFromDesktopMsForTest(0L)
+        setRateLimiterAtomicLong("lastVaultListRequestMs", 0L)
         assertTrue(session.canAcceptVaultListRequestFromDesktop())
     }
 
@@ -50,9 +60,9 @@ class DesktopPairingSessionTest {
     @Test
     fun `rate limiter enforces max passwords per session`() {
         activateSessionForTest()
-        repeat(DesktopPairingSession.MAX_PW_PER_SESSION - 1) {
+        repeat(DesktopPairingConstants.MAX_PW_PER_SESSION - 1) {
             session.recordPasswordSent("Item$it")
-            setLastPasswordRequestTimeMsForTest(0L)
+            setRateLimiterAtomicLong("lastPasswordRequestMs", 0L)
             assertTrue(session.canSendPassword())
         }
         session.recordPasswordSent("Item-final")
@@ -94,15 +104,16 @@ class DesktopPairingSessionTest {
         )
     }
 
-    private fun setLastPasswordRequestTimeMsForTest(value: Long) {
-        val field = DesktopPairingSession::class.java.getDeclaredField("lastPasswordRequestTimeMs")
+    private fun getRateLimiter(): DesktopSessionRateLimiter {
+        val field = DesktopPairingSession::class.java.getDeclaredField("rateLimiter")
         field.isAccessible = true
-        field.setLong(session, value)
+        return field.get(session) as DesktopSessionRateLimiter
     }
 
-    private fun setLastVaultListRequestFromDesktopMsForTest(value: Long) {
-        val field = DesktopPairingSession::class.java.getDeclaredField("lastVaultListRequestFromDesktopMs")
+    private fun setRateLimiterAtomicLong(fieldName: String, value: Long) {
+        val rateLimiter = getRateLimiter()
+        val field = DesktopSessionRateLimiter::class.java.getDeclaredField(fieldName)
         field.isAccessible = true
-        field.setLong(session, value)
+        (field.get(rateLimiter) as AtomicLong).set(value)
     }
 }

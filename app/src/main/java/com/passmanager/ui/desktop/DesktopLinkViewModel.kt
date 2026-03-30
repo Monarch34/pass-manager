@@ -1,40 +1,33 @@
 package com.passmanager.ui.desktop
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
-import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.passmanager.R
 import com.passmanager.protocol.PairingQrPayload
-import com.passmanager.protocol.SecureRequest
-import com.passmanager.protocol.SecureResponse
 import com.passmanager.domain.usecase.ConnectToDesktopUseCase
-import com.passmanager.domain.usecase.DesktopRateLimitException
 import com.passmanager.domain.usecase.SendItemListToDesktopUseCase
-import com.passmanager.domain.usecase.SendPasswordToDesktopUseCase
+import com.passmanager.domain.model.LockState
+import com.passmanager.domain.model.PairingSessionState
+import com.passmanager.domain.port.LockStateProvider
 import com.passmanager.security.DesktopPairingSession
-import com.passmanager.security.LockState
-import com.passmanager.security.PairingSessionState
-import com.passmanager.security.VaultLockManager
+import com.passmanager.ui.common.AppLogger
 import com.passmanager.ui.common.UserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import java.net.ConnectException
 import java.net.SocketTimeoutException
+import java.util.concurrent.atomic.AtomicBoolean
+import androidx.compose.runtime.Immutable
 import javax.inject.Inject
 
+@Immutable
 data class DesktopLinkUiState(
     val vaultUnlocked: Boolean = false,
     val sessionState: PairingSessionState = PairingSessionState.Idle,
@@ -49,20 +42,21 @@ class DesktopLinkViewModel @Inject constructor(
     private val pairingSession: DesktopPairingSession,
     private val connectToDesktopUseCase: ConnectToDesktopUseCase,
     private val sendItemListToDesktopUseCase: SendItemListToDesktopUseCase,
-    private val sendPasswordToDesktopUseCase: SendPasswordToDesktopUseCase,
-    private val vaultLockManager: VaultLockManager,
+    private val lockStateProvider: LockStateProvider,
+    private val requestHandler: DesktopRequestHandler
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DesktopLinkUiState())
     val uiState: StateFlow<DesktopLinkUiState> = _uiState.asStateFlow()
 
-    private var requestLoopJob: Job? = null
-    private var processingQr = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var processingQr = AtomicBoolean(false)
+
+    /** Last emitted pairing state — used to detect transition into [PairingSessionState.Active] only. */
+    private var previousPairingSessionState: PairingSessionState? = null
 
     init {
         observeSessionState()
         observeVaultLock()
-        createNotificationChannel()
     }
 
     private fun observeSessionState() {
@@ -70,13 +64,17 @@ class DesktopLinkViewModel @Inject constructor(
             pairingSession.state.collect { sessionState ->
                 _uiState.value = _uiState.value.copy(sessionState = sessionState)
 
-                // When verification succeeds and session becomes Active, send item list
-                if (sessionState is PairingSessionState.Active) {
+                // When verification succeeds, send item list once per transition into Active (not on Active re-emissions).
+                val becameActive =
+                    sessionState is PairingSessionState.Active &&
+                        previousPairingSessionState !is PairingSessionState.Active
+                previousPairingSessionState = sessionState
+                if (becameActive) {
                     viewModelScope.launch {
                         try {
                             sendItemListToDesktopUseCase()
                         } catch (e: Exception) {
-                            Log.e(TAG, "Failed to send item list", e)
+                            AppLogger.e(TAG, "Failed to send item list", e)
                             // Don't disconnect — items can be re-requested by desktop
                         }
                     }
@@ -87,7 +85,7 @@ class DesktopLinkViewModel @Inject constructor(
 
     private fun observeVaultLock() {
         viewModelScope.launch {
-            vaultLockManager.lockState.collect { lockState ->
+            lockStateProvider.lockState.collect { lockState ->
                 val unlocked = lockState is LockState.Unlocked
                 _uiState.value = _uiState.value.copy(vaultUnlocked = unlocked)
                 if (!unlocked && pairingSession.state.value is PairingSessionState.Active) {
@@ -115,40 +113,37 @@ class DesktopLinkViewModel @Inject constructor(
                 val payload = Json.decodeFromString<PairingQrPayload>(rawValue)
                 connectToDesktopUseCase(payload).getOrThrow()
                 // Session is now in Verifying state — start request loop to listen for Verify
-                startRequestLoop()
+                requestHandler.startRequestLoop(viewModelScope)
                 _uiState.value = _uiState.value.copy(isBusy = false)
             } catch (e: SerializationException) {
-                Log.e(TAG, "QR parsing failed", e)
+                AppLogger.e(TAG, "QR parsing failed", e)
                 _uiState.value = _uiState.value.copy(
                     isBusy = false,
                     error = UserMessage.Resource(R.string.desktop_error_invalid_qr)
                 )
-            } catch (e: com.passmanager.domain.usecase.DesktopHandshakeException) {
-                Log.e(TAG, "Handshake failed", e)
+            } catch (e: com.passmanager.domain.exception.DesktopHandshakeException) {
+                AppLogger.e(TAG, "Handshake failed", e)
                 _uiState.value = _uiState.value.copy(
                     isBusy = false,
                     error = UserMessage.Resource(R.string.desktop_error_session_expired)
                 )
             } catch (e: ConnectException) {
-                Log.e(TAG, "Desktop not reachable", e)
+                AppLogger.e(TAG, "Desktop not reachable", e)
                 _uiState.value = _uiState.value.copy(
                     isBusy = false,
                     error = UserMessage.Resource(R.string.desktop_error_unreachable)
                 )
             } catch (e: SocketTimeoutException) {
-                Log.e(TAG, "Connection timed out", e)
+                AppLogger.e(TAG, "Connection timed out", e)
                 _uiState.value = _uiState.value.copy(
                     isBusy = false,
                     error = UserMessage.Resource(R.string.desktop_error_timeout)
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "Pairing failed", e)
+                AppLogger.e(TAG, "Pairing failed", e)
                 _uiState.value = _uiState.value.copy(
                     isBusy = false,
-                    error = UserMessage.Resource(
-                        R.string.desktop_error_connection_failed_with_reason,
-                        e.message ?: appContext.getString(R.string.error_unknown)
-                    )
+                    error = UserMessage.Resource(R.string.desktop_error_pairing_failed)
                 )
             } finally {
                 processingQr.set(false)
@@ -158,7 +153,7 @@ class DesktopLinkViewModel @Inject constructor(
 
     fun disconnect() {
         viewModelScope.launch {
-            requestLoopJob?.cancel()
+            requestHandler.stopLoop()
             pairingSession.endSession(appContext.getString(R.string.desktop_session_user_disconnected))
         }
     }
@@ -167,130 +162,12 @@ class DesktopLinkViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(error = null)
     }
 
-    private fun startRequestLoop() {
-        requestLoopJob?.cancel()
-        requestLoopJob = viewModelScope.launch {
-            while (isActive) {
-                val request = pairingSession.receiveSecureRequest() ?: break
-                handleDesktopRequest(request)
-            }
-        }
-    }
-
-    private suspend fun handleDesktopRequest(request: SecureRequest) {
-        val state = pairingSession.state.value
-        val requestAllowed = when (state) {
-            is PairingSessionState.Active -> true
-            is PairingSessionState.Verifying ->
-                request is SecureRequest.Verify ||
-                    request is SecureRequest.Heartbeat ||
-                    request is SecureRequest.Disconnect
-            else ->
-                request is SecureRequest.Heartbeat ||
-                    request is SecureRequest.Disconnect
-        }
-        if (!requestAllowed) {
-            sendErrorSafely(
-                appContext.getString(R.string.desktop_error_verification_required),
-                "rejecting disallowed request ${request::class.simpleName}"
-            )
-            return
-        }
-
-        when (request) {
-            is SecureRequest.GetPassword -> {
-                try {
-                    val title = sendPasswordToDesktopUseCase(request.itemId)
-                    showPasswordNotification(title)
-                } catch (_: DesktopRateLimitException) {
-                    // [SecureResponse.RateLimited] already sent — do not send [Error] or desktop shows a false "bug".
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to send password", e)
-                    sendErrorSafely(
-                        appContext.getString(
-                            R.string.desktop_error_password_retrieval_failed,
-                            (e.message ?: appContext.getString(R.string.error_unknown))
-                        ),
-                        "sending password retrieval error"
-                    )
-                }
-            }
-            is SecureRequest.ListItems -> {
-                if (!pairingSession.canAcceptVaultListRequestFromDesktop()) {
-                    pairingSession.sendSecure(
-                        SecureResponse.RateLimited(
-                            appContext.getString(R.string.desktop_rate_limited_list_refresh)
-                        )
-                    )
-                    return
-                }
-                pairingSession.recordVaultListRequestFromDesktop()
-                try {
-                    sendItemListToDesktopUseCase()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to send item list", e)
-                    sendErrorSafely(
-                        appContext.getString(R.string.desktop_error_list_refresh_failed),
-                        "sending item list refresh error"
-                    )
-                }
-            }
-            is SecureRequest.Heartbeat -> {
-                pairingSession.respondToHeartbeat()
-            }
-            is SecureRequest.Disconnect -> {
-                pairingSession.endSession(appContext.getString(R.string.desktop_session_desktop_disconnected))
-            }
-            is SecureRequest.Verify -> {
-                pairingSession.handleVerifyRequest(request.code)
-            }
-        }
-    }
-
-    private suspend fun sendErrorSafely(message: String, context: String) {
-        try {
-            pairingSession.sendSecure(SecureResponse.Error(message))
-        } catch (sendError: Exception) {
-            Log.w(TAG, "Failed $context", sendError)
-        }
-    }
-
-    private fun showPasswordNotification(itemTitle: String) {
-        val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(appContext.getString(R.string.desktop_link_title))
-            .setContentText(
-                appContext.getString(R.string.desktop_notification_password_sent, itemTitle)
-            )
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .build()
-        nm.notify(NOTIFICATION_ID_BASE + (System.currentTimeMillis() % 1000).toInt(), notification)
-    }
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                appContext.getString(R.string.desktop_pairing_channel_name),
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = appContext.getString(R.string.desktop_pairing_channel_desc)
-            }
-            nm.createNotificationChannel(channel)
-        }
-    }
-
     override fun onCleared() {
-        requestLoopJob?.cancel()
+        requestHandler.stopLoop()
         super.onCleared()
     }
 
     companion object {
         private const val TAG = "DesktopLinkVM"
-        private const val CHANNEL_ID = "desktop_pairing"
-        private const val NOTIFICATION_ID_BASE = 39000
     }
 }

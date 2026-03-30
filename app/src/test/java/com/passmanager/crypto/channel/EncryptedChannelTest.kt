@@ -6,6 +6,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.security.SecureRandom
+import com.passmanager.domain.exception.ReplayAttackException
 
 class EncryptedChannelTest {
 

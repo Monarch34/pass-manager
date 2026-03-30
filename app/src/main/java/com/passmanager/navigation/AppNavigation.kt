@@ -7,6 +7,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -15,7 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.passmanager.security.LockState
+import com.passmanager.domain.model.LockState
 import com.passmanager.ui.lock.LockScreen
 import com.passmanager.ui.onboarding.OnboardingScreen
 
@@ -26,7 +27,8 @@ fun AppNavigation() {
     val lockState by viewModel.lockState.collectAsStateWithLifecycle()
     val navReady by viewModel.navReady.collectAsStateWithLifecycle()
 
-    if (navReady is NavReady.Loading) {
+    val ready = navReady as? NavReady.Ready
+    if (ready == null) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
@@ -38,12 +40,22 @@ fun AppNavigation() {
         return
     }
 
-    val isVaultSetup = (navReady as NavReady.Ready).isVaultSetup
-
     val startDestination = when {
-        !isVaultSetup -> Screen.Onboarding.route
+        !ready.isVaultSetup -> Screen.Onboarding.route
         lockState is LockState.Unlocked -> Screen.Main.route
         else -> Screen.Lock.route
+    }
+
+    // Single lock enforcement point — no screen-level onLocked callbacks needed.
+    LaunchedEffect(lockState) {
+        if (lockState !is LockState.Unlocked) {
+            val currentRoute = navController.currentDestination?.route
+            if (currentRoute == Screen.Main.route) {
+                navController.navigate(Screen.Lock.route) {
+                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                }
+            }
+        }
     }
 
     NavHost(
@@ -75,7 +87,6 @@ fun AppNavigation() {
 
         composable(Screen.Main.route) {
             MainTabNavHost(
-                rootNavController = navController,
                 modifier = Modifier.fillMaxSize()
             )
         }

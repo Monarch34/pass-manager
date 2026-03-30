@@ -8,11 +8,12 @@ import androidx.room.Update
 import com.passmanager.data.db.entity.VaultItemEntity
 import kotlinx.coroutines.flow.Flow
 
+private const val HEADERS_QUERY =
+    "SELECT id, encrypted_title, title_iv, encrypted_address, address_iv, category, updated_at " +
+    "FROM vault_items ORDER BY updated_at DESC"
+
 @Dao
 interface VaultItemDao {
-
-    @Query("SELECT * FROM vault_items ORDER BY updated_at DESC")
-    fun observeAll(): Flow<List<VaultItemEntity>>
 
     @Query("SELECT * FROM vault_items WHERE id = :id")
     suspend fun getById(id: String): VaultItemEntity?
@@ -26,6 +27,26 @@ interface VaultItemDao {
     @Update
     suspend fun update(item: VaultItemEntity)
 
+    @Query(
+        "UPDATE vault_items SET " +
+        "encrypted_data = :ed, data_iv = :div, key_version = :kv, updated_at = :ua, " +
+        "category = :cat, encrypted_title = :et, title_iv = :tiv, " +
+        "encrypted_address = :ea, address_iv = :aiv " +
+        "WHERE id = :id"
+    )
+    suspend fun updateDirectly(
+        id: String,
+        ed: ByteArray,
+        div: ByteArray,
+        kv: Int,
+        ua: Long,
+        cat: String,
+        et: ByteArray,
+        tiv: ByteArray,
+        ea: ByteArray?,
+        aiv: ByteArray?
+    )
+
     @Query("DELETE FROM vault_items WHERE id = :id")
     suspend fun deleteById(id: String)
 
@@ -35,20 +56,12 @@ interface VaultItemDao {
     @Query("SELECT COUNT(*) FROM vault_items")
     suspend fun count(): Int
 
-    /**
-     * Lightweight projection for list display — skips the full encrypted blob.
-     * Rows created before the header-column migration have null encrypted_title.
-     */
-    @Query(
-        "SELECT id, encrypted_title, title_iv, encrypted_address, address_iv, category, updated_at " +
-        "FROM vault_items ORDER BY updated_at DESC"
-    )
+    @Query(HEADERS_QUERY)
     fun observeHeaders(): Flow<List<VaultItemHeaderProjection>>
 
-    /**
-     * Backfill the separately-encrypted title/address columns for a legacy row.
-     * Called once per item on first unlock after the migration.
-     */
+    @Query(HEADERS_QUERY)
+    suspend fun getHeaders(): List<VaultItemHeaderProjection>
+
     @Query(
         "UPDATE vault_items " +
         "SET encrypted_title = :et, title_iv = :tiv, encrypted_address = :ea, address_iv = :aiv " +

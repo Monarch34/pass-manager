@@ -41,7 +41,9 @@ secrets.properties
 keystore.properties
 *.pem
 *.p12
-# Play / CI service accounts (keep google-services.json if you add Firebase — often committed)
+# Firebase config — contains project ID / app ID (not committed; no Firebase dependency)
+google-services.json
+# Play / CI service accounts
 serviceAccount*.json
 
 # Android Studio
@@ -90,6 +92,10 @@ Thumbs.db
 
 # Local agent/editor runtime artifacts
 build_output.txt
+build_errors*.txt
+gradlew_output.txt
+test_output.txt
+.claude/
 
 # Stray Gradle downloads (use wrapper only)
 gradle-temp.zip

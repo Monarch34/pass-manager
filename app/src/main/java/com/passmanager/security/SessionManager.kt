@@ -1,23 +1,21 @@
 package com.passmanager.security
 
+import com.passmanager.domain.port.UnlockSessionRecorder
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Tracks whether the user has completed a full passphrase unlock this process lifetime.
- *
- * This is intentionally NOT persisted. A process kill (force-stop, OOM kill, etc.)
- * resets this to false, which is the cold lock detection mechanism.
- * No disk I/O needed — memory IS the security boundary.
- */
 @Singleton
-class SessionManager @Inject constructor() {
+class SessionManager @Inject constructor() : UnlockSessionRecorder {
 
     @Volatile
-    var hasPassphraseUnlockedThisSession: Boolean = false
+    var hasUnlockedThisSession: Boolean = false
         private set
 
-    fun recordPassphraseUnlock() {
-        hasPassphraseUnlockedThisSession = true
+    override fun recordSuccessfulUnlock() {
+        hasUnlockedThisSession = true
+    }
+
+    fun invalidate() {
+        hasUnlockedThisSession = false
     }
 }

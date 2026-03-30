@@ -1,11 +1,11 @@
 package com.passmanager.navigation
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.passmanager.domain.repository.MetadataRepository
-import com.passmanager.security.LockState
-import com.passmanager.security.VaultLockManager
+import com.passmanager.BuildConfig
+import com.passmanager.domain.model.LockState
+import com.passmanager.domain.port.LockStateProvider
+import com.passmanager.domain.usecase.CheckVaultSetupUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,11 +20,11 @@ sealed interface NavReady {
 
 @HiltViewModel
 class NavigationViewModel @Inject constructor(
-    private val vaultLockManager: VaultLockManager,
-    private val metadataRepository: MetadataRepository
+    private val lockStateProvider: LockStateProvider,
+    private val checkVaultSetupUseCase: CheckVaultSetupUseCase
 ) : ViewModel() {
 
-    val lockState: StateFlow<LockState> = vaultLockManager.lockState
+    val lockState: StateFlow<LockState> = lockStateProvider.lockState
 
     private val _navReady = MutableStateFlow<NavReady>(NavReady.Loading)
     val navReady: StateFlow<NavReady> = _navReady.asStateFlow()
@@ -32,10 +32,12 @@ class NavigationViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             try {
-                val isSetup = metadataRepository.isVaultSetup()
+                val isSetup = checkVaultSetupUseCase()
                 _navReady.value = NavReady.Ready(isSetup)
             } catch (e: Exception) {
-                Log.e("NavigationViewModel", "Failed to check vault setup", e)
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.e("NavigationViewModel", "Failed to check vault setup", e)
+                }
                 _navReady.value = NavReady.Ready(false)
             }
         }

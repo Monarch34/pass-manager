@@ -1,18 +1,20 @@
 package com.passmanager.ui.settings
 
 import android.content.Context
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.passmanager.BuildConfig
 import com.passmanager.R
-import com.passmanager.data.preferences.AppPreferences
-import com.passmanager.crypto.keystore.AndroidKeystoreManager
-import com.passmanager.domain.repository.MetadataRepository
+import com.passmanager.domain.port.AppSettingsDefaults
+import com.passmanager.domain.port.AppSettingsPort
 import com.passmanager.domain.usecase.ChangePassphraseUseCase
-import com.passmanager.domain.usecase.EnableBiometricUseCase
-import com.passmanager.domain.usecase.WrongPassphraseException
-import com.passmanager.security.VaultLockManager
+import com.passmanager.domain.usecase.SeedDemoVaultItemsUseCase
+import com.passmanager.domain.exception.WrongPassphraseException
+import com.passmanager.domain.model.LockState
+import com.passmanager.domain.port.LockStateProvider
+import com.passmanager.domain.port.BiometricLockPort
 import com.passmanager.security.biometric.BiometricHelper
+import com.passmanager.ui.common.AppLogger
 import com.passmanager.ui.common.UserMessage
 import coil.imageLoader
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,30 +29,42 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.crypto.Cipher
+import androidx.compose.runtime.Immutable
 import javax.inject.Inject
 
+/** One-shot error shown to the user in the Settings screen. */
+sealed interface SettingsError {
+    val message: UserMessage
+    /** General biometric / setting error shown as a snackbar. */
+    data class General(override val message: UserMessage) : SettingsError
+    /** Passphrase change failure shown inline in the bottom sheet. */
+    data class PassphraseChange(override val message: UserMessage) : SettingsError
+}
+
+@Immutable
 data class SettingsUiState(
     val biometricEnabled: Boolean = false,
     val biometricAvailableOnDevice: Boolean = false,
-    val autoLockSeconds: Int = AppPreferences.DEFAULT_AUTO_LOCK_SECONDS,
-    val useGoogleFavicons: Boolean = AppPreferences.DEFAULT_USE_GOOGLE_FAVICONS,
-    val error: UserMessage? = null,
+    val autoLockSeconds: Int = AppSettingsDefaults.AUTO_LOCK_SECONDS,
+    val useGoogleFavicons: Boolean = AppSettingsDefaults.USE_GOOGLE_FAVICONS,
+    val error: SettingsError? = null,
     val showChangePassphraseSheet: Boolean = false,
     val isPassphraseChanging: Boolean = false,
-    val passphraseChangeError: UserMessage? = null,
-    val vaultLocked: Boolean = false
+    /** Debug: loading state for demo seed button. */
+    val isSeedingDemo: Boolean = false,
+    /** Debug: one-shot snackbar after demo seed (success or failure). */
+    val seedDemoMessage: UserMessage? = null,
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val metadataRepository: MetadataRepository,
-    private val enableBiometricUseCase: EnableBiometricUseCase,
-    private val appPreferences: AppPreferences,
+    private val biometricLockPort: BiometricLockPort,
+    private val appSettings: AppSettingsPort,
     private val biometricHelper: BiometricHelper,
     private val changePassphraseUseCase: ChangePassphraseUseCase,
-    private val vaultLockManager: VaultLockManager,
-    private val keystoreManager: AndroidKeystoreManager
+    private val lockStateProvider: LockStateProvider,
+    private val seedDemoVaultItemsUseCase: SeedDemoVaultItemsUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -61,40 +75,35 @@ class SettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val metadata = metadataRepository.get()
+            val enrolled = biometricLockPort.isAvailable()
             val canUseBiometric = biometricHelper.canUseBiometric()
-            _uiState.value = _uiState.value.copy(
-                biometricEnabled = metadata?.biometricEnabled == true,
-                biometricAvailableOnDevice = canUseBiometric
-            )
+            _uiState.update {
+                it.copy(
+                    biometricEnabled = enrolled,
+                    biometricAvailableOnDevice = canUseBiometric
+                )
+            }
         }
-        appPreferences.autoLockTimeoutSeconds
+        appSettings.autoLockTimeoutSeconds
             .onEach { seconds -> _uiState.update { it.copy(autoLockSeconds = seconds) } }
             .launchIn(viewModelScope)
-        appPreferences.useGoogleFavicons
+        appSettings.useGoogleFavicons
             .onEach { useGoogle -> _uiState.update { it.copy(useGoogleFavicons = useGoogle) } }
             .launchIn(viewModelScope)
     }
 
     fun toggleBiometric() {
-        val currentlyEnabled = _uiState.value.biometricEnabled
-        if (currentlyEnabled) {
-            disableBiometric()
-        } else {
-            prepareBiometricEnrollment()
-        }
+        if (_uiState.value.biometricEnabled) disableBiometric() else prepareBiometricEnrollment()
     }
 
     private fun prepareBiometricEnrollment() {
         viewModelScope.launch {
             try {
-                val cipher = enableBiometricUseCase.prepareEnrollment()
+                val cipher = biometricLockPort.prepareEnrollment()
                 _pendingBiometricCipherEvent.emit(cipher)
             } catch (e: Exception) {
-                Log.e("SettingsViewModel", "Failed to prepare biometric", e)
-                _uiState.value = _uiState.value.copy(
-                    error = UserMessage.Resource(R.string.settings_error_biometric_prepare)
-                )
+                AppLogger.e("SettingsViewModel", "Failed to prepare biometric", e)
+                _uiState.update { it.copy(error = SettingsError.General(UserMessage.Resource(R.string.settings_error_biometric_prepare))) }
             }
         }
     }
@@ -102,13 +111,11 @@ class SettingsViewModel @Inject constructor(
     fun onBiometricEnrollmentSuccess(authenticatedCipher: Cipher) {
         viewModelScope.launch {
             try {
-                enableBiometricUseCase.completeEnrollment(authenticatedCipher)
-                _uiState.value = _uiState.value.copy(biometricEnabled = true)
+                biometricLockPort.completeEnrollment(authenticatedCipher)
+                _uiState.update { it.copy(biometricEnabled = true) }
             } catch (e: Exception) {
-                Log.e("SettingsViewModel", "Failed to enable biometric", e)
-                _uiState.value = _uiState.value.copy(
-                    error = UserMessage.Resource(R.string.settings_error_biometric_enable)
-                )
+                AppLogger.e("SettingsViewModel", "Failed to enable biometric", e)
+                _uiState.update { it.copy(error = SettingsError.General(UserMessage.Resource(R.string.settings_error_biometric_enable))) }
             }
         }
     }
@@ -116,28 +123,23 @@ class SettingsViewModel @Inject constructor(
     private fun disableBiometric() {
         viewModelScope.launch {
             try {
-                metadataRepository.disableBiometric()
-                keystoreManager.deleteBiometricKey()
-                _uiState.value = _uiState.value.copy(biometricEnabled = false)
+                biometricLockPort.disable()
+                _uiState.update { it.copy(biometricEnabled = false) }
             } catch (e: Exception) {
-                Log.e("SettingsViewModel", "Failed to disable biometric", e)
-                _uiState.value = _uiState.value.copy(
-                    error = UserMessage.Resource(R.string.settings_error_biometric_disable)
-                )
+                AppLogger.e("SettingsViewModel", "Failed to disable biometric", e)
+                _uiState.update { it.copy(error = SettingsError.General(UserMessage.Resource(R.string.settings_error_biometric_disable))) }
             }
         }
     }
 
     fun setAutoLockTimeout(seconds: Int) {
-        viewModelScope.launch {
-            appPreferences.setAutoLockTimeout(seconds)
-        }
+        viewModelScope.launch { appSettings.setAutoLockTimeout(seconds) }
     }
 
     @OptIn(coil.annotation.ExperimentalCoilApi::class)
     fun setUseGoogleFavicons(enabled: Boolean) {
         viewModelScope.launch {
-            appPreferences.setUseGoogleFavicons(enabled)
+            appSettings.setUseGoogleFavicons(enabled)
             if (!enabled) {
                 val loader = context.imageLoader
                 loader.memoryCache?.clear()
@@ -147,43 +149,44 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun openChangePassphraseSheet() {
-        _uiState.value = _uiState.value.copy(showChangePassphraseSheet = true)
+        _uiState.update { it.copy(showChangePassphraseSheet = true) }
     }
 
     fun dismissChangePassphraseSheet() {
-        _uiState.value = _uiState.value.copy(
-            showChangePassphraseSheet = false,
-            passphraseChangeError = null
-        )
+        _uiState.update { it.copy(showChangePassphraseSheet = false, error = null) }
     }
 
     fun changePassphrase(current: CharArray, new: CharArray, confirm: CharArray) {
         if (!new.contentEquals(confirm)) {
-            _uiState.value = _uiState.value.copy(
-                passphraseChangeError = UserMessage.Resource(R.string.onboarding_passphrase_mismatch)
-            )
             current.fill('\u0000')
             new.fill('\u0000')
             confirm.fill('\u0000')
+            _uiState.update {
+                it.copy(error = SettingsError.PassphraseChange(UserMessage.Resource(R.string.onboarding_passphrase_mismatch)))
+            }
             return
         }
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isPassphraseChanging = true, passphraseChangeError = null)
+            _uiState.update { it.copy(isPassphraseChanging = true, error = null) }
             try {
                 changePassphraseUseCase(current, new)
-                vaultLockManager.lock()
-                _uiState.value = _uiState.value.copy(isPassphraseChanging = false, vaultLocked = true)
+                lockStateProvider.lock()
+                _uiState.update { it.copy(isPassphraseChanging = false) }
             } catch (e: WrongPassphraseException) {
-                _uiState.value = _uiState.value.copy(
-                    isPassphraseChanging = false,
-                    passphraseChangeError = UserMessage.Resource(R.string.settings_wrong_current_passphrase)
-                )
+                _uiState.update {
+                    it.copy(
+                        isPassphraseChanging = false,
+                        error = SettingsError.PassphraseChange(UserMessage.Resource(R.string.settings_wrong_current_passphrase))
+                    )
+                }
             } catch (e: Exception) {
-                Log.e("SettingsViewModel", "Failed to change passphrase", e)
-                _uiState.value = _uiState.value.copy(
-                    isPassphraseChanging = false,
-                    passphraseChangeError = UserMessage.Resource(R.string.settings_passphrase_change_failed)
-                )
+                AppLogger.e("SettingsViewModel", "Failed to change passphrase", e)
+                _uiState.update {
+                    it.copy(
+                        isPassphraseChanging = false,
+                        error = SettingsError.PassphraseChange(UserMessage.Resource(R.string.settings_passphrase_change_failed))
+                    )
+                }
             } finally {
                 current.fill('\u0000')
                 new.fill('\u0000')
@@ -192,9 +195,42 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun clearPassphraseChangeError() {
-        _uiState.value = _uiState.value.copy(passphraseChangeError = null)
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
     }
 
-    fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
+    /** Debug only: inserts 6 demo items per category. No-op in release builds. */
+    fun seedDemoVaultItems() {
+        if (!BuildConfig.DEBUG) return
+        viewModelScope.launch {
+            if (lockStateProvider.lockState.value !is LockState.Unlocked) {
+                _uiState.update {
+                    it.copy(seedDemoMessage = UserMessage.Resource(R.string.settings_debug_seed_demo_locked))
+                }
+                return@launch
+            }
+            _uiState.update { it.copy(isSeedingDemo = true, seedDemoMessage = null) }
+            try {
+                val added = seedDemoVaultItemsUseCase()
+                _uiState.update {
+                    it.copy(
+                        isSeedingDemo = false,
+                        seedDemoMessage = UserMessage.Resource(R.string.settings_debug_seed_demo_done, added)
+                    )
+                }
+            } catch (e: Exception) {
+                AppLogger.e("SettingsViewModel", "Demo seed failed", e)
+                _uiState.update {
+                    it.copy(
+                        isSeedingDemo = false,
+                        seedDemoMessage = UserMessage.Resource(R.string.settings_debug_seed_demo_failed)
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearSeedDemoMessage() {
+        _uiState.update { it.copy(seedDemoMessage = null) }
+    }
 }

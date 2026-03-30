@@ -1,5 +1,7 @@
 package com.passmanager.domain.model
 
+import com.passmanager.crypto.util.contentEqualsNullable
+
 /**
  * Lightweight vault item representation used for list display.
  * Contains only the fields needed to show an item in a list:
@@ -13,7 +15,7 @@ data class VaultItemHeader(
     val titleIv:          ByteArray?,
     val encryptedAddress: ByteArray?,
     val addressIv:        ByteArray?,
-    val category:         String,
+    val category:         ItemCategory,
     val updatedAt:        Long
 ) {
     override fun equals(other: Any?): Boolean {
@@ -38,9 +40,4 @@ data class VaultItemHeader(
         result = 31 * result + updatedAt.hashCode()
         return result
     }
-
-    private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean =
-        if (this == null && other == null) true
-        else if (this == null || other == null) false
-        else contentEquals(other)
 }

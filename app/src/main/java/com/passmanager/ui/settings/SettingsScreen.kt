@@ -7,14 +7,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Timer
@@ -31,8 +35,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -46,8 +48,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,18 +55,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.passmanager.BuildConfig
 import com.passmanager.R
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.passmanager.security.biometric.BiometricHelper
 import com.passmanager.ui.common.clearAllFocus
+import com.passmanager.ui.components.BiometricPromptEffect
 import com.passmanager.ui.common.resolve
 import com.passmanager.ui.common.UserMessage
 import com.passmanager.ui.components.ErrorSnackbarEffect
@@ -78,38 +79,30 @@ import com.passmanager.ui.components.SecureTextField
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
-    onVaultLocked: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
 
     ErrorSnackbarEffect(
-        error = uiState.error,
+        error = (uiState.error as? SettingsError.General)?.message,
         onErrorShown = { viewModel.clearError() },
         snackbarHostState = snackbarHostState
     )
 
-    LaunchedEffect(Unit) {
-        viewModel.pendingBiometricCipherEvent.collect { cipher ->
-            val activity = context as? FragmentActivity ?: return@collect
-            val helper = BiometricHelper(context)
-            helper.showPrompt(
-                activity = activity,
-                cipher = cipher,
-                title = context.getString(R.string.settings_biometric_prompt_title),
-                subtitle = context.getString(R.string.settings_biometric_prompt_subtitle),
-                negativeButtonText = context.getString(R.string.cancel),
-                onSuccess = { authenticatedCipher -> viewModel.onBiometricEnrollmentSuccess(authenticatedCipher) },
-                onError = { _ -> }
-            )
-        }
-    }
+    ErrorSnackbarEffect(
+        error = uiState.seedDemoMessage,
+        onErrorShown = { viewModel.clearSeedDemoMessage() },
+        snackbarHostState = snackbarHostState
+    )
 
-    LaunchedEffect(uiState.vaultLocked) {
-        if (uiState.vaultLocked) onVaultLocked()
-    }
+    BiometricPromptEffect(
+        cipherFlow = viewModel.pendingBiometricCipherEvent,
+        title = stringResource(R.string.settings_biometric_prompt_title),
+        subtitle = stringResource(R.string.settings_biometric_prompt_subtitle),
+        negativeButtonText = stringResource(R.string.cancel),
+        onSuccess = viewModel::onBiometricEnrollmentSuccess
+    )
 
     val min1  = stringResource(R.string.settings_auto_lock_1min)
     val min5  = stringResource(R.string.settings_auto_lock_5min)
@@ -136,11 +129,11 @@ fun SettingsScreen(
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { padding ->
+    ) { paddingValues: PaddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
         ) {
             Text(
@@ -283,7 +276,7 @@ fun SettingsScreen(
                 trailingContent = {
                     ExposedDropdownMenuBox(
                         expanded = autoLockDropdownExpanded,
-                        onExpandedChange = { expanded ->
+                        onExpandedChange = { expanded: Boolean ->
                             autoLockDropdownExpanded = expanded
                             if (!expanded) focusManager.clearAllFocus()
                         },
@@ -320,7 +313,9 @@ fun SettingsScreen(
                                 .widthIn(min = autoLockMenuWidthDp, max = autoLockMenuWidthDp)
                                 .heightIn(max = 280.dp)
                         ) {
-                            autoLockOptions.forEach { (seconds, label) ->
+                            autoLockOptions.forEach { option: Pair<Int, String> ->
+                                val seconds = option.first
+                                val label = option.second
                                 DropdownMenuItem(
                                     text = { Text(label) },
                                     onClick = {
@@ -334,13 +329,53 @@ fun SettingsScreen(
                 }
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            if (BuildConfig.DEBUG) {
+                Text(
+                    text = stringResource(R.string.settings_debug_section),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+                ListItem(
+                    headlineContent = {
+                        Text(
+                            stringResource(R.string.settings_debug_seed_demo_title),
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                    },
+                    supportingContent = {
+                        Text(
+                            stringResource(R.string.settings_debug_seed_demo_subtitle),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    leadingContent = {
+                        SettingIconBox(
+                            icon = Icons.Default.BugReport,
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            iconTint = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    },
+                    trailingContent = {
+                        TextButton(
+                            onClick = { viewModel.seedDemoVaultItems() },
+                            enabled = !uiState.isSeedingDemo
+                        ) {
+                            Text(stringResource(R.string.settings_debug_seed_demo_action))
+                        }
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            }
         }
     }
 
     if (uiState.showChangePassphraseSheet) {
         ChangePassphraseSheet(
             isChanging = uiState.isPassphraseChanging,
-            error = uiState.passphraseChangeError,
+            error = (uiState.error as? SettingsError.PassphraseChange)?.message,
             onDismiss = { viewModel.dismissChangePassphraseSheet() },
             onConfirm = { current, new, confirm ->
                 viewModel.changePassphrase(current, new, confirm)
@@ -368,93 +403,120 @@ private fun ChangePassphraseSheet(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         dragHandle = null
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .navigationBarsPadding()
-                .imePadding()
-                .padding(bottom = 24.dp)
+        ChangePassphraseSheetBody(
+            isChanging = isChanging,
+            error = error,
+            currentPass = currentPass,
+            newPass = newPass,
+            confirmPass = confirmPass,
+            onCurrentPassChange = { s: String -> currentPass = s },
+            onNewPassChange = { s: String -> newPass = s },
+            onConfirmPassChange = { s: String -> confirmPass = s },
+            onDismiss = onDismiss,
+            onSubmit = {
+                onConfirm(
+                    currentPass.toCharArray(),
+                    newPass.toCharArray(),
+                    confirmPass.toCharArray()
+                )
+            }
+        )
+    }
+}
+
+@Composable
+private fun ChangePassphraseSheetBody(
+    isChanging: Boolean,
+    error: UserMessage?,
+    currentPass: String,
+    newPass: String,
+    confirmPass: String,
+    onCurrentPassChange: (String) -> Unit,
+    onNewPassChange: (String) -> Unit,
+    onConfirmPassChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onSubmit: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .navigationBarsPadding()
+            .imePadding()
+            .padding(bottom = 24.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.settings_change_passphrase_sheet_title),
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Text(
+            text = stringResource(R.string.settings_change_passphrase_sheet_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        SecureTextField(
+            value = currentPass,
+            onValueChange = onCurrentPassChange,
+            label = stringResource(R.string.settings_current_passphrase_hint),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        SecureTextField(
+            value = newPass,
+            onValueChange = onNewPassChange,
+            label = stringResource(R.string.settings_new_passphrase_hint),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        if (newPass.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            PasswordStrengthBar(
+                password = newPass,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        SecureTextField(
+            value = confirmPass,
+            onValueChange = onConfirmPassChange,
+            label = stringResource(R.string.settings_confirm_passphrase_hint),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        if (error != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = error.resolve(),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        LoadingButton(
+            text = stringResource(R.string.settings_update_passphrase_button),
+            onClick = onSubmit,
+            isLoading = isChanging,
+            enabled = currentPass.isNotEmpty() && newPass.isNotEmpty() && confirmPass.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        TextButton(
+            onClick = onDismiss,
+            enabled = !isChanging,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = stringResource(R.string.settings_change_passphrase_sheet_title),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Text(
-                text = stringResource(R.string.settings_change_passphrase_sheet_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            SecureTextField(
-                value = currentPass,
-                onValueChange = { currentPass = it },
-                label = stringResource(R.string.settings_current_passphrase_hint),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            SecureTextField(
-                value = newPass,
-                onValueChange = { newPass = it },
-                label = stringResource(R.string.settings_new_passphrase_hint),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            if (newPass.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                PasswordStrengthBar(
-                    password = newPass,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp)
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            SecureTextField(
-                value = confirmPass,
-                onValueChange = { confirmPass = it },
-                label = stringResource(R.string.settings_confirm_passphrase_hint),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            if (error != null) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = error.resolve(),
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            LoadingButton(
-                text = stringResource(R.string.settings_update_passphrase_button),
-                onClick = {
-                    onConfirm(
-                        currentPass.toCharArray(),
-                        newPass.toCharArray(),
-                        confirmPass.toCharArray()
-                    )
-                },
-                isLoading = isChanging,
-                enabled = currentPass.isNotEmpty() && newPass.isNotEmpty() && confirmPass.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            TextButton(
-                onClick = onDismiss,
-                enabled = !isChanging,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(R.string.cancel))
-            }
+            Text(stringResource(R.string.cancel))
         }
     }
 }
@@ -462,8 +524,8 @@ private fun ChangePassphraseSheet(
 @Composable
 private fun SettingIconBox(
     icon: ImageVector,
-    containerColor: androidx.compose.ui.graphics.Color,
-    iconTint: androidx.compose.ui.graphics.Color
+    containerColor: Color,
+    iconTint: Color
 ) {
     Surface(
         shape = MaterialTheme.shapes.small,

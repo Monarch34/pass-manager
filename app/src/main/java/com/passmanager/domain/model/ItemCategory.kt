@@ -1,32 +1,31 @@
 package com.passmanager.domain.model
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.NoteAlt
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import com.passmanager.ui.theme.CategoryBankTint
-import com.passmanager.ui.theme.CategoryCardTint
-import com.passmanager.ui.theme.CategoryIdentityTint
-import com.passmanager.ui.theme.CategoryLoginTint
-import com.passmanager.ui.theme.CategoryNoteTint
+/**
+ * Vault item category — pure domain enum with no UI dependencies.
+ *
+ * UI presentation (icons, tints) lives in [com.passmanager.ui.model.ItemCategoryUi].
+ */
+enum class ItemCategory(val label: String) {
+    LOGIN("Login"),
+    CARD("Card"),
+    NOTE("Note"),
+    IDENTITY("Identity"),
+    BANK("Bank");
 
-enum class ItemCategory(
-    val label: String,
-    val icon: ImageVector,
-    val tint: Color
-) {
-    LOGIN("Login", Icons.Default.Key, CategoryLoginTint),
-    CARD("Card", Icons.Default.CreditCard, CategoryCardTint),
-    NOTE("Note", Icons.Default.NoteAlt, CategoryNoteTint),
-    IDENTITY("Identity", Icons.Default.Person, CategoryIdentityTint),
-    BANK("Bank", Icons.Default.AccountBalance, CategoryBankTint);
+    /** Lowercase name used for DB storage (e.g. `"login"`, `"card"`). */
+    val dbKey: String get() = name.lowercase()
 
     companion object {
-        fun fromString(value: String): ItemCategory =
-            entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: LOGIN
+        /**
+         * Parses a category from navigation args, deep links, or the DB `category` column.
+         * Blank or unknown values map to [LOGIN] so corrupted or legacy rows do not crash the app.
+         */
+        fun fromString(value: String): ItemCategory {
+            val v = value.trim()
+            if (v.isEmpty()) return LOGIN
+            return entries.firstOrNull { entry ->
+                entry.name.equals(v, ignoreCase = true) || entry.dbKey.equals(v, ignoreCase = true)
+            } ?: LOGIN
+        }
     }
 }

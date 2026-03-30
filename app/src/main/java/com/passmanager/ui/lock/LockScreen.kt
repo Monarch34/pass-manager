@@ -36,18 +36,18 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
 import com.passmanager.R
 import com.passmanager.ui.components.AppShieldLogo
-import com.passmanager.security.biometric.BiometricHelper
+import com.passmanager.ui.components.BiometricPromptEffect
 import com.passmanager.ui.components.ErrorSnackbarEffect
 import com.passmanager.ui.components.LoadingButton
 import com.passmanager.ui.components.SecureTextField
@@ -63,8 +63,9 @@ fun LockScreen(
     var passphrase by remember { mutableStateOf("") }
     var shakeCount by remember { mutableIntStateOf(0) }
     val focusManager = LocalFocusManager.current
-    val context = LocalContext.current
     val view = LocalView.current
+    val unlockButtonLabel = stringResource(R.string.lock_unlock_button)
+    val biometricButtonLabel = stringResource(R.string.lock_biometric_button)
 
     LaunchedEffect(uiState.shouldShakePassphraseField) {
         if (uiState.shouldShakePassphraseField) {
@@ -83,21 +84,13 @@ fun LockScreen(
         snackbarHostState = snackbarHostState
     )
 
-    LaunchedEffect(Unit) {
-        viewModel.biometricCipherEvent.collect { cipher ->
-            val activity = context as? FragmentActivity ?: return@collect
-            val helper = BiometricHelper(context)
-            helper.showPrompt(
-                activity = activity,
-                cipher = cipher,
-                title = context.getString(R.string.lock_biometric_prompt_title),
-                subtitle = context.getString(R.string.lock_biometric_prompt_subtitle),
-                negativeButtonText = context.getString(R.string.lock_biometric_prompt_cancel),
-                onSuccess = { authenticatedCipher -> viewModel.onBiometricSuccess(authenticatedCipher) },
-                onError = { _ -> }
-            )
-        }
-    }
+    BiometricPromptEffect(
+        cipherFlow = viewModel.biometricCipherEvent,
+        title = stringResource(R.string.lock_biometric_prompt_title),
+        subtitle = stringResource(R.string.lock_biometric_prompt_subtitle),
+        negativeButtonText = stringResource(R.string.lock_biometric_prompt_cancel),
+        onSuccess = viewModel::onBiometricSuccess
+    )
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -168,7 +161,7 @@ fun LockScreen(
                 Spacer(Modifier.height(16.dp))
 
                 LoadingButton(
-                    text = stringResource(R.string.lock_unlock_button),
+                    text = unlockButtonLabel,
                     onClick = {
                         focusManager.clearFocus()
                         viewModel.unlockWithPassphrase(passphrase.toCharArray())
@@ -176,7 +169,11 @@ fun LockScreen(
                     },
                     isLoading = uiState.isLoading,
                     enabled = passphrase.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            contentDescription = unlockButtonLabel
+                        }
                 )
 
                 if (uiState.biometricAvailable) {
@@ -202,9 +199,16 @@ fun LockScreen(
                         },
                         enabled = !uiState.isLoading,
                         shape = MaterialTheme.shapes.extraLarge,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics {
+                                contentDescription = biometricButtonLabel
+                            }
                     ) {
-                        Icon(Icons.Default.Fingerprint, contentDescription = null)
+                        Icon(
+                            Icons.Default.Fingerprint,
+                            contentDescription = null
+                        )
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.lock_biometric_button))
                     }

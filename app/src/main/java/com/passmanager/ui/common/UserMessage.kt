@@ -1,5 +1,6 @@
 package com.passmanager.ui.common
 
+import android.content.Context
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
@@ -18,6 +19,19 @@ sealed class UserMessage {
         val formatArgs: List<Any> = emptyList(),
     ) : UserMessage() {
         constructor(@StringRes resId: Int, vararg formatArgs: Any) : this(resId, formatArgs.toList())
+    }
+}
+
+/** Resolve for [LaunchedEffect] / non-Composable callers (e.g. snackbar from context). */
+fun UserMessage.resolve(context: Context): String = when (this) {
+    is UserMessage.Plain -> text
+    is UserMessage.Resource -> {
+        val args = formatArgs.toTypedArray()
+        if (args.isEmpty()) {
+            context.getString(resId)
+        } else {
+            context.getString(resId, *args)
+        }
     }
 }
 

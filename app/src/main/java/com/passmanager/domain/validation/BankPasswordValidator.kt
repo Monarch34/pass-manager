@@ -26,9 +26,9 @@ class BankPasswordValidator @Inject constructor() {
             return when {
                 password.length < 6 -> listOf(BankPasswordViolation.TooShort)
                 password.length == 6 -> buildList {
-                    if (previousPasswords.take(4).contains(password)) {
-                        add(BankPasswordViolation.ReusedPassword)
-                    }
+                    if (hasConsecutiveSequence(password)) add(BankPasswordViolation.ConsecutiveSequence)
+                    if (hasRepeatingCharacters(password)) add(BankPasswordViolation.RepeatingCharacters)
+                    if (previousPasswords.take(4).contains(password)) add(BankPasswordViolation.ReusedPassword)
                 }
                 else -> validateComplexPassword(password, previousPasswords)
             }

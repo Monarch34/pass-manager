@@ -21,32 +21,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.passmanager.R
+import com.passmanager.domain.validation.PasswordStrengthEvaluator
 import com.passmanager.ui.theme.StrengthFairColor
 import kotlinx.coroutines.delay
-
-@Composable
-private fun strengthColors() = listOf(
-    MaterialTheme.colorScheme.error,
-    StrengthFairColor,
-    MaterialTheme.colorScheme.tertiary,
-    MaterialTheme.colorScheme.primary
-)
-
-private fun computeStrength(password: String): Int {
-    if (password.isEmpty()) return 0
-    var score = 0
-    if (password.length >= 8) score++
-    if (password.length >= 14) score++
-    if (password.any { it.isUpperCase() } && password.any { it.isLowerCase() }) score++
-    if (password.any { it.isDigit() }) score++
-    if (password.any { !it.isLetterOrDigit() }) score++
-    return when {
-        score <= 1 -> 1
-        score == 2 -> 2
-        score == 3 -> 3
-        else -> 4
-    }
-}
 
 /**
  * Debounced strength meter to avoid heavy main-thread work on every keystroke.
@@ -70,7 +47,8 @@ fun PasswordStrengthBar(
 
     if (debounced.isEmpty()) return
 
-    val strength = remember(debounced) { computeStrength(debounced) }
+    val strength = remember(debounced) { PasswordStrengthEvaluator.evaluate(debounced) }
+    val idx = strength.ordinal
     val weakLabel = stringResource(R.string.strength_weak)
     val fairLabel = stringResource(R.string.strength_fair)
     val goodLabel = stringResource(R.string.strength_good)
@@ -84,7 +62,7 @@ fun PasswordStrengthBar(
     val colors = remember(errorColor, tertiaryColor, primaryColor) {
         listOf(errorColor, StrengthFairColor, tertiaryColor, primaryColor)
     }
-    val active = colors[strength - 1]
+    val active = colors[idx]
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
 
     Column(modifier = modifier) {
@@ -93,7 +71,7 @@ fun PasswordStrengthBar(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             repeat(4) { index ->
-                val segmentColor = if (index < strength) active else surfaceVariant
+                val segmentColor = if (index <= idx) active else surfaceVariant
                 Spacer(
                     modifier = Modifier
                         .weight(1f)
@@ -105,7 +83,7 @@ fun PasswordStrengthBar(
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            text = strengthLabels[strength - 1],
+            text = strengthLabels[idx],
             style = MaterialTheme.typography.labelSmall,
             color = active
         )

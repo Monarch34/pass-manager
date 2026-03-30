@@ -6,7 +6,7 @@ import com.passmanager.protocol.HandshakeResponse
 import com.passmanager.protocol.SecureMessageCbor
 import com.passmanager.protocol.SecureRequest
 import com.passmanager.protocol.SecureResponse
-import com.passmanager.domain.usecase.DesktopHandshakeException
+import com.passmanager.domain.exception.DesktopHandshakeException
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
@@ -32,6 +32,8 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.net.InetAddress
+import javax.inject.Inject
 
 /**
  * HTTP + WebSocket client that connects to the desktop pairing server.
@@ -42,26 +44,19 @@ import kotlinx.serialization.json.jsonPrimitive
  * 3. [sendSecure] / [receiveSecure] — bidirectional encrypted messages
  * 4. [close] — tear down WebSocket and HTTP client
  */
-class DesktopPairingClient {
+class DesktopPairingClient @Inject constructor(private val httpClient: HttpClient) {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
-
-    private val httpClient = HttpClient(CIO) {
-        install(HttpTimeout) {
-            connectTimeoutMillis = 20_000
-            requestTimeoutMillis = 60_000
-            socketTimeoutMillis = 60_000
-        }
-        install(ContentNegotiation) { json(json) }
-        install(WebSockets)
-    }
 
     private var wsSession: WebSocketSession? = null
     private var encryptedChannel: EncryptedChannel? = null
 
     private val incomingRequests = Channel<SecureRequest>(Channel.BUFFERED)
 
-    fun baseUrl(ip: String, port: Int) = "http://$ip:$port"
+    fun baseUrl(ip: String, port: Int): String {
+        requirePrivateIp(ip)
+        return "http://$ip:$port"
+    }
 
     suspend fun handshake(
         ip: String,
@@ -112,6 +107,7 @@ class DesktopPairingClient {
         channel: EncryptedChannel,
         onSessionReady: suspend DesktopPairingClient.() -> Unit
     ) {
+        requirePrivateIp(ip)
         encryptedChannel = channel
         httpClient.webSocket("ws://$ip:$port/v1/session") {
             wsSession = this
@@ -157,6 +153,14 @@ class DesktopPairingClient {
         wsSession = null
         encryptedChannel = null
         incomingRequests.close()
-        httpClient.close()
+    }
+
+    companion object {
+        private fun requirePrivateIp(ip: String) {
+            val addr = InetAddress.getByName(ip)
+            require(addr.isSiteLocalAddress || addr.isLoopbackAddress || addr.isLinkLocalAddress) {
+                "Refusing to connect to non-private IP: $ip"
+            }
+        }
     }
 }

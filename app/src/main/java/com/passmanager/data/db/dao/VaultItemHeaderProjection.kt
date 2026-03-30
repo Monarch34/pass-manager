@@ -2,10 +2,6 @@ package com.passmanager.data.db.dao
 
 import androidx.room.ColumnInfo
 
-/**
- * Lightweight Room projection for the vault list screen.
- * Only the columns needed for display are loaded — the full encrypted blob is skipped.
- */
 data class VaultItemHeaderProjection(
     @ColumnInfo(name = "id")               val id: String,
     @ColumnInfo(name = "encrypted_title")  val encryptedTitle: ByteArray?,

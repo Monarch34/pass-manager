@@ -12,6 +12,9 @@ import kotlinx.coroutines.launch
  * Copies [value] to the system clipboard with an optional auto-clear after [clearAfterMs].
  * Auto-clear uses [ClipboardManager.clearPrimaryClip] on API 28+ or overwrites with empty text.
  *
+ * Vault item details use a 15s clear for all copy actions (credentials, PII, card data) so the
+ * clipboard is not left populated indefinitely.
+ *
  * When [clearAfterMs] is greater than 0, [scope] must be provided (e.g. [rememberCoroutineScope] in
  * Compose) so the delayed clear is cancelled if the caller is disposed.
  */

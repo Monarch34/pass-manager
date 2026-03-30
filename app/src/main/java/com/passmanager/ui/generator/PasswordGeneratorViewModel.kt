@@ -7,8 +7,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import androidx.compose.runtime.Immutable
 import javax.inject.Inject
 
+@Immutable
 data class GeneratorUiState(
     val password: String = "",
     val length: Int = 16,

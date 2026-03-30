@@ -1,19 +1,22 @@
 package com.passmanager.domain.usecase
 
-import com.passmanager.crypto.util.toUtf8Bytes
 import com.passmanager.crypto.cipher.AesGcmCipher
 import com.passmanager.crypto.kdf.KdfProvider
+import com.passmanager.crypto.util.toUtf8Bytes
+import com.passmanager.domain.port.BiometricLockPort
 import com.passmanager.domain.repository.MetadataRepository
 import java.security.SecureRandom
 import javax.crypto.AEADBadTagException
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.passmanager.domain.exception.WrongPassphraseException
 
 class ChangePassphraseUseCase @Inject constructor(
     private val kdfProvider: KdfProvider,
     private val cipher: AesGcmCipher,
-    private val metadataRepository: MetadataRepository
+    private val metadataRepository: MetadataRepository,
+    private val biometricLockPort: BiometricLockPort
 ) {
     private val secureRandom = SecureRandom()
 
@@ -22,9 +25,9 @@ class ChangePassphraseUseCase @Inject constructor(
 
         val currentBytes = currentPassphrase.toUtf8Bytes()
         var currentDerivedKey: ByteArray? = null
-        var newDerivedKey: ByteArray? = null
         var vaultKey: ByteArray? = null
         var newBytes: ByteArray? = null
+        var newDerivedKey: ByteArray? = null
 
         try {
             currentDerivedKey = withContext(Dispatchers.Default) {
@@ -38,20 +41,23 @@ class ChangePassphraseUseCase @Inject constructor(
             }
 
             val newSalt = ByteArray(16).also { secureRandom.nextBytes(it) }
-            val newBytesArr = newPassphrase.toUtf8Bytes()
-            newBytes = newBytesArr
+            newBytes = newPassphrase.toUtf8Bytes()
             newDerivedKey = withContext(Dispatchers.Default) {
-                kdfProvider.deriveKey(newBytesArr, newSalt, metadata.kdfParams)
+                kdfProvider.deriveKey(newBytes, newSalt, metadata.kdfParams)
             }
 
             val newWrapped = cipher.encrypt(vaultKey, newDerivedKey)
             metadataRepository.update(metadata.copy(kdfSalt = newSalt, wrappedVaultKey = newWrapped))
+
+            biometricLockPort.disableIfEnabled()
         } finally {
             currentDerivedKey?.fill(0)
             newDerivedKey?.fill(0)
             currentBytes.fill(0)
             newBytes?.fill(0)
             vaultKey?.fill(0)
+            currentPassphrase.fill('\u0000')
+            newPassphrase.fill('\u0000')
         }
     }
 }

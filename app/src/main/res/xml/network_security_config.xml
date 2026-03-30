@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <!--
-        Cleartext HTTP is permitted for LAN desktop pairing. All payloads are
-        encrypted at the application layer (ephemeral ECDH + AES-256-GCM),
-        so TLS is not required. The phone connects to a desktop server on
-        the local network — no cloud traffic.
+        Cleartext is blocked globally. LAN desktop pairing uses cleartext HTTP
+        but the DesktopPairingClient enforces a private-IP-only check before
+        connecting, and all payloads are encrypted at the application layer
+        (ephemeral ECDH + AES-256-GCM). Ktor CIO bypasses NetworkSecurityPolicy
+        so this config acts as defence-in-depth for any other HTTP code.
     -->
-    <base-config cleartextTrafficPermitted="true" />
+    <base-config cleartextTrafficPermitted="false" />
 </network-security-config>

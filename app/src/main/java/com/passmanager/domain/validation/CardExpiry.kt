@@ -1,4 +1,4 @@
-package com.passmanager.ui.item
+package com.passmanager.domain.validation
 
 /** Standard 16-digit PAN groups of 4. */
 const val CARD_NUMBER_DIGITS = 16
@@ -35,16 +35,7 @@ fun formatExpiryMmYy(month: Int, yearFull: Int): String {
     return "%02d/%02d".format(month, yearFull % 100)
 }
 
-/** Converts stored value (MM/YY or legacy MM/YYYY) to MM/YY for the edit field. */
-fun normalizeCardExpiryForEdit(raw: String): String {
-    val parsed = parseExpiryMmYyToMonthYear(raw) ?: return raw
-    return formatExpiryMmYy(parsed.first, parsed.second)
-}
-
-/**
- * Expiry [OutlinedTextField] value: **digits only** (max 4), no slash — the slash is drawn via
- * [androidx.compose.ui.text.input.VisualTransformation] so the cursor never sticks on `/`.
- */
+/** Expiry field raw value: digits only (max four); UI may insert a visual slash. */
 fun sanitizeExpiryFieldDigits(value: String): String = value.filter { it.isDigit() }.take(4)
 
 private fun expiryDigitsToSlashForm(fieldDigits: String): String {

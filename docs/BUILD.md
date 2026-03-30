@@ -1,5 +1,7 @@
 # Build and environment
 
+**After you can build:** how to run the apps and use pairing → **[USAGE.md](USAGE.md)**.
+
 - **Android:** repository root. `settings.gradle.kts` includes `:app` and **`includeBuild("protocol")`** so `:app` depends on `com.passmanager:passmanager-protocol` (built from `protocol/`).
 - **Desktop:** `desktop/` — its own `settings.gradle.kts`, wrapper, and `includeBuild("../protocol")` with the same dependency coordinates.
 - **`protocol/`:** small Kotlin/JVM library (handshake + secure WebSocket message types, CBOR). Own `settings.gradle.kts`; not opened as an Android Studio module from the root import.
