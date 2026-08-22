@@ -31,6 +31,15 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation(kotlin("test-junit"))
+
+    // Server-layer tests drive a real PairingServer over loopback: start() builds its own
+    // embeddedServer, so the routes cannot be reached through Ktor's testApplication harness
+    // without duplicating the routing block. That means the tests need a Ktor CLIENT, not the
+    // server test host. Coordinates are built from the catalog's `ktor` version rather than
+    // hard-coded so they cannot drift from the server artifacts above.
+    val ktorVersion = libs.versions.ktor.get()
+    testImplementation("io.ktor:ktor-client-cio:$ktorVersion")
+    testImplementation("io.ktor:ktor-client-websockets:$ktorVersion")
 }
 
 compose.desktop {

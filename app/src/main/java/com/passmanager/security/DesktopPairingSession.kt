@@ -4,6 +4,7 @@ import android.util.Base64
 import com.passmanager.BuildConfig
 import com.passmanager.agent.DesktopPairingClient
 import com.passmanager.crypto.channel.EncryptedChannel
+import com.passmanager.domain.exception.DesktopHandshakeException
 import com.passmanager.domain.model.DesktopPairingConstants
 import com.passmanager.domain.model.PairingSessionState
 import com.passmanager.domain.port.DesktopPairingPort
@@ -72,6 +73,20 @@ class DesktopPairingSession @Inject constructor(
     var desktopIp: String? = null; private set
     var desktopPort: Int = 0; private set
 
+    /**
+     * Pairing QR token, required by the desktop as the WebSocket session header.
+     *
+     * Secret. Every cleanup path drops the reference, but this is a [String] and so cannot be
+     * wiped: the characters stay on the heap until GC reclaims them. Holding it as a
+     * [com.passmanager.crypto.util.SensitiveByteArray] would be the stronger option and is the
+     * reason the rest of the hot path avoids [String] for secrets.
+     */
+    private var desktopToken: String? = null
+
+    /** Set when the desktop refused the WebSocket after the session had already gone live. */
+    @Volatile
+    private var sessionRejection: String? = null
+
     private val rateLimiter = DesktopSessionRateLimiter(
         maxPasswords = DesktopPairingConstants.MAX_PW_PER_SESSION,
         passwordCooldownMs = DesktopPairingConstants.PW_COOLDOWN_MS,
@@ -100,6 +115,7 @@ class DesktopPairingSession @Inject constructor(
 
         desktopIp = qrPayload.ip
         desktopPort = qrPayload.port
+        desktopToken = qrPayload.token
 
         val kx = X25519KeyExchange()
         keyExchange = kx
@@ -162,6 +178,7 @@ class DesktopPairingSession @Inject constructor(
     ) {
         val ip = desktopIp ?: throw IllegalStateException("No desktop IP")
         val port = desktopPort
+        val token = desktopToken ?: throw IllegalStateException("No session token")
 
         val verified = CompletableDeferred<Unit>()
 
@@ -169,7 +186,7 @@ class DesktopPairingSession @Inject constructor(
 
         sessionJob = scope.launch {
             try {
-                pairingClient.runSecureSession(ip, port, channel) {
+                pairingClient.runSecureSession(ip, port, channel, token) {
                     val expiresAt = System.currentTimeMillis() + DesktopPairingConstants.VERIFY_CODE_TIMEOUT_MS
                     _state.value = PairingSessionState.Verifying(
                         code = code,
@@ -194,6 +211,10 @@ class DesktopPairingSession @Inject constructor(
             } catch (e: Exception) {
                 if (!verified.isCompleted) {
                     verified.completeExceptionally(e)
+                } else if (e is DesktopHandshakeException) {
+                    // Desktop refused the socket after it was already live (close 1008).
+                    // Remember why, so the completion handler below can report it.
+                    sessionRejection = e.message
                 }
             }
         }
@@ -211,8 +232,15 @@ class DesktopPairingSession @Inject constructor(
             if (currentState is PairingSessionState.Active ||
                 currentState is PairingSessionState.Verifying
             ) {
-                scope.launch {
-                    endSession(cause?.message ?: "Connection closed")
+                val rejection = sessionRejection
+                if (rejection != null) {
+                    // Rejected by the desktop: show an actionable error instead of a
+                    // silent "connection closed".
+                    abortPairing(rejection)
+                } else {
+                    scope.launch {
+                        endSession(cause?.message ?: "Connection closed")
+                    }
                 }
             }
         }
@@ -363,6 +391,8 @@ class DesktopPairingSession @Inject constructor(
         pendingSafetyNumber = ""
         desktopIp = null
         desktopPort = 0
+        desktopToken = null
+        sessionRejection = null
     }
 
     suspend fun respondToHeartbeat() {

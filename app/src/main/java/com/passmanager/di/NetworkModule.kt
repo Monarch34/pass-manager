@@ -30,7 +30,20 @@ object NetworkModule {
             install(ContentNegotiation) { 
                 json(Json { ignoreUnknownKeys = true; isLenient = true }) 
             }
-            install(WebSockets)
+            install(WebSockets) {
+                // Mirrors the desktop server cap. Without it the phone is the soft side of the
+                // pair: a compromised or spoofed desktop could send one unbounded frame and OOM
+                // the app that holds the vault.
+                maxFrameSize = WS_MAX_FRAME_SIZE_BYTES
+            }
         }
     }
+
+    /**
+     * Keep in step with `PairingServer.MAX_FRAME_SIZE_BYTES` on the desktop side. The two are
+     * separate Gradle builds, so this cannot be a shared constant without moving it into
+     * `:protocol`; a mismatch is not a build error, it just means one side accepts a frame the
+     * other would have refused.
+     */
+    private const val WS_MAX_FRAME_SIZE_BYTES = 1024L * 1024
 }

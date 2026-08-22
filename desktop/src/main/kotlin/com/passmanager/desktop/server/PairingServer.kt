@@ -10,6 +10,7 @@ import com.passmanager.protocol.PairingQrPayload
 import com.passmanager.protocol.SecureMessageCbor
 import com.passmanager.protocol.SecureRequest
 import com.passmanager.protocol.SecureResponse
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
@@ -23,8 +24,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
+import io.ktor.websocket.FrameTooBigException
 import io.ktor.websocket.readBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
@@ -34,6 +37,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.io.Closeable
@@ -64,7 +68,14 @@ class PairingServer(
         val sessionToken: String,
         val outgoingRequests: Channel<SecureRequest> = Channel(Channel.BUFFERED),
         val incomingResponses: Channel<SecureResponse> = Channel(Channel.BUFFERED),
-        val handshakeUsed: AtomicBoolean = AtomicBoolean(false)
+        val handshakeUsed: AtomicBoolean = AtomicBoolean(false),
+        /**
+         * One WebSocket per session. Taken after authentication and released when
+         * the socket handler exits, so a legitimate reconnect works while a second
+         * concurrent socket is rejected. [generateSession] creates a fresh session
+         * object, which resets this latch naturally.
+         */
+        val websocketAttached: AtomicBoolean = AtomicBoolean(false)
     ) {
         fun closeChannels() {
             outgoingRequests.close()
@@ -156,10 +167,23 @@ class PairingServer(
         // Avoids exposing the pairing server on Docker/WSL/VPN adapters or WAN interfaces.
         engine = embeddedServer(CIO, port = port, host = lanIp) {
             install(ContentNegotiation) { json(json) }
-            install(WebSockets)
+            install(WebSockets) {
+                // Ktor's default is unlimited: a single huge frame from an
+                // unauthenticated peer could OOM the desktop app before the
+                // handler ever sees it. Real frames are a few KiB.
+                maxFrameSize = MAX_FRAME_SIZE_BYTES
+                // No pingPeriod/timeout here on purpose — DesktopSessionManager
+                // runs its own application-level heartbeat.
+            }
 
             routing {
                 post("/v1/pair/handshake") {
+                    // Fixed order: 1) session exists  2) per-IP rate limit
+                    // 3) body + constant-time token check  4) single-use latch
+                    // 5) ECDH/HKDF. The rate limit stays ahead of the token check
+                    // so brute force is throttled; the latch moved behind it so an
+                    // unauthenticated request can no longer burn the QR the user is
+                    // scanning right now.
                     val session = _currentSession.value
                     if (session == null) {
                         context.respond(
@@ -170,7 +194,11 @@ class PairingServer(
                     }
 
                     // Rate limit: one handshake attempt per IP per HANDSHAKE_RATE_LIMIT_MS
-                    val remoteIp = context.request.local.remoteHost
+                    // remoteAddress, not remoteHost: the latter calls InetAddress.getHostName(),
+                    // which performs a blocking reverse DNS lookup on every request. On a LAN with
+                    // no PTR records that stalls the request thread until the resolver times out,
+                    // and it is reachable by an unauthenticated caller.
+                    val remoteIp = context.request.local.remoteAddress
                     val now = System.currentTimeMillis()
                     val lastAttempt = handshakeAttemptsByIp[remoteIp] ?: 0L
                     if (now - lastAttempt < HANDSHAKE_RATE_LIMIT_MS) {
@@ -180,7 +208,31 @@ class PairingServer(
                         )
                         return@post
                     }
+                    pruneHandshakeAttempts(now)
                     handshakeAttemptsByIp[remoteIp] = now
+
+                    val body = try {
+                        context.receive<HandshakeRequest>()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        context.respond(
+                            HttpStatusCode.BadRequest,
+                            mapOf("error" to "invalid_request")
+                        )
+                        return@post
+                    }
+
+                    if (!tokenMatches(body.token, session.sessionToken)) {
+                        // Wrong token: leave the session completely untouched.
+                        // No latch is taken, so no compensating reset is needed and
+                        // an attacker cannot invalidate the displayed QR.
+                        context.respond(
+                            HttpStatusCode.Unauthorized,
+                            mapOf("error" to "invalid_session")
+                        )
+                        return@post
+                    }
 
                     if (!session.handshakeUsed.compareAndSet(false, true)) {
                         // Session already used — generate a fresh one so the new QR
@@ -196,16 +248,6 @@ class PairingServer(
                     }
 
                     try {
-                        val body = context.receive<HandshakeRequest>()
-                        if (body.token != session.sessionToken) {
-                            session.handshakeUsed.set(false)
-                            context.respond(
-                                HttpStatusCode.Unauthorized,
-                                mapOf("error" to "invalid_session")
-                            )
-                            return@post
-                        }
-
                         val phonePubBytes = Base64.getDecoder().decode(body.phonePub)
                         require(phonePubBytes.size == 32) {
                             "Phone public key must be 32 bytes, got ${phonePubBytes.size}"
@@ -241,6 +283,8 @@ class PairingServer(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
+                        // Key agreement failed after the latch was taken — release it
+                        // so the phone can retry against the same QR.
                         session.handshakeUsed.set(false)
                         context.respond(
                             HttpStatusCode.InternalServerError,
@@ -250,57 +294,106 @@ class PairingServer(
                 }
 
                 webSocket("/v1/session") {
-                    val channel = sessionManager.channel
-                        ?: run { close(); return@webSocket }
+                    // Authentication happens inside the handler: by the time Ktor
+                    // enters this block the HTTP upgrade is already complete, so a
+                    // rejection is a close frame rather than an HTTP status. Doing it
+                    // pre-upgrade would need a pipeline intercept that duplicates the
+                    // route match; closing here is equivalent for the contract as long
+                    // as a rejected connection touches NO session state — no
+                    // onSessionConnected(), no onDisconnected(), no latch taken.
+
+                    // Defence in depth: a legitimate phone client never sends Origin.
+                    // Browsers always do — and they cannot set the session header at
+                    // all, so this only ever hits a browser-originated request.
+                    if (call.request.headers[HttpHeaders.Origin] != null) {
+                        close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "origin_not_allowed"))
+                        return@webSocket
+                    }
 
                     val session = _currentSession.value
-                        ?: run { close(); return@webSocket }
+                        ?: run {
+                            close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "session_not_ready"))
+                            return@webSocket
+                        }
 
-                    sessionManager.onSessionConnected()
+                    if (!tokenMatches(call.request.headers[SESSION_TOKEN_HEADER], session.sessionToken)) {
+                        close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "unauthorized"))
+                        return@webSocket
+                    }
 
-                    val receiveJob = launch {
-                        try {
-                            while (isActive) {
-                                val frame = incoming.receive()
-                                if (frame is Frame.Binary) {
-                                    val plaintext = channel.open(frame.readBytes())
-                                    val msg = SecureMessageCbor.decodeResponse(plaintext)
-                                    plaintext.fill(0)
-                                    try {
-                                        session.incomingResponses.send(msg)
-                                    } catch (_: ClosedSendChannelException) {
-                                        break
+                    val channel = sessionManager.channel
+                        ?: run {
+                            close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "session_not_ready"))
+                            return@webSocket
+                        }
+
+                    // Single socket per session: the second one is refused without
+                    // disturbing the first.
+                    if (!session.websocketAttached.compareAndSet(false, true)) {
+                        close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "already_connected"))
+                        return@webSocket
+                    }
+
+                    // Everything past the latch runs inside try/finally. Setting up the jobs can
+                    // throw, and this handler can be cancelled outright when the engine stops -
+                    // either would strand the latch at true and leave the session unable to ever
+                    // accept a socket again, short of restarting the app.
+                    var sendJob: Job? = null
+                    try {
+                        sessionManager.onSessionConnected()
+
+                        val receiveJob = launch {
+                            try {
+                                while (isActive) {
+                                    val frame = incoming.receive()
+                                    if (frame is Frame.Binary) {
+                                        val plaintext = channel.open(frame.readBytes())
+                                        val msg = SecureMessageCbor.decodeResponse(plaintext)
+                                        plaintext.fill(0)
+                                        try {
+                                            session.incomingResponses.send(msg)
+                                        } catch (_: ClosedSendChannelException) {
+                                            break
+                                        }
                                     }
                                 }
+                            } catch (_: ClosedReceiveChannelException) {
+                                sessionManager.onDisconnected("Phone disconnected")
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (_: FrameTooBigException) {
+                                // Distinct from a plain disconnect: the phone tried to send a
+                                // vault list larger than MAX_FRAME_BYTES, and the user needs to
+                                // know that rather than seeing "phone disconnected".
+                                sessionManager.onDisconnected("Vault list too large to transfer")
+                            } catch (_: Exception) {
+                                sessionManager.onDisconnected("Connection error")
                             }
-                        } catch (_: ClosedReceiveChannelException) {
-                            sessionManager.onDisconnected("Phone disconnected")
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (_: Exception) {
-                            sessionManager.onDisconnected("Connection error")
                         }
-                    }
 
-                    val sendJob = launch {
-                        try {
-                            for (request in session.outgoingRequests) {
-                                val payload = SecureMessageCbor.encodeRequest(request)
-                                val envelope = channel.seal(payload)
-                                payload.fill(0)
-                                send(Frame.Binary(true, envelope))
+                        sendJob = launch {
+                            try {
+                                for (request in session.outgoingRequests) {
+                                    val payload = SecureMessageCbor.encodeRequest(request)
+                                    val envelope = channel.seal(payload)
+                                    payload.fill(0)
+                                    send(Frame.Binary(true, envelope))
+                                }
+                            } catch (_: ClosedSendChannelException) {
+                                // Channel closed - session ended
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (_: Exception) {
+                                // WebSocket closed - stop sending
                             }
-                        } catch (_: ClosedSendChannelException) {
-                            // Channel closed — session ended
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (_: Exception) {
-                            // WebSocket closed — stop sending
                         }
-                    }
 
-                    receiveJob.join()
-                    sendJob.cancel()
+                        receiveJob.join()
+                    } finally {
+                        sendJob?.cancel()
+                        // Release the latch so a legitimate reconnect can attach.
+                        session.websocketAttached.set(false)
+                    }
                 }
             }
         }.apply { start(wait = false) }
@@ -347,6 +440,35 @@ class PairingServer(
         return digest.take(4).joinToString("") { "%02X".format(it) }
     }
 
+    /**
+     * Constant-time session-token comparison. Never use `==` on secrets: String
+     * equality short-circuits on the first differing character and leaks the
+     * matching prefix through timing. A missing header simply fails.
+     */
+    private fun tokenMatches(provided: String?, expected: String): Boolean {
+        if (provided == null) return false
+        return MessageDigest.isEqual(
+            provided.toByteArray(Charsets.UTF_8),
+            expected.toByteArray(Charsets.UTF_8)
+        )
+    }
+
+    /**
+     * Drops rate-limit entries whose window has already expired, so the map cannot
+     * grow without bound as source IPs change. Only runs once the map is larger than
+     * a normal pairing session could ever make it, keeping the common path free.
+     * If everything is still fresh (a burst from many distinct IPs) the map is
+     * cleared outright — losing throttling state is preferable to unbounded growth,
+     * and the next attempt from each IP starts the window again.
+     */
+    private fun pruneHandshakeAttempts(now: Long) {
+        if (handshakeAttemptsByIp.size < HANDSHAKE_ATTEMPTS_MAX) return
+        handshakeAttemptsByIp.values.removeIf { now - it >= HANDSHAKE_RATE_LIMIT_MS }
+        if (handshakeAttemptsByIp.size >= HANDSHAKE_ATTEMPTS_MAX) {
+            handshakeAttemptsByIp.clear()
+        }
+    }
+
     private fun compareArrays(a: ByteArray, b: ByteArray): Int {
         val len = minOf(a.size, b.size)
         for (i in 0 until len) {
@@ -357,10 +479,32 @@ class PairingServer(
     }
 
     companion object {
+        /**
+         * Header carrying the pairing token on the WebSocket upgrade. The value is
+         * the exact `token` field of the QR payload.
+         *
+         * A custom header — not a query string, not a subprotocol: query strings end
+         * up in proxy and access logs, and browsers cannot attach custom headers to a
+         * WebSocket at all, so requiring one blocks cross-site WebSocket hijacking
+         * more reliably than an Origin check.
+         */
+        const val SESSION_TOKEN_HEADER = "X-PassManager-Session"
+
         private val SESSION_INFO = "passmanager-v1".toByteArray()
         private const val SESSION_TOKEN_BYTES = 18
         /** Minimum ms between handshake attempts from the same IP. */
         private const val HANDSHAKE_RATE_LIMIT_MS = 3_000L
+        /** Rate-limit map size that triggers pruning. */
+        private const val HANDSHAKE_ATTEMPTS_MAX = 256
+        /** Hard cap on a single WebSocket frame (256 KiB); real frames are a few KiB. */
+        /**
+         * Bounded so an unauthenticated peer cannot OOM the app, but generous enough for a real
+         * vault: SendItemListToDesktopUseCase serialises the whole list into ONE SecureResponse.Items
+         * frame, so this value is a hard ceiling on vault size. At roughly 150-250 bytes per
+         * ItemSummary, 256 KiB would have capped out near a thousand entries - reachable for anyone
+         * importing a browser password store.
+         */
+        const val MAX_FRAME_SIZE_BYTES = 1024L * 1024
 
         private fun findAvailablePort(): Int {
             ServerSocket(0).use { return it.localPort }
