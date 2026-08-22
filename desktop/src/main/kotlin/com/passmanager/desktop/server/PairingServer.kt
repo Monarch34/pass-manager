@@ -238,6 +238,8 @@ class PairingServer(
                         sessionManager.setChannel(channel)
 
                         context.respond(HandshakeResponse())
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         session.handshakeUsed.set(false)
                         context.respond(
@@ -273,8 +275,10 @@ class PairingServer(
                             }
                         } catch (_: ClosedReceiveChannelException) {
                             sessionManager.onDisconnected("Phone disconnected")
-                        } catch (e: Exception) {
-                            sessionManager.onDisconnected("Connection error: ${e.message}")
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            sessionManager.onDisconnected("Connection error")
                         }
                     }
 
@@ -288,6 +292,8 @@ class PairingServer(
                             }
                         } catch (_: ClosedSendChannelException) {
                             // Channel closed — session ended
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (_: Exception) {
                             // WebSocket closed — stop sending
                         }

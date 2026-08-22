@@ -3,6 +3,7 @@ package com.passmanager.desktop.server
 import com.passmanager.desktop.crypto.EncryptedChannel
 import com.passmanager.desktop.crypto.SensitiveByteArray
 import com.passmanager.protocol.ItemSummary
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -211,6 +212,8 @@ class DesktopSessionManager : Closeable {
                 delay(HEARTBEAT_INTERVAL_MS)
                 try {
                     onHeartbeatNeeded?.invoke()
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     onDisconnected("Heartbeat send failed")
                     break
