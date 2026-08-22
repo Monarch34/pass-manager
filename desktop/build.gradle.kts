@@ -28,6 +28,9 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.bouncycastle.provider)
+
+    testImplementation(kotlin("test"))
+    testImplementation(kotlin("test-junit"))
 }
 
 compose.desktop {
@@ -42,11 +45,29 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb
             )
             packageName = "PassManager Desktop"
-            packageVersion = "1.0.0"
+            packageVersion = project.version.toString()
 
             windows {
                 menuGroup = "PassManager"
                 upgradeUuid = "d4e7f8a1-2b3c-4d5e-6f7a-8b9c0d1e2f3a"
+
+                // Installer, Start menu and shortcut icon. The .ico is a binary asset that is
+                // generated outside the build; when it is missing, jpackage falls back to its
+                // own default icon rather than failing configuration.
+                val windowsIcon = project.file("src/main/resources/app-icon.ico")
+                if (windowsIcon.exists()) {
+                    iconFile.set(windowsIcon)
+                }
+            }
+
+            // Deb is a declared target format, so the .png is a packaging input rather than dead
+            // weight in the jar. macOS is left on the jpackage default: .icns cannot be produced
+            // here, and Compose Desktop only builds the host OS format anyway.
+            linux {
+                val linuxIcon = project.file("src/main/resources/app-icon.png")
+                if (linuxIcon.exists()) {
+                    iconFile.set(linuxIcon)
+                }
             }
         }
     }

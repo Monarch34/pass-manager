@@ -49,9 +49,11 @@ class OnboardingViewModel @Inject constructor(
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
+            // Both use cases wipe the array they are given, so unlock needs its own copy.
+            val unlockCopy = passphrase.copyOf()
             try {
                 setupVaultUseCase(passphrase)
-                unlockWithPassphraseUseCase(passphrase)
+                unlockWithPassphraseUseCase(unlockCopy)
                 _uiState.update { it.copy(isLoading = false, isComplete = true) }
             } catch (e: CancellationException) {
                 throw e
@@ -62,6 +64,7 @@ class OnboardingViewModel @Inject constructor(
                 }
             } finally {
                 passphrase.fill('\u0000')
+                unlockCopy.fill('\u0000')
                 confirm.fill('\u0000')
             }
         }

@@ -50,10 +50,7 @@ class VaultRepositoryImplTest {
             keyVersion = 1,
             createdAt = 1000L,
             category = ItemCategory.LOGIN,
-            encryptedTitle = null,
-            titleIv = null,
-            encryptedAddress = null,
-            addressIv = null
+            headerEncryption = null
         )
         val headers = repository.observeHeaders().first()
         assertEquals(1, headers.size)
@@ -77,10 +74,7 @@ class VaultRepositoryImplTest {
             keyVersion = 1,
             createdAt = 2000L,
             category = ItemCategory.LOGIN,
-            encryptedTitle = null,
-            titleIv = null,
-            encryptedAddress = null,
-            addressIv = null
+            headerEncryption = null
         )
         val item = repository.getById("2")
         assertEquals("2", item?.id)
@@ -94,10 +88,7 @@ class VaultRepositoryImplTest {
             keyVersion = 1,
             createdAt = 3000L,
             category = ItemCategory.LOGIN,
-            encryptedTitle = null,
-            titleIv = null,
-            encryptedAddress = null,
-            addressIv = null
+            headerEncryption = null
         )
         repository.deleteById("3")
         val item = repository.getById("3")
@@ -117,10 +108,7 @@ class VaultRepositoryImplTest {
             keyVersion = 1,
             createdAt = 4000L,
             category = ItemCategory.LOGIN,
-            encryptedTitle = null,
-            titleIv = null,
-            encryptedAddress = null,
-            addressIv = null
+            headerEncryption = null
         )
         assertEquals(false, repository.isVaultEmpty())
     }

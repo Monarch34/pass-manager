@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.passmanager.protocol.design.LogoPalette as LogoTokens
 import java.awt.BasicStroke
 import java.awt.Graphics2D
 import java.awt.RenderingHints
@@ -66,17 +67,25 @@ private data class LogoPalette(
     val circuitRight: java.awt.Color
 )
 
+/** Wraps an ARGB token from [LogoTokens] into AWT's color type (`true` = honor the alpha channel). */
+private fun argb(token: Long) = java.awt.Color(token.toInt(), true)
+
 /** Matches [ic_vault_logo.xml] / launcher foreground (single art for all themes). */
 private val LogoPaletteVault = LogoPalette(
-    tealDark = java.awt.Color(0x1A, 0x6D, 0x68),
-    tealLight = java.awt.Color(0x21, 0x83, 0x7D),
-    innerLeft = java.awt.Color(0xC8, 0xE6, 0xDA),
-    innerRight = java.awt.Color(0xDD, 0xF0, 0xE6),
-    circuitLeft = java.awt.Color(0xA5, 0xD4, 0xC4),
-    circuitRight = java.awt.Color(0xBC, 0xE0, 0xD4)
+    tealDark = argb(LogoTokens.TEAL_DARK),
+    tealLight = argb(LogoTokens.TEAL_LIGHT),
+    innerLeft = argb(LogoTokens.INNER_LEFT),
+    innerRight = argb(LogoTokens.INNER_RIGHT),
+    circuitLeft = argb(LogoTokens.CIRCUIT_LEFT),
+    circuitRight = argb(LogoTokens.CIRCUIT_RIGHT)
 )
 
-private fun renderVaultLogo(outputSize: Int): ImageBitmap {
+/** Compose-typed logo, for use inside the UI tree. */
+internal fun renderVaultLogo(outputSize: Int): ImageBitmap =
+    renderVaultLogoAwt(outputSize).toComposeImageBitmap()
+
+/** AWT-typed logo, for the window/taskbar icon which the OS shell reads off the AWT frame. */
+internal fun renderVaultLogoAwt(outputSize: Int): BufferedImage {
     val p = LogoPaletteVault
     val vw = 280f
     val vh = 335f
@@ -186,7 +195,7 @@ private fun renderVaultLogo(outputSize: Int): ImageBitmap {
     })
 
     g.dispose()
-    return image.toComposeImageBitmap()
+    return image
 }
 
 // ── Geometry helpers ──

@@ -1,17 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Match ui/theme Color.kt light/dark backgrounds for window + splash -->
+    <!--
+      XML cannot reference a Kotlin constant, so every value here is a hand-kept copy of a token in
+      :protocol `design/Palette.kt` / `design/LogoPalette.kt`. Change the token first, then mirror it
+      here — a drift shows up as a color seam between the window and the Compose content, or between
+      the launcher icon and the in-app logo.
+    -->
+
+    <!-- Window + splash canvas: Palette.LIGHT_BACKGROUND / Palette.DARK_BACKGROUND.
+         Both live in values/ (not values-night/) because themes.xml picks one per configuration. -->
     <color name="window_background_light">#FFF6F8FC</color>
     <color name="window_background_dark">#FF0C0F14</color>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
 
-    <!-- Adaptive launcher: Material primary / primaryContainer (light scheme — see ui/theme Color.kt) -->
-    <color name="ic_launcher_primary">#FF0D7A70</color>
+    <!-- Adaptive launcher plate: Palette.LIGHT_PRIMARY_CONTAINER.
+         Night-independent on purpose: the launcher renders the adaptive icon in its own context and
+         the store listing icon is a single asset, so a night-varying icon color would make the same
+         app look different from device to device and disagree with the store. -->
     <color name="ic_launcher_primary_container">#FFCCFBF1</color>
+
+    <!-- Vault shield logo: LogoPalette, shared with the desktop AppShieldLogo renderer.
+         Used by drawable/ic_launcher_foreground.xml; the shield art is identical in light and dark. -->
+    <color name="logo_teal_dark">#FF1A6D68</color>
+    <color name="logo_teal_light">#FF21837D</color>
+    <color name="logo_inner_left">#FFC8E6DA</color>
+    <color name="logo_inner_right">#FFDDF0E6</color>
+    <color name="logo_circuit_left">#FFA5D4C4</color>
+    <color name="logo_circuit_right">#FFBCE0D4</color>
 </resources>

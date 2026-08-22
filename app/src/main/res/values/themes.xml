@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base theme: solid window background until Compose paints (avoids black/blank flash) -->
+    <!-- Base theme: solid window background until Compose paints (avoids black/blank flash).
+         @color/window_background_light must stay equal to Palette.LIGHT_BACKGROUND (#F6F8FC), the
+         value Color.kt feeds to lightColorScheme.background — XML cannot read the Kotlin constant,
+         so the two are kept in sync by hand and a drift shows as a flash of the wrong canvas. -->
     <style name="Theme.PassManager" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/window_background_light</item>
         <item name="android:colorBackground">@color/window_background_light</item>

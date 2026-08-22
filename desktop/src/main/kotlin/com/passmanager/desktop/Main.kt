@@ -4,6 +4,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -14,12 +15,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.WindowState
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
 import com.passmanager.desktop.clipboard.ClipboardManager
 import com.passmanager.desktop.preferences.DesktopPreferences
 import com.passmanager.protocol.SecureRequest
@@ -30,6 +35,7 @@ import com.passmanager.desktop.server.PairingServer
 import com.passmanager.desktop.ui.PairScreen
 import com.passmanager.desktop.ui.Strings
 import com.passmanager.desktop.ui.clearDesktopFaviconMemoryCaches
+import com.passmanager.desktop.ui.components.renderVaultLogoAwt
 import com.passmanager.desktop.ui.VaultBrowserScreen
 import com.passmanager.desktop.ui.VerifyScreen
 import com.passmanager.desktop.ui.theme.PassManagerDesktopTheme
@@ -48,10 +54,15 @@ fun main() = application {
     val sessionManager = remember { DesktopSessionManager() }
     val server = remember { PairingServer(sessionManager, lanIp) }
     val clipboardManager = remember { ClipboardManager(scope) }
-    var isDarkTheme by remember { mutableStateOf(true) }
+    var isDarkTheme by remember { mutableStateOf(DesktopPreferences.getUseDarkTheme()) }
     var useGoogleFavicons by remember {
         mutableStateOf(DesktopPreferences.getUseGoogleFavicons())
     }
+    // Drawn once and shared: the Compose window decoration takes the ImageBitmap, the OS shell
+    // (taskbar, ALT+TAB) reads the AWT image off the frame. Rendering twice would redo the same
+    // vector work at every launch.
+    val appIconImage = remember { renderVaultLogoAwt(WINDOW_ICON_SIZE_PX) }
+    val appIcon = remember(appIconImage) { BitmapPainter(appIconImage.toComposeImageBitmap()) }
 
     // Reactive QR content — updates when a new session is generated
     val qrContent by server.qrContent.collectAsState()
@@ -90,7 +101,12 @@ fun main() = application {
             exitApplication()
         },
         title = Strings.APP_TITLE,
-        state = WindowState(width = 520.dp, height = 720.dp),
+        state = rememberWindowState(
+            width = 520.dp,
+            height = 720.dp,
+            position = WindowPosition(Alignment.Center)
+        ),
+        icon = appIcon,
         resizable = true
     ) {
         val density = LocalDensity.current
@@ -101,6 +117,11 @@ fun main() = application {
                     480.dp.roundToPx().coerceAtLeast(320)
                 )
             }
+        }
+        LaunchedEffect(Unit) {
+            // `icon` above covers the Compose window decoration; the taskbar and ALT+TAB
+            // read the AWT frame image instead, so the same art is set on both.
+            window.iconImage = appIconImage
         }
         PassManagerDesktopTheme(darkTheme = isDarkTheme) {
             // Compose Desktop does not paint Material background on the window by default.
@@ -115,7 +136,10 @@ fun main() = application {
                     serverPort = server.port,
                     clipboardManager = clipboardManager,
                     isDarkTheme = isDarkTheme,
-                    onToggleTheme = { isDarkTheme = !isDarkTheme },
+                    onToggleTheme = {
+                        isDarkTheme = !isDarkTheme
+                        DesktopPreferences.setUseDarkTheme(isDarkTheme)
+                    },
                     useGoogleFavicons = useGoogleFavicons,
                     onFaviconSourceChange = { useGoogle ->
                         if (useGoogle != useGoogleFavicons) {
@@ -340,6 +364,9 @@ private fun gracefulShutdown(
 }
 
 private const val SHUTDOWN_TIMEOUT_MS = 3000L
+
+/** Rendered once at startup; large enough for HiDPI taskbars, which downscale it themselves. */
+private const val WINDOW_ICON_SIZE_PX = 256
 
 /**
  * Picks an IPv4 address the phone can actually reach.

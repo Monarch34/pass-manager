@@ -11,6 +11,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -74,6 +75,28 @@ class OnboardingViewModelTest {
         val state = viewModel.uiState.value
         assertTrue(state.isComplete)
         assertFalse(state.isLoading)
+    }
+
+    @Test
+    fun `createVault gives unlock a live copy of the passphrase`() = runTest {
+        val setupVault = mockk<SetupVaultUseCase>()
+        val unlock = mockk<UnlockWithPassphraseUseCase>()
+        var unlockArgument: CharArray? = null
+        // Both real use cases wipe the array handed to them, so reproduce that side effect here.
+        coEvery { setupVault(any()) } coAnswers { firstArg<CharArray>().fill('\u0000') }
+        coEvery { unlock(any()) } coAnswers {
+            val given = firstArg<CharArray>()
+            unlockArgument = given.copyOf()
+            given.fill('\u0000')
+        }
+
+        val viewModel = OnboardingViewModel(setupVault, unlock)
+
+        viewModel.createVault("password123".toCharArray(), "password123".toCharArray())
+        advanceUntilIdle()
+
+        assertArrayEquals("password123".toCharArray(), unlockArgument)
+        assertTrue(viewModel.uiState.value.isComplete)
     }
 
     @Ignore(

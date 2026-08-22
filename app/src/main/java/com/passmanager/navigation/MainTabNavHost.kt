@@ -127,7 +127,7 @@ fun MainTabNavHost(
                 
                 LaunchedEffect(pending) {
                     if (pending != null) {
-                        addEditVm.applyGeneratedPassword(String(pending))
+                        addEditVm.applyGeneratedPassword(pending)
                         pending.fill('\u0000')
                         savedStateHandle.remove<CharArray>("generated_password")
                     }

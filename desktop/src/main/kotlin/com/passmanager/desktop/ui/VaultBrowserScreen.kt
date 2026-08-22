@@ -25,6 +25,7 @@ import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Key
@@ -56,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.passmanager.protocol.ItemSummary
+import com.passmanager.desktop.ui.theme.CategoryBankTint
 import com.passmanager.desktop.ui.theme.CategoryCardTint
 import com.passmanager.desktop.ui.theme.CategoryIdentityTint
 import com.passmanager.desktop.ui.theme.CategoryLoginTint
@@ -589,18 +591,22 @@ private fun extractDomain(url: String): String? {
     }
 }
 
+// Category tint and icon must stay in step with the phone (app ItemCategoryUi.kt): the desktop shows
+// the same vault, so an item may not change colour or glyph depending on which screen it is read on.
 private fun categoryTintColor(category: String): Color = when (category.lowercase()) {
     "login" -> CategoryLoginTint
     "card" -> CategoryCardTint
     "identity" -> CategoryIdentityTint
     "note" -> CategoryNoteTint
+    "bank" -> CategoryBankTint
     else -> CategoryLoginTint
 }
 
 private fun categoryIcon(category: String): ImageVector = when (category.lowercase()) {
-    "login" -> Icons.Default.Person
+    "login" -> Icons.Default.Key
     "card" -> Icons.Default.CreditCard
     "identity" -> Icons.Default.Person
     "note" -> Icons.AutoMirrored.Filled.Note
+    "bank" -> Icons.Default.AccountBalance
     else -> Icons.Default.Key
 }

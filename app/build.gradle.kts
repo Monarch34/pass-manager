@@ -16,6 +16,15 @@ if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 
+// Reads a mandatory keystore.properties entry. Names the offending key instead of failing with a
+// bare NPE when the file was copied from keystore.properties.example but never filled in.
+fun requireKeystoreProperty(key: String): String =
+    keystoreProperties.getProperty(key)?.takeIf { it.isNotBlank() }
+        ?: throw GradleException(
+            "keystore.properties is missing a value for `$key`: " +
+                "fill in every entry from keystore.properties.example before building a release."
+        )
+
 android {
     namespace = "com.passmanager"
     compileSdk = 35
@@ -31,18 +40,21 @@ android {
     }
 
     signingConfigs {
+        // The `release` config only exists when keystore.properties is present. It is never
+        // substituted by the debug config: the debug keystore is identical on every machine, so a
+        // debug-signed "release" APK is both unpublishable and indistinguishable from a real build.
         if (keystorePropertiesFile.exists()) {
             create("release") {
-                keyAlias = keystoreProperties.getProperty("keyAlias")!!
-                keyPassword = keystoreProperties.getProperty("keyPassword")!!
-                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile")!!)
-                storePassword = keystoreProperties.getProperty("storePassword")!!
+                keyAlias = requireKeystoreProperty("keyAlias")
+                keyPassword = requireKeystoreProperty("keyPassword")
+                storeFile = rootProject.file(requireKeystoreProperty("storeFile"))
+                storePassword = requireKeystoreProperty("storePassword")
             }
         }
     }
 
     buildTypes {
-        // Production: R8 + resource shrink; sign with keystore.properties when present (else debug keystore — not for store upload).
+        // Production: R8 + resource shrink; signed with keystore.properties.
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -50,11 +62,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            // null when keystore.properties is absent — the guard task below then fails the build
+            // with an explanation instead of quietly emitting an APK signed with the debug key.
+            signingConfig = signingConfigs.findByName("release")
         }
         // Development: faster iteration, no minify, debug signing.
         debug {
@@ -89,6 +99,45 @@ android {
             assets.srcDir(layout.buildDirectory.dir("generated/roomAndroidTestAssets"))
         }
     }
+}
+
+// A release APK/AAB must never leave the machine unsigned or debug-signed. The check runs at task
+// execution time (not during configuration) so `assembleDebug` and IDE sync keep working on
+// machines that have no keystore.
+//
+// It is bound to the packaging tasks by exact name, for two reasons:
+//   * `packageRelease` is what actually writes the artifact. Guarding the `assembleRelease`
+//     lifecycle task instead would fail the build only after an unsigned APK had already been
+//     written to build/outputs, which defeats the point.
+//   * A `name.contains("Release")` filter also matches AGP internals such as
+//     `bundleReleaseClassesToCompileJar` and `bundleReleaseResources`, which lint and unit tests
+//     pull in — that would break tasks having nothing to do with shipping an artifact.
+tasks.matching { task ->
+    task.name == "packageRelease" || task.name == "packageReleaseBundle"
+}.configureEach {
+    val keystoreFile = keystorePropertiesFile
+    doFirst {
+        if (!keystoreFile.exists()) {
+            throw GradleException(
+                "keystore.properties not found: a release build cannot be signed. " +
+                    "Copy keystore.properties.example to ${keystoreFile.path} and fill it in, " +
+                    "or use assembleDebug for local testing."
+            )
+        }
+    }
+}
+
+// ColorResourceTokenTest reads these XML files to check they still match the :protocol design
+// tokens. Gradle does not treat resources as inputs to a JVM unit test task, so without this the
+// test stays UP-TO-DATE after a colors.xml edit and the drift it exists to catch slips through.
+tasks.withType<Test>().configureEach {
+    inputs.files(
+        layout.projectDirectory.file("src/main/res/values/colors.xml"),
+        layout.projectDirectory.file("src/main/res/values-night/colors.xml")
+    )
+        .withPropertyName("themeColorResources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+        .optional()
 }
 
 // MigrationTestHelper expects assets under schemas/<pkg path>/; KSP exports to schemas/<single dotted dir>/

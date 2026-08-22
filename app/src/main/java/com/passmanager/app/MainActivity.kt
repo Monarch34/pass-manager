@@ -28,8 +28,8 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            // Keep static branding colors on cold start; dynamic color can misbehave on some OEMs.
-            PassManagerTheme(dynamicColor = false) {
+            // Static brand palette only - see PassManagerTheme for why Material You is not offered.
+            PassManagerTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

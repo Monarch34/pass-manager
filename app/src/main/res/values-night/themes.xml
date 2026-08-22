@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Match PassManager dark canvas (#0C0F14) so cold start is never a blank black frame -->
+    <!-- Match PassManager dark canvas so cold start is never a blank black frame.
+         @color/window_background_dark must stay equal to Palette.DARK_BACKGROUND (#0C0F14), the
+         value Color.kt feeds to darkColorScheme.background — XML cannot read the Kotlin constant,
+         so the two are kept in sync by hand and a drift shows as a flash of the wrong canvas. -->
     <style name="Theme.PassManager" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/window_background_dark</item>
         <item name="android:colorBackground">@color/window_background_dark</item>

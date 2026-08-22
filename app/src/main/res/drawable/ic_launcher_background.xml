@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Adaptive icon background: colorScheme.primaryContainer (@color/ic_launcher_primary_container) -->
+<!-- Adaptive icon background: the light scheme's primaryContainer mint plate.
+     @color/ic_launcher_primary_container has no values-night/ override, so the plate is the same on
+     every device and matches the store listing icon. The shield foreground is night-independent too,
+     so the pair always renders as dark teal art on mint. -->
+
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <solid android:color="@color/ic_launcher_primary_container" />
 </shape>

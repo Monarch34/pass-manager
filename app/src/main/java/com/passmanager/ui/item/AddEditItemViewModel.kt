@@ -250,14 +250,16 @@ class AddEditItemViewModel @Inject constructor(
     fun onIdentityAddressChange(value: String) { _form.update { it.copy(identityAddress = value) } }
     fun onCompanyChange(value: String) { _form.update { it.copy(company = value) } }
 
-    fun applyGeneratedPassword(password: String) {
+    /** The caller owns [password] and wipes it afterwards, so this never mutates the array. */
+    fun applyGeneratedPassword(password: CharArray) {
+        val value = String(password)
         _form.update {
             when (it.category) {
                 ItemCategory.BANK -> {
-                    val violations = bankPasswordValidator.validate(password, it.previousPasswords)
-                    it.copy(bankPassword = password, bankPasswordViolations = violations)
+                    val violations = bankPasswordValidator.validate(value, it.previousPasswords)
+                    it.copy(bankPassword = value, bankPasswordViolations = violations)
                 }
-                else -> it.copy(password = password)
+                else -> it.copy(password = value)
             }
         }
     }

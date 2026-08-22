@@ -1,14 +1,10 @@
 package com.passmanager.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
     primary = DarkPrimary,
@@ -84,20 +80,22 @@ private val LightColorScheme = lightColorScheme(
     surfaceContainerHighest = LightSurfaceContainerHighest
 )
 
+/**
+ * The app theme. Always one of the two schemes above — Material You dynamic color is not offered.
+ *
+ * A password manager leans on color to carry meaning: the category tints ([CategoryLoginTint] and
+ * friends) are fixed hues that let a vault entry be recognized at a glance, and the same vault is
+ * rendered by the desktop client from the same [com.passmanager.protocol.design.Palette] tokens.
+ * Reseeding the scheme from the user's wallpaper would break that recognition, clash with the fixed
+ * tints, and make the phone and desktop disagree about what the same vault looks like — so the
+ * brand palette wins and the dynamic-color branch is not built at all.
+ */
 @Composable
 fun PassManagerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
 
     MaterialTheme(
         colorScheme = colorScheme,

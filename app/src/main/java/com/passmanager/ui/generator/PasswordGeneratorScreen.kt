@@ -1,7 +1,7 @@
 package com.passmanager.ui.generator
 
 import com.passmanager.R
-import com.passmanager.ui.util.copyToClipboard
+import com.passmanager.ui.util.rememberSecureClipboard
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -86,7 +86,7 @@ private val LengthThumbSize = DpSize(width = 5.dp, height = 28.dp)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PasswordGeneratorScreen(
-    onPasswordSelected: (String) -> Unit,
+    onPasswordSelected: (CharArray) -> Unit,
     onNavigateBack: () -> Unit,
     showUseButton: Boolean = true,
     viewModel: PasswordGeneratorViewModel = hiltViewModel()
@@ -96,6 +96,7 @@ fun PasswordGeneratorScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val view = LocalView.current
+    val clipboard = rememberSecureClipboard()
 
     var sliderValue by remember { mutableFloatStateOf(uiState.length.toFloat()) }
     LaunchedEffect(uiState.length) {
@@ -261,7 +262,7 @@ fun PasswordGeneratorScreen(
                             onClick = {
                                 if (uiState.password.isNotEmpty()) {
                                     view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                                    copyToClipboard(context, "Password", uiState.password, clearAfterMs = 15_000L, scope = scope)
+                                    clipboard.copy(uiState.password)
                                     scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.generator_copied)) }
                                 }
                             },
@@ -483,7 +484,7 @@ fun PasswordGeneratorScreen(
                 Button(
                     onClick = {
                         view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                        onPasswordSelected(uiState.password)
+                        onPasswordSelected(uiState.password.toCharArray())
                     },
                     enabled = uiState.password.isNotEmpty(),
                     modifier = Modifier

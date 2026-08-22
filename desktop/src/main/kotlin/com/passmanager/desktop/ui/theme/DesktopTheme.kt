@@ -14,89 +14,98 @@ import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.passmanager.protocol.design.Palette
 
 // ── Android-matching color palette ──────────────────────────────────────
+//
+// Every value comes from [Palette], the shared token object in :protocol, so the phone and the
+// desktop cannot drift apart. Nothing here is a literal.
 
 // Category tints (shared across themes)
-val CategoryLoginTint = Color(0xFF0D9488)
-val CategoryCardTint = Color(0xFFB45309)
-val CategoryNoteTint = Color(0xFF7C3AED)
-val CategoryIdentityTint = Color(0xFF0284C7)
+val CategoryLoginTint = Color(Palette.CATEGORY_LOGIN_TINT)
+val CategoryCardTint = Color(Palette.CATEGORY_CARD_TINT)
+val CategoryNoteTint = Color(Palette.CATEGORY_NOTE_TINT)
+val CategoryIdentityTint = Color(Palette.CATEGORY_IDENTITY_TINT)
+val CategoryBankTint = Color(Palette.CATEGORY_BANK_TINT)
 
 // Desktop LCD screens render darker than phone OLED — tones are lifted
 // slightly for better contrast and readability on non-emissive displays.
+// That lift now lives in the shared palette as the `_LIFTED` tokens; this
+// scheme picks one wherever it exists and the shared token otherwise.
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF5EEAD4),
-    onPrimary = Color(0xFF003731),
-    primaryContainer = Color(0xFF0D9488),
-    onPrimaryContainer = Color(0xFFCCFBF1),
-    secondary = Color(0xFFA5B4FC),
-    onSecondary = Color(0xFF1E1B4B),
-    secondaryContainer = Color(0xFF3730A3),
-    onSecondaryContainer = Color(0xFFE0E7FF),
-    tertiary = Color(0xFFFBBF24),
-    onTertiary = Color(0xFF422006),
-    tertiaryContainer = Color(0xFF92400E),
-    onTertiaryContainer = Color(0xFFFEF3C7),
-    error = Color(0xFFFCA5A5),
-    onError = Color(0xFF7F1D1D),
-    errorContainer = Color(0xFF991B1B),
-    onErrorContainer = Color(0xFFFEE2E2),
-    background = Color(0xFF111827),           // lifted from 0x0C0F14
-    onBackground = Color(0xFFE8ECF2),
-    surface = Color(0xFF1A2033),              // lifted from 0x141820
-    onSurface = Color(0xFFE8ECF2),
-    surfaceVariant = Color(0xFF252D3C),       // lifted from 0x1E2430
-    onSurfaceVariant = Color(0xFFA0A8B8),
-    outline = Color(0xFF4A5268),              // lifted from 0x3B4254
-    outlineVariant = Color(0xFF2A3040),
-    surfaceDim = Color(0xFF111827),
-    surfaceBright = Color(0xFF2A3040),
-    inverseSurface = Color(0xFFE8ECF2),
-    inverseOnSurface = Color(0xFF1A1E28),
-    inversePrimary = Color(0xFF0D7A70),
-    surfaceContainerLowest = Color(0xFF0C1018),
-    surfaceContainerLow = Color(0xFF141B2A),
-    surfaceContainer = Color(0xFF1A2233),
-    surfaceContainerHigh = Color(0xFF283040), // lifted from 0x1C2230 (fixes near-black digit boxes)
-    surfaceContainerHighest = Color(0xFF303848), // lifted from 0x24293A
+    primary = Color(Palette.DARK_PRIMARY),
+    onPrimary = Color(Palette.DARK_ON_PRIMARY),
+    primaryContainer = Color(Palette.DARK_PRIMARY_CONTAINER),
+    onPrimaryContainer = Color(Palette.DARK_ON_PRIMARY_CONTAINER),
+    secondary = Color(Palette.DARK_SECONDARY),
+    onSecondary = Color(Palette.DARK_ON_SECONDARY),
+    secondaryContainer = Color(Palette.DARK_SECONDARY_CONTAINER),
+    onSecondaryContainer = Color(Palette.DARK_ON_SECONDARY_CONTAINER),
+    tertiary = Color(Palette.DARK_TERTIARY),
+    onTertiary = Color(Palette.DARK_ON_TERTIARY),
+    tertiaryContainer = Color(Palette.DARK_TERTIARY_CONTAINER),
+    onTertiaryContainer = Color(Palette.DARK_ON_TERTIARY_CONTAINER),
+    error = Color(Palette.DARK_ERROR),
+    onError = Color(Palette.DARK_ON_ERROR),
+    errorContainer = Color(Palette.DARK_ERROR_CONTAINER),
+    onErrorContainer = Color(Palette.DARK_ON_ERROR_CONTAINER),
+    background = Color(Palette.DARK_BACKGROUND_LIFTED),
+    onBackground = Color(Palette.DARK_ON_BACKGROUND),
+    surface = Color(Palette.DARK_SURFACE_LIFTED),
+    onSurface = Color(Palette.DARK_ON_SURFACE),
+    surfaceVariant = Color(Palette.DARK_SURFACE_VARIANT_LIFTED),
+    onSurfaceVariant = Color(Palette.DARK_ON_SURFACE_VARIANT),
+    outline = Color(Palette.DARK_OUTLINE_LIFTED),
+    outlineVariant = Color(Palette.DARK_OUTLINE_VARIANT),
+    surfaceDim = Color(Palette.DARK_SURFACE_DIM_LIFTED),
+    surfaceBright = Color(Palette.DARK_SURFACE_BRIGHT),
+    inverseSurface = Color(Palette.DARK_INVERSE_SURFACE),
+    inverseOnSurface = Color(Palette.DARK_INVERSE_ON_SURFACE),
+    inversePrimary = Color(Palette.DARK_INVERSE_PRIMARY),
+    surfaceContainerLowest = Color(Palette.DARK_SURFACE_CONTAINER_LOWEST_LIFTED),
+    surfaceContainerLow = Color(Palette.DARK_SURFACE_CONTAINER_LOW_LIFTED),
+    surfaceContainer = Color(Palette.DARK_SURFACE_CONTAINER_LIFTED),
+    surfaceContainerHigh = Color(Palette.DARK_SURFACE_CONTAINER_HIGH_LIFTED),
+    surfaceContainerHighest = Color(Palette.DARK_SURFACE_CONTAINER_HIGHEST_LIFTED),
 )
 
+// Mirror of the dark lift: on LCD the off-white canvas reads as grey, so the
+// light scheme takes the brighter, slightly cooler `_LIFTED` canvas tones.
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF0D7A70),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFCCFBF1),
-    onPrimaryContainer = Color(0xFF00312C),
-    secondary = Color(0xFF4338CA),
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE0E7FF),
-    onSecondaryContainer = Color(0xFF1E1B4B),
-    tertiary = Color(0xFFB45309),
-    onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFFEF3C7),
-    onTertiaryContainer = Color(0xFF422006),
-    error = Color(0xFFDC2626),
-    onError = Color.White,
-    errorContainer = Color(0xFFFEE2E2),
-    onErrorContainer = Color(0xFF7F1D1D),
-    background = Color(0xFFF8FAFF),           // slightly cooler white
-    onBackground = Color(0xFF111318),
-    surface = Color.White,
-    onSurface = Color(0xFF111318),
-    surfaceVariant = Color(0xFFE4E8F0),
-    onSurfaceVariant = Color(0xFF3E4450),
-    outline = Color(0xFF6E7688),
-    outlineVariant = Color(0xFFC8CDD8),
-    surfaceDim = Color(0xFFD8DCE6),
-    surfaceBright = Color(0xFFF8FAFF),
-    inverseSurface = Color(0xFF1A1E28),
-    inverseOnSurface = Color(0xFFEFF1F6),
-    inversePrimary = Color(0xFF5EEAD4),
-    surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF0F2F8),
-    surfaceContainer = Color(0xFFEAECF4),
-    surfaceContainerHigh = Color(0xFFE4E7EF),
-    surfaceContainerHighest = Color(0xFFDDE1EA),
+    primary = Color(Palette.LIGHT_PRIMARY),
+    onPrimary = Color(Palette.LIGHT_ON_PRIMARY),
+    primaryContainer = Color(Palette.LIGHT_PRIMARY_CONTAINER),
+    onPrimaryContainer = Color(Palette.LIGHT_ON_PRIMARY_CONTAINER),
+    secondary = Color(Palette.LIGHT_SECONDARY),
+    onSecondary = Color(Palette.LIGHT_ON_SECONDARY),
+    secondaryContainer = Color(Palette.LIGHT_SECONDARY_CONTAINER),
+    onSecondaryContainer = Color(Palette.LIGHT_ON_SECONDARY_CONTAINER),
+    tertiary = Color(Palette.LIGHT_TERTIARY),
+    onTertiary = Color(Palette.LIGHT_ON_TERTIARY),
+    tertiaryContainer = Color(Palette.LIGHT_TERTIARY_CONTAINER),
+    onTertiaryContainer = Color(Palette.LIGHT_ON_TERTIARY_CONTAINER),
+    error = Color(Palette.LIGHT_ERROR),
+    onError = Color(Palette.LIGHT_ON_ERROR),
+    errorContainer = Color(Palette.LIGHT_ERROR_CONTAINER),
+    onErrorContainer = Color(Palette.LIGHT_ON_ERROR_CONTAINER),
+    background = Color(Palette.LIGHT_BACKGROUND_LIFTED),
+    onBackground = Color(Palette.LIGHT_ON_BACKGROUND),
+    surface = Color(Palette.LIGHT_SURFACE),
+    onSurface = Color(Palette.LIGHT_ON_SURFACE),
+    surfaceVariant = Color(Palette.LIGHT_SURFACE_VARIANT),
+    onSurfaceVariant = Color(Palette.LIGHT_ON_SURFACE_VARIANT),
+    outline = Color(Palette.LIGHT_OUTLINE),
+    outlineVariant = Color(Palette.LIGHT_OUTLINE_VARIANT),
+    surfaceDim = Color(Palette.LIGHT_SURFACE_DIM),
+    surfaceBright = Color(Palette.LIGHT_SURFACE_BRIGHT_LIFTED),
+    inverseSurface = Color(Palette.LIGHT_INVERSE_SURFACE),
+    inverseOnSurface = Color(Palette.LIGHT_INVERSE_ON_SURFACE),
+    inversePrimary = Color(Palette.LIGHT_INVERSE_PRIMARY),
+    surfaceContainerLowest = Color(Palette.LIGHT_SURFACE_CONTAINER_LOWEST),
+    surfaceContainerLow = Color(Palette.LIGHT_SURFACE_CONTAINER_LOW),
+    surfaceContainer = Color(Palette.LIGHT_SURFACE_CONTAINER),
+    surfaceContainerHigh = Color(Palette.LIGHT_SURFACE_CONTAINER_HIGH),
+    surfaceContainerHighest = Color(Palette.LIGHT_SURFACE_CONTAINER_HIGHEST),
 )
 
 // ── Typography with Poppins ─────────────────────────────────────────────

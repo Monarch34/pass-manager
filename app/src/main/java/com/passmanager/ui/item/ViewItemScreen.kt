@@ -1,7 +1,7 @@
 package com.passmanager.ui.item
 
 import com.passmanager.R
-import com.passmanager.ui.util.copyToClipboard
+import com.passmanager.ui.util.rememberSecureClipboard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -382,17 +382,15 @@ private fun LoginViewFields(
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
+    val clipboard = rememberSecureClipboard()
 
     if (payload.username.isNotBlank()) {
         FieldBlock(
             label = stringResource(R.string.item_username_hint),
             onCopy = {
                 view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                clipboard.copy(payload.username)
                 scope.launch {
-                    copyToClipboard(
-                        context, "Username", payload.username,
-                        clearAfterMs = 15_000L, scope = scope
-                    )
                     snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
                 }
             }
@@ -406,11 +404,8 @@ private fun LoginViewFields(
             label = stringResource(R.string.item_address_hint),
             onCopy = {
                 view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                clipboard.copy(payload.address)
                 scope.launch {
-                    copyToClipboard(
-                        context, "Address", payload.address,
-                        clearAfterMs = 15_000L, scope = scope
-                    )
                     snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
                 }
             }
@@ -437,17 +432,15 @@ private fun BankViewFields(
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
+    val clipboard = rememberSecureClipboard()
 
     if (payload.accountNumber.isNotBlank()) {
         FieldBlock(
             label = stringResource(R.string.item_account_number_hint),
             onCopy = {
                 view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                clipboard.copy(payload.accountNumber)
                 scope.launch {
-                    copyToClipboard(
-                        context, "Account", payload.accountNumber,
-                        clearAfterMs = 15_000L, scope = scope
-                    )
                     snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
                 }
             }
@@ -461,11 +454,8 @@ private fun BankViewFields(
             label = stringResource(R.string.item_bank_name_hint),
             onCopy = {
                 view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                clipboard.copy(payload.bankName)
                 scope.launch {
-                    copyToClipboard(
-                        context, "Bank", payload.bankName,
-                        clearAfterMs = 15_000L, scope = scope
-                    )
                     snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
                 }
             }
@@ -490,6 +480,7 @@ private fun CardViewFields(
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
+    val clipboard = rememberSecureClipboard()
     var cardNumberVisible by remember { mutableStateOf(false) }
     var cvcVisible by remember { mutableStateOf(false) }
 
@@ -498,8 +489,8 @@ private fun CardViewFields(
             label = stringResource(R.string.item_card_number_hint),
             onCopy = {
                 view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                clipboard.copy(payload.cardNumber.filter { it.isDigit() })
                 scope.launch {
-                    copyToClipboard(context, "Card number", payload.cardNumber.filter { it.isDigit() }, clearAfterMs = 15_000L, scope = scope)
                     snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
                 }
             },
@@ -525,11 +516,8 @@ private fun CardViewFields(
             label = stringResource(R.string.item_cardholder_hint),
             onCopy = {
                 view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                clipboard.copy(payload.cardholderName)
                 scope.launch {
-                    copyToClipboard(
-                        context, "Cardholder", payload.cardholderName,
-                        clearAfterMs = 15_000L, scope = scope
-                    )
                     snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
                 }
             }
@@ -543,11 +531,8 @@ private fun CardViewFields(
             label = stringResource(R.string.item_expiry_hint),
             onCopy = {
                 view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                clipboard.copy(payload.cardExpiry)
                 scope.launch {
-                    copyToClipboard(
-                        context, "Expiry", payload.cardExpiry,
-                        clearAfterMs = 15_000L, scope = scope
-                    )
                     snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
                 }
             }
@@ -562,8 +547,8 @@ private fun CardViewFields(
             label = stringResource(R.string.item_cvc_hint),
             onCopy = {
                 view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                clipboard.copy(payload.cardCvc)
                 scope.launch {
-                    copyToClipboard(context, "CVC", payload.cardCvc, clearAfterMs = 15_000L, scope = scope)
                     snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
                 }
             },
@@ -592,6 +577,7 @@ private fun IdentityViewFields(
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
+    val clipboard = rememberSecureClipboard()
 
     val fields = listOf(
         stringResource(R.string.identity_first_name) to payload.firstName,
@@ -608,11 +594,8 @@ private fun IdentityViewFields(
                 label = label,
                 onCopy = {
                     view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                    clipboard.copy(value)
                     scope.launch {
-                        copyToClipboard(
-                            context, label, value,
-                            clearAfterMs = 15_000L, scope = scope
-                        )
                         snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
                     }
                 }
@@ -635,14 +618,15 @@ private fun PasswordField(
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
+    val clipboard = rememberSecureClipboard()
 
     if (password.isNotBlank()) {
         FieldBlock(
             label = stringResource(R.string.item_password_hint),
             onCopy = {
                 view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                clipboard.copy(password)
                 scope.launch {
-                    copyToClipboard(context, "Password", password, clearAfterMs = 15_000L, scope = scope)
                     snackbarHostState.showSnackbar(context.getString(R.string.item_clipboard_copied_clears))
                 }
             },
