@@ -2,10 +2,26 @@ package com.passmanager.crypto.model
 
 import kotlinx.serialization.Serializable
 
+/**
+ * Argon2id cost parameters, persisted per vault in `vault_metadata.kdf_params_json`.
+ *
+ * The defaults below apply to NEWLY created vaults only. An existing vault is always
+ * unlocked with the parameters stored in its own row, so lowering a default here never
+ * re-derives an old vault's key at the wrong cost. `MIGRATION_7_8` guarantees that by
+ * back-filling rows that were written before the parameters were stored explicitly.
+ *
+ * Cost rationale: OWASP's Password Storage Cheat Sheet lists m=47104/t=1/p=1,
+ * m=19456/t=2/p=1 and m=12288/t=3/p=1 as acceptable Argon2id configurations. Argon2's
+ * resistance comes mostly from memory, so 64 MiB — comfortably above all three references —
+ * stays untouched. The iteration count is what was out of line: at t=10 a click-to-list
+ * unlock measured 2.35 s on an API 36 emulator, which is unusable in an app opened dozens
+ * of times a day. t=3 matches the highest-iteration OWASP reference on top of 5x its
+ * memory, and costs roughly a third of what t=10 did.
+ */
 @Serializable
 data class KdfParams(
-    val memory: Int = 65536,
-    val iterations: Int = 10,
+    val memory: Int = 65536,        // 64 MiB
+    val iterations: Int = 3,
     val parallelism: Int = 4,
     val hashLength: Int = 32
 ) {

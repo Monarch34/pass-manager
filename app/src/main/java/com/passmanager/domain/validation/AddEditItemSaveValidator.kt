@@ -18,6 +18,13 @@ data class AddEditSaveSnapshot(
     val accountNumber: String,
     val bankName: String,
     val bankPassword: String,
+    /**
+     * Bank password this record was loaded with — empty for a new record. Keeping it apart from
+     * [previousPasswords] is what lets an unchanged password stay valid while a true rollback to
+     * a retired password is still rejected.
+     */
+    val originalBankPassword: String,
+    /** Retired bank passwords only; never contains [bankPassword] or [originalBankPassword]. */
     val previousPasswords: List<String>,
     val bankPasswordViolations: List<BankPasswordViolation>,
     val notes: String,
@@ -72,7 +79,6 @@ class AddEditItemSaveValidator @Inject constructor(
                 if (violations.isNotEmpty()) {
                     return AddEditSaveOutcome.Failure(AddEditSaveFailure.BankInvalid(violations))
                 }
-                val updatedHistory = (listOf(s.bankPassword) + s.previousPasswords).take(4)
                 ItemPayload.Bank(
                     id = id,
                     title = s.title.trim(),
@@ -80,7 +86,7 @@ class AddEditItemSaveValidator @Inject constructor(
                     accountNumber = s.accountNumber.trim(),
                     bankName = s.bankName.trim(),
                     password = s.bankPassword,
-                    previousPasswords = updatedHistory,
+                    previousPasswords = retiredBankPasswords(s),
                 )
             }
             ItemCategory.NOTE -> ItemPayload.SecureNote(
@@ -111,7 +117,11 @@ class AddEditItemSaveValidator @Inject constructor(
         return AddEditSaveOutcome.Success(payload)
     }
 
-    private fun evaluateFailure(s: AddEditSaveSnapshot): AddEditSaveFailure? {
+    /**
+     * The first reason this form cannot be saved, or `null` when it can. Public so the screen can
+     * tell the user *why* the save button is disabled instead of leaving it dead.
+     */
+    fun evaluateFailure(s: AddEditSaveSnapshot): AddEditSaveFailure? {
         if (s.title.isBlank()) return AddEditSaveFailure.TitleRequired
         return when (s.category) {
             ItemCategory.CARD -> {
@@ -134,5 +144,22 @@ class AddEditItemSaveValidator @Inject constructor(
                 null
             }
         }
+    }
+
+    /**
+     * History written back with the record: the passwords it no longer uses.
+     *
+     * The password being saved is deliberately left out — it is already stored in
+     * [ItemPayload.Bank.password], and repeating it here would make the record fail its own
+     * [BankPasswordViolation.ReusedPassword] check the next time it is opened for editing.
+     * A password only joins the history once it is actually replaced, which is what keeps a
+     * rollback to an earlier password blocked.
+     */
+    private fun retiredBankPasswords(s: AddEditSaveSnapshot): List<String> {
+        if (s.bankPassword == s.originalBankPassword) return s.previousPasswords
+        return (listOf(s.originalBankPassword) + s.previousPasswords)
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .take(BankPasswordRules.HISTORY_SIZE)
     }
 }

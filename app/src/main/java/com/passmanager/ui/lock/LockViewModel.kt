@@ -119,6 +119,20 @@ class LockViewModel @Inject constructor(
         }
     }
 
+    /**
+     * The system prompt is gone by the time this runs, so without surfacing the reason the screen
+     * would just sit there and the user would have no idea why nothing opened. The text comes from
+     * BiometricPrompt itself (already localised by the platform), so it is passed through as-is.
+     */
+    fun onBiometricError(message: String) {
+        _uiState.update { it.copy(isLoading = false, error = UserMessage.Plain(message)) }
+    }
+
+    /** Soft failure: the prompt stays open for another try, so only the hint is refreshed. */
+    fun onBiometricFail() {
+        _uiState.update { it.copy(error = UserMessage.Resource(R.string.lock_biometric_not_recognised)) }
+    }
+
     fun clearError() {
         _uiState.update { it.copy(error = null, shouldShakePassphraseField = false) }
     }

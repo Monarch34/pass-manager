@@ -13,8 +13,26 @@ sealed class BankPasswordViolation {
     data object ReusedPassword : BankPasswordViolation()
 }
 
+/**
+ * The numbers behind [BankPasswordValidator], named so that producers of bank passwords —
+ * the password generator, the rule indicator, the save-time history trim — stay in step with
+ * the checker instead of repeating literals.
+ */
+object BankPasswordRules {
+    const val MIN_LENGTH = 6
+    const val MAX_LENGTH = 12
+
+    /** How many retired passwords a new bank password is checked against. */
+    const val HISTORY_SIZE = 4
+}
+
 class BankPasswordValidator @Inject constructor() {
 
+    /**
+     * @param previousPasswords passwords this record no longer uses. The password currently
+     *   stored on the record must not be in this list, otherwise re-saving an untouched item
+     *   would fail with [BankPasswordViolation.ReusedPassword].
+     */
     fun validate(
         password: String,
         previousPasswords: List<String> = emptyList()
@@ -24,11 +42,11 @@ class BankPasswordValidator @Inject constructor() {
         val allDigits = password.all { it.isDigit() }
         if (allDigits) {
             return when {
-                password.length < 6 -> listOf(BankPasswordViolation.TooShort)
-                password.length == 6 -> buildList {
+                password.length < BankPasswordRules.MIN_LENGTH -> listOf(BankPasswordViolation.TooShort)
+                password.length == BankPasswordRules.MIN_LENGTH -> buildList {
                     if (hasConsecutiveSequence(password)) add(BankPasswordViolation.ConsecutiveSequence)
                     if (hasRepeatingCharacters(password)) add(BankPasswordViolation.RepeatingCharacters)
-                    if (previousPasswords.take(4).contains(password)) add(BankPasswordViolation.ReusedPassword)
+                    if (isReused(password, previousPasswords)) add(BankPasswordViolation.ReusedPassword)
                 }
                 else -> validateComplexPassword(password, previousPasswords)
             }
@@ -40,17 +58,18 @@ class BankPasswordValidator @Inject constructor() {
         password: String,
         previousPasswords: List<String>
     ): List<BankPasswordViolation> = buildList {
-        if (password.length < 6) add(BankPasswordViolation.TooShort)
-        if (password.length > 12) add(BankPasswordViolation.TooLong)
+        if (password.length < BankPasswordRules.MIN_LENGTH) add(BankPasswordViolation.TooShort)
+        if (password.length > BankPasswordRules.MAX_LENGTH) add(BankPasswordViolation.TooLong)
         if (password.none { it.isUpperCase() }) add(BankPasswordViolation.MissingUppercase)
         if (password.none { it.isLowerCase() }) add(BankPasswordViolation.MissingLowercase)
         if (password.none { it.isDigit() }) add(BankPasswordViolation.MissingDigit)
         if (hasConsecutiveSequence(password)) add(BankPasswordViolation.ConsecutiveSequence)
         if (hasRepeatingCharacters(password)) add(BankPasswordViolation.RepeatingCharacters)
-        if (previousPasswords.take(4).any { it == password }) {
-            add(BankPasswordViolation.ReusedPassword)
-        }
+        if (isReused(password, previousPasswords)) add(BankPasswordViolation.ReusedPassword)
     }
+
+    private fun isReused(password: String, previousPasswords: List<String>): Boolean =
+        previousPasswords.take(BankPasswordRules.HISTORY_SIZE).any { it == password }
 
     private fun hasConsecutiveSequence(password: String): Boolean {
         if (password.length < 3) return false

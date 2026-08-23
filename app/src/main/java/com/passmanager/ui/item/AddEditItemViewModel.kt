@@ -46,8 +46,12 @@ data class AddEditUiState(
     val isLoading: Boolean = false,
     val error: UserMessage? = null,
     val isSaved: Boolean = false,
-    /** Derived in [AddEditItemViewModel] via [AddEditItemSaveValidator.canSave]. */
+    /** Derived in [AddEditItemViewModel] via [AddEditItemSaveValidator.evaluateFailure]. */
     val canSave: Boolean = false,
+    /** Why [canSave] is false — shown next to the disabled save button. Null when it is true. */
+    val saveBlockedReason: AddEditSaveFailure? = null,
+    /** True once the form differs from what was loaded; gates the “discard changes?” prompt. */
+    val isDirty: Boolean = false,
 
     // ── Login fields ──
     val username: String = "",
@@ -65,6 +69,9 @@ data class AddEditUiState(
     val accountNumber: String = "",
     val bankName: String = "",
     val bankPassword: String = "",
+    /** Bank password this record was loaded with; empty while adding a new record. */
+    val originalBankPassword: String = "",
+    /** Retired bank passwords only — the record's current password is never in here. */
     val previousPasswords: List<String> = emptyList(),
     val bankPasswordViolations: List<BankPasswordViolation> = emptyList(),
 
@@ -95,6 +102,7 @@ private fun AddEditUiState.toSaveSnapshot() = AddEditSaveSnapshot(
     accountNumber = accountNumber,
     bankName = bankName,
     bankPassword = bankPassword,
+    originalBankPassword = originalBankPassword,
     previousPasswords = previousPasswords,
     bankPasswordViolations = bankPasswordViolations,
     notes = notes,
@@ -104,6 +112,20 @@ private fun AddEditUiState.toSaveSnapshot() = AddEditSaveSnapshot(
     phone = phone,
     identityAddress = identityAddress,
     company = company,
+)
+
+/**
+ * Drops transient and derived fields so two form states can be compared on user-entered content
+ * alone. Backs [AddEditUiState.isDirty], and stays correct as new content fields are added.
+ */
+private fun AddEditUiState.contentSignature() = copy(
+    isLoading = false,
+    error = null,
+    isSaved = false,
+    canSave = false,
+    saveBlockedReason = null,
+    isDirty = false,
+    bankPasswordViolations = emptyList(),
 )
 
 @HiltViewModel
@@ -125,17 +147,29 @@ class AddEditItemViewModel @Inject constructor(
     private val initialForm = AddEditUiState()
     private val _form = MutableStateFlow(initialForm)
 
+    /**
+     * The form as the user first saw it: empty for a new record, the decrypted record for an edit.
+     * Everything typed after this point counts as an unsaved change.
+     */
+    private var baseline: AddEditUiState = initialForm
+
     val uiState: StateFlow<AddEditUiState> = _form
-        .map { s ->
-            s.copy(canSave = addEditItemSaveValidator.canSave(s.toSaveSnapshot()))
-        }
+        .map { s -> s.withDerivedFlags() }
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000L),
-            initialForm.copy(
-                canSave = addEditItemSaveValidator.canSave(initialForm.toSaveSnapshot())
-            )
+            initialForm.withDerivedFlags()
         )
+
+    /** Recomputes [AddEditUiState.canSave], [AddEditUiState.saveBlockedReason] and dirty state. */
+    private fun AddEditUiState.withDerivedFlags(): AddEditUiState {
+        val failure = addEditItemSaveValidator.evaluateFailure(toSaveSnapshot())
+        return copy(
+            canSave = failure == null,
+            saveBlockedReason = failure,
+            isDirty = contentSignature() != baseline.contentSignature()
+        )
+    }
 
     init {
         when {
@@ -154,6 +188,8 @@ class AddEditItemViewModel @Inject constructor(
             } else emptyList()
             it.copy(category = cat, bankPasswordViolations = violations)
         }
+        // Preselecting a category is navigation, not user input: it must not arm the discard prompt.
+        baseline = _form.value
     }
 
     private fun loadItem(id: String) {
@@ -167,8 +203,9 @@ class AddEditItemViewModel @Inject constructor(
                     }
                     return@launch
                 }
-                val payload = decryptItemUseCase(item)
-                _form.update { fromPayload(payload) }
+                val loaded = fromPayload(payload = decryptItemUseCase(item))
+                baseline = loaded
+                _form.update { loaded }
             } catch (e: Exception) {
                 _form.update { it.copy(isLoading = false, error = UserMessage.Resource(R.string.item_load_failed)) }
             }
@@ -189,7 +226,15 @@ class AddEditItemViewModel @Inject constructor(
         is ItemPayload.Bank -> AddEditUiState(
             title = payload.title, notes = payload.notes, category = ItemCategory.BANK,
             accountNumber = payload.accountNumber, bankName = payload.bankName,
-            bankPassword = payload.password, previousPasswords = payload.previousPasswords
+            bankPassword = payload.password, originalBankPassword = payload.password,
+            // Records written before the history split kept the current password as entry 0.
+            // Dropping it here is what stops the record failing its own reuse check on reopen.
+            // Only the leading entry is dropped: a match further down is a genuinely retired
+            // password the user happens to have returned to, and removing it would quietly make
+            // that old password reusable again.
+            previousPasswords = payload.previousPasswords.let {
+                if (it.firstOrNull() == payload.password) it.drop(1) else it
+            }
         )
         is ItemPayload.SecureNote -> AddEditUiState(
             title = payload.title, notes = payload.notes, category = ItemCategory.NOTE
@@ -250,6 +295,14 @@ class AddEditItemViewModel @Inject constructor(
     fun onIdentityAddressChange(value: String) { _form.update { it.copy(identityAddress = value) } }
     fun onCompanyChange(value: String) { _form.update { it.copy(company = value) } }
 
+    // ── Password generator handoff ───────────────────
+
+    /**
+     * Category whose password rules the generator must respect when opened from this form.
+     * Read by the navigation layer, so it stays correct even while nothing collects [uiState].
+     */
+    val generatorCategory: ItemCategory get() = _form.value.category
+
     /** The caller owns [password] and wipes it afterwards, so this never mutates the array. */
     fun applyGeneratedPassword(password: CharArray) {
         val value = String(password)
@@ -296,7 +349,18 @@ class AddEditItemViewModel @Inject constructor(
             _form.update { it.copy(isLoading = true, error = null) }
             try {
                 saveVaultItemUseCase(payload = payload, existingId = itemId)
-                _form.update { it.copy(isLoading = false, isSaved = true) }
+                // What is on screen is now what is stored, so leaving must not prompt to discard.
+                // The baseline has to move BEFORE the emission: isDirty is derived in the map on
+                // _form, so assigning it afterwards leaves the flag stale until the next edit.
+                // originalBankPassword moves with it, otherwise a second save without leaving the
+                // screen would retire the password that was just stored as if it were the old one.
+                val saved = _form.value.copy(
+                    isLoading = false,
+                    isSaved = true,
+                    originalBankPassword = _form.value.bankPassword
+                )
+                baseline = saved
+                _form.value = saved
             } catch (e: Exception) {
                 AppLogger.e("AddEditItemViewModel", "Save failed", e)
                 _form.update { it.copy(isLoading = false, error = UserMessage.Resource(R.string.item_save_failed)) }
@@ -312,6 +376,7 @@ class AddEditItemViewModel @Inject constructor(
 
     fun resetForNewItem() {
         if (itemId != null) return
-        _form.value = AddEditUiState()
+        _form.value = initialForm
+        baseline = initialForm
     }
 }

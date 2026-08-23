@@ -2,6 +2,7 @@ package com.passmanager.domain.usecase
 
 import com.passmanager.crypto.cipher.AesGcmCipher
 import com.passmanager.crypto.kdf.KdfProvider
+import com.passmanager.crypto.model.KdfParams
 import com.passmanager.crypto.util.toUtf8Bytes
 import com.passmanager.domain.port.BiometricLockPort
 import com.passmanager.domain.repository.MetadataRepository
@@ -41,13 +42,20 @@ class ChangePassphraseUseCase @Inject constructor(
             }
 
             val newSalt = ByteArray(16).also { secureRandom.nextBytes(it) }
+            // The vault key is being re-wrapped against a fresh salt anyway, so this is the one
+            // safe moment to move an old vault onto the current cost parameters. Without it a
+            // vault created before the defaults changed would keep paying the old cost forever,
+            // since every other path unlocks with whatever is stored in its own row.
+            val newParams = KdfParams()
             newBytes = newPassphrase.toUtf8Bytes()
             newDerivedKey = withContext(Dispatchers.Default) {
-                kdfProvider.deriveKey(newBytes, newSalt, metadata.kdfParams)
+                kdfProvider.deriveKey(newBytes, newSalt, newParams)
             }
 
             val newWrapped = cipher.encrypt(vaultKey, newDerivedKey)
-            metadataRepository.update(metadata.copy(kdfSalt = newSalt, wrappedVaultKey = newWrapped))
+            metadataRepository.update(
+                metadata.copy(kdfSalt = newSalt, wrappedVaultKey = newWrapped, kdfParams = newParams)
+            )
 
             biometricLockPort.disableIfEnabled()
         } finally {

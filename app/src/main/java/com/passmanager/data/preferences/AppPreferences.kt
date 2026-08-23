@@ -13,8 +13,11 @@ import com.passmanager.domain.model.VaultSortOrder
 import com.passmanager.domain.port.AppSettingsDefaults
 import com.passmanager.domain.port.AppSettingsPort
 import dagger.hilt.android.qualifiers.ApplicationContext
+import androidx.datastore.preferences.core.emptyPreferences
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,15 +35,15 @@ class AppPreferences @Inject constructor(
         private const val ALL_CATEGORIES = "__all__"
     }
 
-    override val autoLockTimeoutSeconds: Flow<Int> = context.dataStore.data.map { preferences ->
+    override val autoLockTimeoutSeconds: Flow<Int> = context.dataStore.data.recoverToEmpty().map { preferences ->
         preferences[AUTO_LOCK_TIMEOUT_SECONDS] ?: AppSettingsDefaults.AUTO_LOCK_SECONDS
     }
 
-    override val useGoogleFavicons: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    override val useGoogleFavicons: Flow<Boolean> = context.dataStore.data.recoverToEmpty().map { preferences ->
         preferences[USE_GOOGLE_FAVICONS] ?: AppSettingsDefaults.USE_GOOGLE_FAVICONS
     }
 
-    override val vaultListSort: Flow<VaultSortOrder> = context.dataStore.data.map { preferences ->
+    override val vaultListSort: Flow<VaultSortOrder> = context.dataStore.data.recoverToEmpty().map { preferences ->
         when (preferences[VAULT_LIST_SORT]) {
             VaultSortOrder.DATE_NEWEST.name -> VaultSortOrder.DATE_NEWEST
             VaultSortOrder.DATE_OLDEST.name -> VaultSortOrder.DATE_OLDEST
@@ -49,7 +52,7 @@ class AppPreferences @Inject constructor(
     }
 
     /** `null` means all groups (categories). */
-    override val vaultGroupFilter: Flow<ItemCategory?> = context.dataStore.data.map { preferences ->
+    override val vaultGroupFilter: Flow<ItemCategory?> = context.dataStore.data.recoverToEmpty().map { preferences ->
         val raw = preferences[VAULT_GROUP_FILTER] ?: ALL_CATEGORIES
         if (raw == ALL_CATEGORIES) {
             null
@@ -81,4 +84,15 @@ class AppPreferences @Inject constructor(
             preferences[VAULT_GROUP_FILTER] = category?.name ?: ALL_CATEGORIES
         }
     }
+}
+
+/**
+ * DataStore turns a read failure into an exception on the flow, which kills every collector
+ * downstream. The vault list combines these preference flows with its item pipeline, so an
+ * unreadable preferences file would leave the list stuck on its loading skeleton forever.
+ * Corrupt or unreadable preferences fall back to defaults instead; anything that is not an IO
+ * problem still propagates.
+ */
+private fun Flow<Preferences>.recoverToEmpty(): Flow<Preferences> = catch { cause ->
+    if (cause is IOException) emit(emptyPreferences()) else throw cause
 }

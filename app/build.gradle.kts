@@ -96,7 +96,12 @@ android {
 
     sourceSets {
         getByName("androidTest") {
-            assets.srcDir(layout.buildDirectory.dir("generated/roomAndroidTestAssets"))
+            // MigrationTestHelper resolves schemas as "<dotted db class>/<version>.json" relative to
+            // the assets root, which is exactly how KSP already lays out schemas/. Pointing the
+            // assets root straight at it removes the copy step that used to rewrite the dotted
+            // directory into package folders under an extra schemas/ prefix — a path Room never
+            // looks in, which is why every migration test failed with FileNotFoundException.
+            assets.srcDir(layout.projectDirectory.dir("schemas"))
         }
     }
 }
@@ -138,25 +143,6 @@ tasks.withType<Test>().configureEach {
         .withPropertyName("themeColorResources")
         .withPathSensitivity(PathSensitivity.RELATIVE)
         .optional()
-}
-
-// MigrationTestHelper expects assets under schemas/<pkg path>/; KSP exports to schemas/<single dotted dir>/
-val copyRoomTestSchemas by tasks.registering(Copy::class) {
-    from(layout.projectDirectory.dir("schemas/com.passmanager.data.db.VaultDatabase"))
-    into(
-        layout.buildDirectory.dir(
-            "generated/roomAndroidTestAssets/schemas/com/passmanager/data/db/VaultDatabase"
-        )
-    )
-    include("*.json")
-}
-
-tasks.configureEach {
-    if (name.startsWith("merge") && name.contains("AndroidTest", ignoreCase = true) &&
-        name.contains("Assets", ignoreCase = true)
-    ) {
-        dependsOn(copyRoomTestSchemas)
-    }
 }
 
 kotlin {
@@ -243,6 +229,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.room.testing)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

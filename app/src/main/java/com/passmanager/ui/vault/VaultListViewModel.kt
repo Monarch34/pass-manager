@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -30,6 +31,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.Immutable
 import javax.inject.Inject
+
+/** Idle time before a typed search query is applied to the list. */
+private const val SEARCH_DEBOUNCE_MS = 300L
 
 /** One-shot error presented as a snackbar from the vault list. */
 sealed interface VaultListError {
@@ -50,7 +54,14 @@ data class VaultListUiState(
     val sortOrder: VaultSortOrder = VaultSortOrder.NAME_ASC,
     val categoryFilter: ItemCategory? = null,
     val isLocked: Boolean = false,
+    /** True until the display pipeline has produced its first result; equivalent to `!hasLoaded`. */
     val isLoading: Boolean = true,
+    /**
+     * True once [filteredItems] reflects a real pipeline pass (headers loaded, cache and settings
+     * applied). Before that the list is *unknown*, not *empty* — an empty-state component must not
+     * claim "no items" while this is false.
+     */
+    val hasLoaded: Boolean = false,
     val useGoogleFavicons: Boolean = AppSettingsDefaults.USE_GOOGLE_FAVICONS,
     val selectedIds: Set<String> = emptySet(),
     val isSelectionMode: Boolean = false,
@@ -82,7 +93,13 @@ class VaultListViewModel @Inject constructor(
     private val decryptionManager = VaultListDecryptionManager(processVaultListHeadersUseCase)
 
     private val _searchQuery = MutableStateFlow("")
-    private val _items = MutableStateFlow<List<VaultItemHeader>>(emptyList())
+
+    /**
+     * `null` means "the headers query has not returned yet". The display pipeline filters that out,
+     * so it cannot emit an empty result before the vault has actually been read — which is what made
+     * the list flash its empty state on open.
+     */
+    private val _items = MutableStateFlow<List<VaultItemHeader>?>(null)
 
     init {
         // Forward decrypt warnings into _uiState
@@ -99,7 +116,7 @@ class VaultListViewModel @Inject constructor(
         viewModelScope.launch {
             observeVaultHeadersUseCase().collect { headers ->
                 _items.value = headers
-                _uiState.update { it.copy(items = headers, isLoading = false) }
+                _uiState.update { it.copy(items = headers) }
                 if (lockStateProvider.lockState.value is LockState.Unlocked) {
                     decryptionManager.decryptHeaders(headers, viewModelScope)
                 }
@@ -113,7 +130,7 @@ class VaultListViewModel @Inject constructor(
                     decryptionManager.clearCache()
                     _uiState.update { it.copy(error = null) }
                 } else {
-                    decryptionManager.decryptHeaders(_items.value, viewModelScope)
+                    decryptionManager.decryptHeaders(_items.value.orEmpty(), viewModelScope)
                 }
             }
         }
@@ -121,8 +138,11 @@ class VaultListViewModel @Inject constructor(
             _uiState.update { it.copy(searchQuery = query) }
         }.launchIn(viewModelScope)
         combine(
-            _items,
-            _searchQuery.debounce(300),
+            _items.filterNotNull(),
+            // Debounce only what the user types. A fixed debounce also delayed the initial empty
+            // query, so the list stayed empty for 300 ms after the vault opened and briefly showed
+            // the "no items" copy over a populated vault.
+            _searchQuery.debounce { query -> if (query.isEmpty()) 0L else SEARCH_DEBOUNCE_MS },
             decryptionManager.headerCache,
             appSettings.vaultListSort,
             appSettings.vaultGroupFilter
@@ -137,7 +157,11 @@ class VaultListViewModel @Inject constructor(
                         filteredItems = result.filteredSorted,
                         headerDisplayCache = result.headerCache,
                         sortOrder = result.sortOrder,
-                        categoryFilter = result.categoryFilter
+                        categoryFilter = result.categoryFilter,
+                        // First pipeline pass: filteredItems is now authoritative, so the list may
+                        // stop showing the skeleton and may finally trust an empty result.
+                        isLoading = false,
+                        hasLoaded = true
                     )
                 }
             }

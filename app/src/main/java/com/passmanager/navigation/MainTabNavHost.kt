@@ -21,6 +21,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.passmanager.ui.desktop.DesktopLinkScreen
+import com.passmanager.ui.generator.GENERATOR_CONSTRAINT_CATEGORY_ARG
 import com.passmanager.ui.generator.PasswordGeneratorScreen
 import com.passmanager.ui.item.AddEditItemScreen
 import com.passmanager.ui.item.AddEditItemViewModel
@@ -141,7 +142,11 @@ fun MainTabNavHost(
                     itemId = cleanId,
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToGenerator = {
-                        navController.navigate(Screen.PasswordGenerator.route)
+                        // Pass the category so the generator honours that form's rules; BANK caps
+                        // length at 12 and the unconstrained default of 16 is rejected on return.
+                        navController.navigate(
+                            Screen.PasswordGenerator.createRoute(addEditVm.generatorCategory)
+                        )
                     },
                     viewModel = addEditVm
                 )
@@ -149,6 +154,13 @@ fun MainTabNavHost(
 
             composable(
                 Screen.PasswordGenerator.route,
+                arguments = listOf(
+                    navArgument(GENERATOR_CONSTRAINT_CATEGORY_ARG) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                ),
                 enterTransition = { NavTransitions.slideInFromRight },
                 exitTransition = { NavTransitions.slideOutToLeft },
                 popEnterTransition = { NavTransitions.slideInFromLeft },

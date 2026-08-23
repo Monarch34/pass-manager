@@ -11,7 +11,7 @@ import com.passmanager.data.db.entity.VaultMetadataEntity
 
 @Database(
     entities = [VaultItemEntity::class, VaultMetadataEntity::class],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 abstract class VaultDatabase : RoomDatabase() {
@@ -82,6 +82,43 @@ abstract class VaultDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_vault_items_category ON vault_items (category)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_vault_items_category_updated_at ON vault_items (category, updated_at)")
+            }
+        }
+
+        /**
+         * Data-only migration: no schema change, so 8.json keeps 7.json's identityHash.
+         *
+         * Rows written before this version stored `"{}"` in kdf_params_json, because every
+         * KdfParams field is defaulted and the encoder used to drop defaults. Such a row
+         * carries no cost parameters, so unlocking it re-derived the key from whatever the
+         * defaults were at that moment — and the very next commit lowers the iteration
+         * default, which would have made those vaults underivable.
+         *
+         * The values below are therefore written as literals, frozen at what the defaults
+         * were when these rows were created (memory=65536, iterations=10, parallelism=4,
+         * hashLength=32). Never replace them with KdfParams constants: migration history
+         * must stay fixed even as the defaults move on.
+         */
+        /**
+         * Data-only migration: back-fills rows written before the KDF parameters were stored
+         * explicitly. The literal below is the cost those vaults were actually created with and is
+         * deliberately NOT read from [KdfParams] — that default has since been lowered, and a
+         * migration must describe history, not whatever the code says today.
+         *
+         * The predicate keys on the absence of "iterations" rather than an exact '{}' match: any
+         * row that cannot state its own iteration count would otherwise fall through to the current
+         * default and derive the vault key at the wrong cost, which locks the vault out for good.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """UPDATE vault_metadata
+                        SET kdf_params_json =
+                            '{"memory":65536,"iterations":10,"parallelism":4,"hashLength":32}'
+                        WHERE kdf_params_json IS NULL
+                           OR TRIM(kdf_params_json) = ''
+                           OR kdf_params_json NOT LIKE '%"iterations"%'""".trimIndent()
+                )
             }
         }
     }

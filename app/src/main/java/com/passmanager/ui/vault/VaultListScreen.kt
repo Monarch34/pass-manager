@@ -211,7 +211,9 @@ fun VaultListScreen(
             )
 
             // Feature #5 — Item count
-            if (!uiState.isLoading) {
+            // Gated on hasLoaded, not just !isLoading: the count would otherwise flash "0 items"
+            // over a populated vault during the first pipeline pass.
+            if (uiState.hasLoaded) {
                 Text(
                     text = stringResource(R.string.vault_item_count, filteredItems.size),
                     style = MaterialTheme.typography.bodySmall,
@@ -226,7 +228,7 @@ fun VaultListScreen(
                         .weight(1f)
                         .fillMaxWidth()
                 )
-            } else if (filteredItems.isEmpty()) {
+            } else if (uiState.hasLoaded && filteredItems.isEmpty()) {
                 VaultListEmptyState(
                     searchQuery = uiState.searchQuery,
                     modifier = Modifier.weight(1f).fillMaxSize()

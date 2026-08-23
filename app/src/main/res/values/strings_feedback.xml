@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Desktop pairing notification -->
+    <!-- Deliberately free of vault entry names: notifications reach the lock screen, paired
+         watches and notification listeners. See DesktopPairingNotificationHelper. -->
+    <string name="desktop_notification_password_sent_generic">Password sent to desktop</string>
+
+    <!-- Biometric -->
+    <string name="lock_biometric_not_recognised">Not recognised. Try again.</string>
+
+    <!-- Desktop link -->
+    <string name="desktop_error_camera_denied">Camera access is needed to scan the QR code. You can allow it in Settings.</string>
+
+    <!-- Item actions -->
+    <string name="item_delete_success">Item deleted</string>
+
+</resources>

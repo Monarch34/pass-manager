@@ -6,11 +6,23 @@ import com.passmanager.data.db.dao.VaultMetadataDao
 import com.passmanager.data.db.entity.VaultMetadataEntity
 import com.passmanager.domain.model.VaultMetadata
 import com.passmanager.domain.repository.MetadataRepository
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
+
+/**
+ * Codec for the `kdf_params_json` column.
+ *
+ * `encodeDefaults = true` is load-bearing: every [KdfParams] field has a default, so the
+ * stock [Json] encoded a fully-default instance as `"{}"`. A row like that carries no
+ * parameters at all — unlocking it re-derived the key with whatever the defaults happened
+ * to be at that moment, so changing a default would have locked such vaults out for good.
+ * Writing the values explicitly pins each vault to the cost it was created with.
+ *
+ * Thread-safe — the [Json] instance is immutable after creation.
+ */
+private val kdfJson: Json = Json { encodeDefaults = true }
 
 class MetadataRepositoryImpl @Inject constructor(
     private val dao: VaultMetadataDao
@@ -32,7 +44,9 @@ class MetadataRepositoryImpl @Inject constructor(
     }
 
     private fun VaultMetadataEntity.toDomain(): VaultMetadata {
-        val kdfParams = Json.decodeFromString<KdfParams>(this.kdfParamsJson)
+        // Missing keys still fall back to the KdfParams defaults, which keeps pre-v8 rows
+        // readable; MIGRATION_7_8 back-fills them so the fallback stops mattering.
+        val kdfParams = kdfJson.decodeFromString(KdfParams.serializer(), this.kdfParamsJson)
         return VaultMetadata(
             currentKeyVersion = this.currentKeyVersion,
             wrappedVaultKey = EncryptedData(
@@ -54,7 +68,7 @@ class MetadataRepositoryImpl @Inject constructor(
         wrappedVaultKey = this.wrappedVaultKey.ciphertext,
         wrapperIv = this.wrappedVaultKey.iv,
         kdfSalt = this.kdfSalt,
-        kdfParamsJson = Json.encodeToString(this.kdfParams),
+        kdfParamsJson = kdfJson.encodeToString(KdfParams.serializer(), this.kdfParams),
         biometricEnabled = if (this.biometricEnabled) 1 else 0,
         biometricWrappedKey = this.biometricWrappedKey?.ciphertext,
         biometricWrapperIv = this.biometricWrappedKey?.iv

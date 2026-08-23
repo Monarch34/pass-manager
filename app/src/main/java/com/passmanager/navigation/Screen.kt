@@ -1,5 +1,7 @@
 package com.passmanager.navigation
 
+import com.passmanager.domain.model.ItemCategory
+
 import java.net.URLEncoder
 
 sealed class Screen(val route: String) {
@@ -17,7 +19,15 @@ sealed class Screen(val route: String) {
             return "add_edit_item/$id?initialCategory=$cat"
         }
     }
-    data object PasswordGenerator : Screen("password_generator")
+    data object PasswordGenerator : Screen("password_generator?constraintCategory={constraintCategory}") {
+        /**
+         * Carries the category the generator is being opened for. Without it the generator keeps
+         * its own defaults, which for BANK produces a password the item form immediately rejects.
+         */
+        fun createRoute(category: ItemCategory?): String =
+            if (category == null) "password_generator"
+            else "password_generator?constraintCategory=${category.dbKey}"
+    }
     data object DesktopLink : Screen("desktop_link")
 
     data object DrawerGenerator : Screen("password_generator_drawer")

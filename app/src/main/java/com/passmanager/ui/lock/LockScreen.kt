@@ -89,7 +89,9 @@ fun LockScreen(
         title = stringResource(R.string.lock_biometric_prompt_title),
         subtitle = stringResource(R.string.lock_biometric_prompt_subtitle),
         negativeButtonText = stringResource(R.string.lock_biometric_prompt_cancel),
-        onSuccess = viewModel::onBiometricSuccess
+        onSuccess = viewModel::onBiometricSuccess,
+        onError = viewModel::onBiometricError,
+        onFail = viewModel::onBiometricFail
     )
 
     Scaffold(

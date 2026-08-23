@@ -63,7 +63,15 @@ fun AppNavigation() {
         startDestination = startDestination,
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.background),
+        // NavHost defaults to a 700 ms cross-fade. On the lock -> main hop that fade runs *after*
+        // the Argon2 derivation has already finished, so it is pure added latency on the slowest
+        // interaction in the app: the vault list sits half-transparent for two thirds of a second
+        // before it looks usable. Use the same 250 ms fade the inner tab host already uses.
+        enterTransition = { NavTransitions.fadeEnter },
+        exitTransition = { NavTransitions.fadeExit },
+        popEnterTransition = { NavTransitions.fadeEnter },
+        popExitTransition = { NavTransitions.fadeExit }
     ) {
         composable(Screen.Onboarding.route) {
             OnboardingScreen(

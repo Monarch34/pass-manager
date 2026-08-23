@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.passmanager.app.NotificationPermissionRequester
 import com.passmanager.R
 import com.passmanager.domain.model.DesktopPairingConstants
 import com.passmanager.domain.model.PairingSessionState
@@ -76,7 +77,7 @@ internal fun IdleContent(uiState: DesktopLinkUiState, viewModel: DesktopLinkView
     val cameraPermLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) viewModel.startScanning()
+        if (granted) viewModel.startScanning() else viewModel.onCameraPermissionDenied()
     }
     val scanLabel = stringResource(R.string.desktop_link_scan_to_connect)
 
@@ -107,6 +108,10 @@ internal fun IdleContent(uiState: DesktopLinkUiState, viewModel: DesktopLinkView
 
     Button(
         onClick = {
+            // Ask for notifications here rather than at launch: this is the one flow that posts
+            // one, so the request arrives with context the user can act on. Without it the
+            // "password sent to desktop" notification is dropped silently on Android 13+.
+            NotificationPermissionRequester.requestIfNeeded(context)
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
                 == PackageManager.PERMISSION_GRANTED
             ) {

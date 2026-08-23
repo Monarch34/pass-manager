@@ -1,5 +1,7 @@
 package com.passmanager.ui.generator
 
+import com.passmanager.domain.validation.BankPasswordValidator
+import androidx.lifecycle.SavedStateHandle
 import com.passmanager.domain.usecase.GeneratePasswordUseCase
 import com.passmanager.test.MainDispatcherRule
 import io.mockk.every
@@ -31,7 +33,7 @@ class PasswordGeneratorViewModelTest {
             )
         } returns "generated-secret"
 
-        val vm = PasswordGeneratorViewModel(useCase)
+        val vm = PasswordGeneratorViewModel(useCase, BankPasswordValidator(), SavedStateHandle())
         advanceUntilIdle()
 
         assertEquals("generated-secret", vm.uiState.value.password)
@@ -52,7 +54,7 @@ class PasswordGeneratorViewModelTest {
             )
         } returnsMany listOf("first", "second")
 
-        val vm = PasswordGeneratorViewModel(useCase)
+        val vm = PasswordGeneratorViewModel(useCase, BankPasswordValidator(), SavedStateHandle())
         advanceUntilIdle()
         assertEquals(0, vm.uiState.value.generateTrigger)
 

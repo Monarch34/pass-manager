@@ -74,6 +74,10 @@
     <string name="item_generate_password">Generate</string>
     <string name="item_title_required">Title is required</string>
     <string name="item_password_required">Password is required</string>
+    <string name="item_discard_title">Discard changes?</string>
+    <string name="item_discard_message">This entry has unsaved changes. Leaving now throws them away.</string>
+    <string name="item_discard_confirm">Discard</string>
+    <string name="item_discard_cancel">Keep editing</string>
     <string name="item_load_failed">Failed to load item</string>
     <string name="item_save_failed">Save failed</string>
     <string name="item_not_found">Item not found</string>
@@ -137,6 +141,8 @@
     <string name="generator_digits_desc">Numeric</string>
     <string name="generator_symbols">Symbols (!@#…)</string>
     <string name="generator_symbols_desc">Special characters</string>
+    <string name="generator_constraint_title">Bank password rules apply</string>
+    <string name="generator_constraint_hint">%1$d–%2$d characters with an uppercase letter, a lowercase letter and a digit. Length and character sets are limited to what the bank form accepts.</string>
     <string name="generator_regenerate_button">Regenerate</string>
     <string name="generator_generate_button">Generate</string>
     <string name="generator_use_button">Use this password</string>

@@ -101,7 +101,10 @@ fun SettingsScreen(
         title = stringResource(R.string.settings_biometric_prompt_title),
         subtitle = stringResource(R.string.settings_biometric_prompt_subtitle),
         negativeButtonText = stringResource(R.string.cancel),
-        onSuccess = viewModel::onBiometricEnrollmentSuccess
+        onSuccess = viewModel::onBiometricEnrollmentSuccess,
+        onError = viewModel::onBiometricEnrollmentError,
+        // Soft failure keeps the prompt open for another attempt; nothing to report yet.
+        onFail = {}
     )
 
     val min1  = stringResource(R.string.settings_auto_lock_1min)

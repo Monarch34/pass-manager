@@ -108,6 +108,13 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /** Enrollment could not complete; the switch must not look enabled after a failed prompt. */
+    fun onBiometricEnrollmentError(message: String) {
+        _uiState.update {
+            it.copy(biometricEnabled = false, error = SettingsError.General(UserMessage.Plain(message)))
+        }
+    }
+
     fun onBiometricEnrollmentSuccess(authenticatedCipher: Cipher) {
         viewModelScope.launch {
             try {

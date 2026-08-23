@@ -56,6 +56,7 @@ bouncycastle = "1.78.1"
 # Testing
 junit = "4.13.2"
 junitVersion = "1.2.1"
+testRunner = "1.7.0"
 turbine = "1.1.0"
 mockk = "1.13.12"
 coroutinesTest = "1.8.1"
@@ -136,6 +137,10 @@ bouncycastle-provider = { group = "org.bouncycastle", name = "bcprov-jdk18on", v
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+# Supplies androidx.test.runner.AndroidJUnitRunner, the class named by `testInstrumentationRunner`.
+# Without it every instrumented run dies at startup with ClassNotFoundException, which is why the
+# Room migration tests had never actually executed.
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "testRunner" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 

@@ -2,6 +2,7 @@ package com.passmanager.ui.item
 
 import com.passmanager.R
 import com.passmanager.ui.util.rememberSecureClipboard
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -78,12 +79,20 @@ enum class ViewItemPresentation {
     Sheet
 }
 
+/**
+ * [onDeleted] is invoked instead of [onNavigateBack] once the item is gone, so the host can both
+ * leave this screen and confirm the deletion where the confirmation outlives it (a snackbar on the
+ * item list). When it is null this screen confirms with a toast before navigating back — a snackbar
+ * hosted here would be torn down with the screen, and staying put is not an option because the
+ * observed item is already gone and the content would flip to "item not found".
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ViewItemScreen(
     itemId: String,
     onNavigateBack: () -> Unit,
     onRequestEdit: () -> Unit,
+    onDeleted: (() -> Unit)? = null,
     presentation: ViewItemPresentation = ViewItemPresentation.Sheet,
     viewModel: ViewItemViewModel = hiltViewModel(key = itemId)
 ) {
@@ -98,8 +107,17 @@ fun ViewItemScreen(
     val context = LocalContext.current
     val view = LocalView.current
 
+    val deletedMessage = stringResource(R.string.item_delete_success)
+
     LaunchedEffect(uiState.isDeleted) {
-        if (uiState.isDeleted) onNavigateBack()
+        if (!uiState.isDeleted) return@LaunchedEffect
+        val hostHandler = onDeleted
+        if (hostHandler != null) {
+            hostHandler()
+        } else {
+            Toast.makeText(context, deletedMessage, Toast.LENGTH_SHORT).show()
+            onNavigateBack()
+        }
     }
 
     // Snackbar only when an error occurs while content is shown (e.g. delete failed).

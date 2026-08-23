@@ -158,6 +158,18 @@ class DesktopLinkViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Denying the camera closes the system dialog and leaves the screen untouched, so without
+     * this the button simply appears to do nothing and there is no hint that Settings is the
+     * way back.
+     */
+    fun onCameraPermissionDenied() {
+        _uiState.value = _uiState.value.copy(
+            isScanning = false,
+            error = UserMessage.Resource(R.string.desktop_error_camera_denied)
+        )
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }
