@@ -37,8 +37,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import com.passmanager.ui.components.AppSnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -223,7 +223,7 @@ fun ViewItemScreen(
                 }
             }
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { AppSnackbarHost(snackbarHostState) }
     ) { padding ->
         when {
             uiState.isLoading -> {
@@ -336,7 +336,6 @@ fun ViewItemScreen(
                                     .background(category.tint.copy(alpha = 0.10f))
                                     .padding(horizontal = 10.dp, vertical = 5.dp)
                             ) {
-                                Icon(category.icon, contentDescription = null, tint = category.tint, modifier = Modifier.size(15.dp))
                                 Text(text = category.label, style = MaterialTheme.typography.labelMedium, color = category.tint)
                             }
                         }

@@ -39,6 +39,7 @@ import com.passmanager.R
 import com.passmanager.domain.model.ItemCategory
 import com.passmanager.domain.validation.cardCvcIsWeak
 import com.passmanager.ui.components.BankPasswordRuleIndicator
+import com.passmanager.ui.vault.categoryFilterChipColors
 import com.passmanager.ui.components.PasswordStrengthBar
 import com.passmanager.ui.components.SecureTextField
 
@@ -65,7 +66,8 @@ internal fun AddEditItemFormCard(
                 FilterChip(
                     selected = uiState.category == cat,
                     onClick = { viewModel.onCategoryChange(cat) },
-                    label = { Text(cat.label) }
+                    label = { Text(cat.label) },
+                    colors = categoryFilterChipColors(cat)
                 )
             }
         }
@@ -183,9 +185,9 @@ internal fun DefaultFormFields(
                 )
             },
             colors = AssistChipDefaults.assistChipColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                leadingIconContentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
         )
     }

@@ -23,8 +23,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import com.passmanager.ui.components.AppSnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -96,7 +96,7 @@ fun LockScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { AppSnackbarHost(snackbarHostState) }
     ) { padding ->
         Box(
             modifier = Modifier
@@ -136,29 +136,21 @@ fun LockScreen(
                 )
                 Spacer(Modifier.height(36.dp))
 
-                Surface(
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                SecureTextField(
+                    value = passphrase,
+                    onValueChange = { passphrase = it },
+                    label = stringResource(R.string.lock_passphrase_hint),
+                    imeAction = ImeAction.Done,
+                    onImeAction = {
+                        if (!uiState.isLoading) {
+                            viewModel.unlockWithPassphrase(passphrase.toCharArray())
+                            passphrase = ""
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .shakeOnTrigger(shakeCount)
-                ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        SecureTextField(
-                            value = passphrase,
-                            onValueChange = { passphrase = it },
-                            label = stringResource(R.string.lock_passphrase_hint),
-                            imeAction = ImeAction.Done,
-                            onImeAction = {
-                                if (!uiState.isLoading) {
-                                    viewModel.unlockWithPassphrase(passphrase.toCharArray())
-                                    passphrase = ""
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
+                )
 
                 Spacer(Modifier.height(16.dp))
 

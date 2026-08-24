@@ -39,8 +39,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import com.passmanager.ui.components.AppSnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -135,7 +135,7 @@ fun SettingsScreen(
                 )
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { AppSnackbarHost(snackbarHostState) }
     ) { paddingValues: PaddingValues ->
         Column(
             modifier = Modifier
@@ -193,8 +193,8 @@ fun SettingsScreen(
                 leadingContent = {
                     SettingIconBox(
                         icon = Icons.Default.VpnKey,
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        iconTint = MaterialTheme.colorScheme.tertiary
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        iconTint = MaterialTheme.colorScheme.primary
                     )
                 },
                 modifier = Modifier.clickable { viewModel.openChangePassphraseSheet() }
@@ -276,8 +276,8 @@ fun SettingsScreen(
                 leadingContent = {
                     SettingIconBox(
                         icon = Icons.Default.Timer,
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        iconTint = MaterialTheme.colorScheme.secondary
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        iconTint = MaterialTheme.colorScheme.primary
                     )
                 },
                 trailingContent = {
@@ -366,8 +366,8 @@ fun SettingsScreen(
                     leadingContent = {
                         SettingIconBox(
                             icon = Icons.Default.BugReport,
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            iconTint = MaterialTheme.colorScheme.onSecondaryContainer
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            iconTint = MaterialTheme.colorScheme.primary
                         )
                     },
                     trailingContent = {

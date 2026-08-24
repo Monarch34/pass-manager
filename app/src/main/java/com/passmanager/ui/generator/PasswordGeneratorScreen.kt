@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,8 +41,8 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import com.passmanager.ui.components.AppSnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -67,7 +68,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.passmanager.ui.components.AppShieldLogo
 import com.passmanager.ui.components.PasswordStrengthBar
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -127,17 +127,10 @@ fun PasswordGeneratorScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            stringResource(R.string.generator_title),
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                        Text(
-                            stringResource(R.string.generator_subtitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        stringResource(R.string.generator_title),
+                        style = MaterialTheme.typography.titleLarge
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -150,7 +143,7 @@ fun PasswordGeneratorScreen(
                 )
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { AppSnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -177,23 +170,7 @@ fun PasswordGeneratorScreen(
                     modifier = Modifier.padding(GenCardPadding),
                     verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
-                    // Header row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        AppShieldLogo(size = 32.dp)
-                        Text(
-                            text = stringResource(R.string.generator_preview_label),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    // Password display
+                    // Password display — the hero of the screen, so nothing sits above it.
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.large,
@@ -244,21 +221,16 @@ fun PasswordGeneratorScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         if (uiState.password.isNotEmpty()) {
-                            Surface(
-                                shape = MaterialTheme.shapes.small,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.generator_entropy_bits, uiState.entropyBits),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
+                            Text(
+                                text = stringResource(R.string.generator_entropy_bits, uiState.entropyBits),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         } else {
                             Spacer(Modifier.width(1.dp))
                         }
                         FilledTonalButton(
+                            colors = brandTonalButtonColors(),
                             onClick = {
                                 if (uiState.password.isNotEmpty()) {
                                     view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
@@ -463,6 +435,7 @@ fun PasswordGeneratorScreen(
 
             // ── Action buttons ─────────────────────────────────────────────────
             FilledTonalButton(
+                colors = brandTonalButtonColors(),
                 onClick = {
                     view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
                     viewModel.generate()
@@ -505,6 +478,17 @@ fun PasswordGeneratorScreen(
         }
     }
 }
+
+/**
+ * Tonal buttons in the primary (teal) family. The M3 default tonal container is
+ * secondaryContainer — indigo here — which read as a second, unrelated accent next to the teal
+ * slider, strength bar and Use button on the same screen.
+ */
+@Composable
+private fun brandTonalButtonColors() = ButtonDefaults.filledTonalButtonColors(
+    containerColor = MaterialTheme.colorScheme.primaryContainer,
+    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+)
 
 @Composable
 private fun CharsetSwitchRow(

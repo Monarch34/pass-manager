@@ -64,6 +64,16 @@ fun AppDrawerContent(
                 icon = { Icon(item.icon, contentDescription = stringResource(item.labelRes), modifier = Modifier.size(24.dp)) },
                 selected = selected,
                 onClick = { if (!selected) onItemClick(item) },
+                // Default drawer selection is secondaryContainer, indigo here, and stretched to
+                // near the sheet width it was the most saturated block in the app. The brand
+                // container keeps the emphasis without introducing a second hue.
+                colors = NavigationDrawerItemDefaults.colors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
             )
         }

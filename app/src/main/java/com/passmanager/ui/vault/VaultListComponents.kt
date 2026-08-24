@@ -193,7 +193,13 @@ fun VaultListFiltersRow(
                 FilterChip(
                     selected = categoryFilter == null,
                     onClick = { onFilterChange(null) },
-                    label = { Text(stringResource(R.string.vault_group_all)) }
+                    label = { Text(stringResource(R.string.vault_group_all)) },
+                    // The brand plays the same role for "All" that each category tint plays for
+                    // its own chip; the default indigo selection belonged to neither system.
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = onTintColor(MaterialTheme.colorScheme.primary)
+                    )
                 )
             }
             items(ItemCategory.entries, key = { it.name }) { category ->
@@ -217,13 +223,13 @@ fun VaultListFiltersRow(
  * category does not appear in two unrelated colors on the same screen.
  */
 @Composable
-private fun categoryFilterChipColors(category: ItemCategory) = FilterChipDefaults.filterChipColors(
+internal fun categoryFilterChipColors(category: ItemCategory) = FilterChipDefaults.filterChipColors(
     selectedContainerColor = category.tint,
     selectedLabelColor = onTintColor(category.tint)
 )
 
 /** Black or white on [tint] — whichever wins the WCAG contrast ratio against it. */
-private fun onTintColor(tint: Color): Color =
+internal fun onTintColor(tint: Color): Color =
     if (contrastRatio(Color.Black, tint) >= contrastRatio(Color.White, tint)) Color.Black
     else Color.White
 

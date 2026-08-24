@@ -51,7 +51,7 @@
     <!-- Item Screens -->
     <string name="item_add_title">Add item</string>
     <string name="item_edit_title">Edit item</string>
-    <string name="item_add_subtitle">Add a login or secure note. Everything stays encrypted on this device.</string>
+    <string name="item_add_subtitle">Everything you save here stays encrypted on this device.</string>
     <string name="item_edit_subtitle">Update this entry. Changes apply when you save.</string>
     <string name="item_view_title">Item Details</string>
     <string name="item_entry_fallback">Entry</string>
@@ -122,8 +122,6 @@
 
     <!-- Password Generator -->
     <string name="generator_title">Generator</string>
-    <string name="generator_subtitle">Random secure password</string>
-    <string name="generator_preview_label">Preview</string>
     <string name="generator_empty_hint">Generate a password below</string>
     <string name="generator_entropy_bits">≈ %1$d bits</string>
     <string name="generator_length_label">Length: %d</string>
@@ -224,7 +222,7 @@
     <string name="desktop_link_verify_instruction">Enter this code on your desktop app to verify the connection.</string>
     <string name="desktop_link_verify_desktop_ip">Connected to %1$s</string>
     <string name="desktop_link_error">Something went wrong</string>
-    <string name="desktop_link_scan_qr_body">Scan the QR code shown on your desktop app to connect securely.</string>
+    <string name="desktop_link_not_connected">No desktop connected</string>
     <string name="desktop_link_scan_to_connect">Scan to connect</string>
     <string name="desktop_link_connecting">Connecting to desktop…</string>
     <string name="desktop_link_connected">Connected</string>

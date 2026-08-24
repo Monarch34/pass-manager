@@ -15,8 +15,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import com.passmanager.ui.components.AppSnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -63,7 +63,7 @@ fun OnboardingScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { AppSnackbarHost(snackbarHostState) }
     ) { padding ->
         Box(
             modifier = Modifier
@@ -101,46 +101,41 @@ fun OnboardingScreen(
                 )
                 Spacer(Modifier.height(40.dp))
 
-                Surface(
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                // The fields sit straight on the gradient: the wrapper plate they used to share
+                // added a third nesting level (background, plate, outlined field) that no other
+                // screen has.
+                SecureTextField(
+                    value = passphrase,
+                    onValueChange = { passphrase = it },
+                    label = stringResource(R.string.onboarding_passphrase_hint),
+                    imeAction = ImeAction.Next,
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        SecureTextField(
-                            value = passphrase,
-                            onValueChange = { passphrase = it },
-                            label = stringResource(R.string.onboarding_passphrase_hint),
-                            imeAction = ImeAction.Next,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                )
 
-                        if (passphrase.isNotEmpty()) {
-                            Spacer(Modifier.height(8.dp))
-                            PasswordStrengthBar(
-                                password = passphrase,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        SecureTextField(
-                            value = confirm,
-                            onValueChange = { confirm = it },
-                            label = stringResource(R.string.onboarding_confirm_hint),
-                            imeAction = ImeAction.Done,
-                            onImeAction = {
-                                if (!uiState.isLoading) {
-                                    viewModel.createVault(passphrase.toCharArray(), confirm.toCharArray())
-                                    passphrase = ""
-                                    confirm = ""
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
+                if (passphrase.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    PasswordStrengthBar(
+                        password = passphrase,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
+
+                Spacer(Modifier.height(16.dp))
+
+                SecureTextField(
+                    value = confirm,
+                    onValueChange = { confirm = it },
+                    label = stringResource(R.string.onboarding_confirm_hint),
+                    imeAction = ImeAction.Done,
+                    onImeAction = {
+                        if (!uiState.isLoading) {
+                            viewModel.createVault(passphrase.toCharArray(), confirm.toCharArray())
+                            passphrase = ""
+                            confirm = ""
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 Spacer(Modifier.height(32.dp))
 
