@@ -3,21 +3,27 @@ package com.passmanager.ui.vault
 import androidx.compose.animation.core.AnimationState
 import androidx.compose.animation.core.DecayAnimationSpec
 import androidx.compose.animation.core.animateDecay
-import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.rememberSplineBasedDecay
 import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 
 /**
- * Higher = fling stops sooner (less “flying” after lift). Tweak if the list still feels too fast/slow.
- * Typical range: 1.2f (near default) … 2.0f (heavy braking).
+ * Scales the initial fling velocity before the decay runs.
+ *
+ * `1f` is the platform feel: the list travels exactly as far as every other Android list does for
+ * the same flick. Lowering it brakes the fling — which reads as "scrolling is slow" rather than as
+ * "controlled", because the finger movement and the resulting travel stop matching. Only go below
+ * 1f if you have a specific complaint that the list overshoots.
  */
-private const val VaultListFlingFrictionMultiplier = 1.55f
+private const val VaultListFlingVelocityScale = 1f
 
-/** Scales down initial fling speed before decay (0f–1f). */
-private const val VaultListFlingVelocityScale = 0.82f
-
+/**
+ * Fling that decays on the same spline Android's own scrollers use, so the deceleration curve
+ * matches the system. The previous spec was an exponential decay, which brakes hardest right after the
+ * lift, which is the part of the gesture the eye reads as sluggishness.
+ */
 private class VaultListFlingBehavior(
     private val decaySpec: DecayAnimationSpec<Float>
 ) : FlingBehavior {
@@ -39,7 +45,8 @@ private class VaultListFlingBehavior(
 
 @Composable
 internal fun rememberVaultListFlingBehavior(): FlingBehavior {
-    return remember {
-        VaultListFlingBehavior(exponentialDecay(frictionMultiplier = VaultListFlingFrictionMultiplier))
-    }
+    // Density-aware: the spline spec is derived from the current density, so it must be read in
+    // composition rather than captured in a density-free `remember { }` the way the old spec was.
+    val decaySpec = rememberSplineBasedDecay<Float>()
+    return remember(decaySpec) { VaultListFlingBehavior(decaySpec) }
 }

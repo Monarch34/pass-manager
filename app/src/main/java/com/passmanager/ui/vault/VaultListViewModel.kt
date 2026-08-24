@@ -46,7 +46,6 @@ sealed interface VaultListError {
 
 @Immutable
 data class VaultListUiState(
-    val items: List<VaultItemHeader> = emptyList(),
     val searchQuery: String = "",
     val filteredItems: List<VaultItemHeader> = emptyList(),
     /** Snapshot of decrypted titles/addresses for list rows (avoids a second StateFlow collect). */
@@ -115,8 +114,10 @@ class VaultListViewModel @Inject constructor(
 
         viewModelScope.launch {
             observeVaultHeadersUseCase().collect { headers ->
+                // Deliberately not mirrored into _uiState: the screen only ever renders
+                // filteredItems, so publishing the raw list too recomposed the whole vault screen
+                // a second time for every database emission without changing a single pixel.
                 _items.value = headers
-                _uiState.update { it.copy(items = headers) }
                 if (lockStateProvider.lockState.value is LockState.Unlocked) {
                     decryptionManager.decryptHeaders(headers, viewModelScope)
                 }
@@ -236,11 +237,11 @@ private fun filterBySearchAndGroup(
     headerCache: VaultListHeaderCache,
     groupFilter: ItemCategory?
 ): List<VaultItemHeader> {
+    val q = query.trim()
     return items.filter { item ->
         val groupOk = groupFilter == null || item.category == groupFilter
         if (!groupOk) return@filter false
-        if (query.isBlank()) return@filter true
-        val q = query.trim()
+        if (q.isEmpty()) return@filter true
         val title = headerCache.titles[item.id].orEmpty()
         val address = headerCache.addresses[item.id].orEmpty()
         title.contains(q, ignoreCase = true) ||
@@ -256,10 +257,16 @@ private fun sortVaultItems(
     titles: Map<String, String>
 ): List<VaultItemHeader> {
     return when (order) {
-        VaultSortOrder.NAME_ASC -> items.sortedWith(
-            compareBy<VaultItemHeader> { titles[it.id].orEmpty().lowercase() }
-                .thenBy { it.id }
-        )
+        VaultSortOrder.NAME_ASC -> {
+            // The comparator runs O(n log n) times, so lowercasing inside it allocated a fresh
+            // String per comparison. Precomputing the key allocates once per item instead.
+            val sortKeys = HashMap<String, String>(items.size)
+            items.forEach { sortKeys[it.id] = titles[it.id].orEmpty().lowercase() }
+            items.sortedWith(
+                compareBy<VaultItemHeader> { sortKeys[it.id].orEmpty() }
+                    .thenBy { it.id }
+            )
+        }
         VaultSortOrder.DATE_NEWEST -> items.sortedByDescending { it.updatedAt }
         VaultSortOrder.DATE_OLDEST -> items.sortedBy { it.updatedAt }
     }

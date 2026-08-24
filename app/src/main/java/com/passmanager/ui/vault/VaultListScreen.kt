@@ -67,7 +67,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.passmanager.R
 import com.passmanager.domain.model.ItemCategory
 import com.passmanager.domain.model.VaultSortOrder
-import com.passmanager.ui.components.AppShieldLogo
 import com.passmanager.ui.components.ConfirmDeleteDialog
 import com.passmanager.ui.components.ErrorSnackbarEffect
 import com.passmanager.ui.components.SkeletonLoading
