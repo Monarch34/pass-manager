@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
+import com.passmanager.BuildConfig
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -76,11 +77,17 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Prevent screenshots and screen-recorders from capturing sensitive data
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE
-        )
+        // Prevent screenshots and screen-recorders from capturing sensitive data. Debug builds
+        // are exempt on purpose: FLAG_SECURE also blanks `adb screencap`, which makes visual bugs
+        // impossible to capture or bisect — the doubled list icon was only diagnosable from a
+        // screenshot. The flag this protects users with is a release property; a debug build's
+        // vault holds developer test data.
+        if (!BuildConfig.DEBUG) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            )
+        }
 
         NotificationPermissionRequester.attach(requestNotificationPermission)
 
