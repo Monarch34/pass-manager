@@ -42,41 +42,61 @@ dependencies {
     testImplementation("io.ktor:ktor-client-websockets:$ktorVersion")
 }
 
+// The packaging rasters are rendered from the LogoPalette tokens at build time instead of being
+// committed as binaries. Checked-in .png/.ico files were the only copies of the mark that could not
+// follow a palette or coordinate edit, which is how the installer and Start-menu icon ended up
+// showing older art than the running app.
+val appIconsDir = layout.buildDirectory.dir("generated/app-icons")
+val generateAppIcons = tasks.register<JavaExec>("generateAppIcons") {
+    group = "build"
+    description = "Renders app-icon.png and app-icon.ico from the LogoPalette tokens."
+    // project.the<>(): inside a task-configuration block the implicit receiver is the task, which is
+    // ExtensionAware in its own right and carries no SourceSetContainer.
+    classpath = project.the<SourceSetContainer>()["main"].runtimeClasspath
+    mainClass.set("com.passmanager.desktop.tools.AppIconGeneratorKt")
+    // The generator only rasterises through Java2D; a headless JVM keeps it usable on CI.
+    systemProperty("java.awt.headless", "true")
+    argumentProviders.add(CommandLineArgumentProvider { listOf(appIconsDir.get().asFile.absolutePath) })
+    outputs.dir(appIconsDir)
+}
+
 compose.desktop {
     application {
         mainClass = "com.passmanager.desktop.MainKt"
 
         // Development: `./gradlew run`. Production Windows installer: `./gradlew packageMsi` (full JDK + WiX on build machine — see docs/BUILD.md).
         nativeDistributions {
+            // macOS is deliberately absent: there is no `macOS { }` block here and no .icns can be
+            // produced in this repo, so declaring Dmg would ship an artifact carrying jpackage's
+            // default Java icon and no bundle identifier. Re-adding it means adding an .icns plus a
+            // `macOS { iconFile; bundleID }` block in the same change.
             targetFormats(
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb
             )
             packageName = "PassManager Desktop"
             packageVersion = project.version.toString()
 
             windows {
+                // Both default to false, so menuGroup alone was inert: jpackage produced neither a
+                // Start-menu entry nor a desktop shortcut, which are the two places the .ico below
+                // is meant to appear.
+                menu = true
+                shortcut = true
                 menuGroup = "PassManager"
                 upgradeUuid = "d4e7f8a1-2b3c-4d5e-6f7a-8b9c0d1e2f3a"
 
-                // Installer, Start menu and shortcut icon. The .ico is a binary asset that is
-                // generated outside the build; when it is missing, jpackage falls back to its
-                // own default icon rather than failing configuration.
-                val windowsIcon = project.file("src/main/resources/app-icon.ico")
-                if (windowsIcon.exists()) {
-                    iconFile.set(windowsIcon)
-                }
+                // Installer, Start menu and shortcut icon, rendered by generateAppIcons. Mapping the
+                // TaskProvider carries the dependency, so packaging runs the generator first.
+                iconFile.set(generateAppIcons.map { appIconsDir.get().file("app-icon.ico") })
             }
 
-            // Deb is a declared target format, so the .png is a packaging input rather than dead
-            // weight in the jar. macOS is left on the jpackage default: .icns cannot be produced
-            // here, and Compose Desktop only builds the host OS format anyway.
             linux {
-                val linuxIcon = project.file("src/main/resources/app-icon.png")
-                if (linuxIcon.exists()) {
-                    iconFile.set(linuxIcon)
-                }
+                // Debian package names must be lowercase and space-free. Without this the name is
+                // sanitised out of "PassManager Desktop" by the bundler rather than chosen here,
+                // alongside the menuGroup and upgradeUuid this file already pins.
+                packageName = "passmanager-desktop"
+                iconFile.set(generateAppIcons.map { appIconsDir.get().file("app-icon.png") })
             }
         }
     }

@@ -55,7 +55,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.passmanager.protocol.ItemSummary
 import com.passmanager.desktop.ui.theme.CategoryBankTint
 import com.passmanager.desktop.ui.theme.CategoryCardTint
@@ -224,10 +223,10 @@ fun VaultBrowserScreen(
                 Spacer(Modifier.height(8.dp))
                 FaviconSourceSection(
                     useGoogleFavicons = useGoogleFavicons,
-                    onSelectPrivate = {
+                    onSelectOff = {
                         if (useGoogleFavicons) onFaviconSourceChange(false)
                     },
-                    onSelectGoogle = {
+                    onSelectOn = {
                         if (!useGoogleFavicons) onFaviconSourceChange(true)
                     },
                     compact = true
@@ -243,10 +242,10 @@ fun VaultBrowserScreen(
                 Spacer(Modifier.height(8.dp))
                 FaviconSourceSection(
                     useGoogleFavicons = useGoogleFavicons,
-                    onSelectPrivate = {
+                    onSelectOff = {
                         if (useGoogleFavicons) onFaviconSourceChange(false)
                     },
-                    onSelectGoogle = {
+                    onSelectOn = {
                         if (!useGoogleFavicons) onFaviconSourceChange(true)
                     },
                     compact = true
@@ -391,12 +390,14 @@ private fun VaultItemRow(
     }
 }
 
-// ── Favicon loading with cache ──────────────────────────────────────────
+// ── Site icons ──────────────────────────────────────────────────────────
 //
-// Private mode: only `https://domain/favicon.ico`. Optional Google s2 (user toggle)
-// matches Android for better coverage; domain is sent to Google in that mode.
+// One contract, identical to Android's. Off (the default) is zero network requests of any kind and
+// the entry shows its category icon. On is exactly one request, to www.google.com. No other host is
+// ever contacted in either state — there is no per-site hop and no fallback host.
 //
-// Quick wins: bounded LRU cache, limited concurrent loads, smaller Google sz=.
+// Around that: a bounded LRU cache, a negative cache so a miss is not retried on every scroll, and a
+// semaphore capping concurrent loads.
 
 private const val MAX_FAVICON_CACHE_ENTRIES = 128
 private const val MAX_CONCURRENT_FAVICON_LOADS = 4
@@ -448,37 +449,52 @@ private fun FaviconIcon(
     fallbackTint: Color,
     modifier: Modifier = Modifier
 ) {
-    val cacheKey = remember(domain, useGoogleFavicons) { cacheKeyFor(domain, useGoogleFavicons) }
-    val cached = remember(cacheKey) { faviconCacheGet(cacheKey) }
-    val bitmapState = remember(cacheKey) { mutableStateOf(cached) }
-    val loaded = remember(cacheKey) {
-        mutableStateOf(cached != null || faviconMissContains(cacheKey))
+    if (!useGoogleFavicons) {
+        // Off means the request is never made, not made and discarded: no LaunchedEffect is started
+        // and no socket is opened. Same behaviour as the phone.
+        Icon(
+            fallbackIcon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = fallbackTint
+        )
+        return
     }
 
-    LaunchedEffect(cacheKey) {
-        faviconCacheGet(cacheKey)?.let { hit ->
+    // One mode, so the bare domain is the store key.
+    val cached = remember(domain) { faviconCacheGet(domain) }
+    val bitmapState = remember(domain) { mutableStateOf(cached) }
+    val loaded = remember(domain) {
+        mutableStateOf(cached != null || faviconMissContains(domain))
+    }
+
+    LaunchedEffect(domain) {
+        if (loaded.value) return@LaunchedEffect
+        faviconCacheGet(domain)?.let { hit ->
             bitmapState.value = hit
             loaded.value = true
             return@LaunchedEffect
         }
-        if (faviconMissContains(cacheKey)) {
+        if (faviconMissContains(domain)) {
             loaded.value = true
             return@LaunchedEffect
         }
-        if (!loaded.value) {
-            val bitmap = faviconLoadSemaphore.withPermit {
-                withContext(Dispatchers.IO) {
-                    faviconCacheGet(cacheKey) ?: loadFavicon(domain, useGoogleFavicons)
-                }
+        // The cache write happens on the loader thread, not after the await. The body is blocking
+        // HttpURLConnection I/O and so is not cancellable: when a row scrolls out the socket runs to
+        // completion anyway, and recording the outcome here keeps that work. Writing after the await
+        // instead dropped the result and skipped the negative cache — the one thing bounding this
+        // exposure — precisely when the user was scrolling fastest.
+        val bitmap = faviconLoadSemaphore.withPermit {
+            withContext(Dispatchers.IO) {
+                val hit = faviconCacheGet(domain)
+                if (hit != null) return@withContext hit
+                val fetched = loadFaviconFromGoogle(domain)
+                if (fetched != null) faviconCachePut(domain, fetched) else faviconMissAdd(domain)
+                fetched
             }
-            if (bitmap != null) {
-                faviconCachePut(cacheKey, bitmap)
-            } else {
-                faviconMissAdd(cacheKey)
-            }
-            bitmapState.value = bitmap
-            loaded.value = true
         }
+        bitmapState.value = bitmap
+        loaded.value = true
     }
 
     val bitmap = bitmapState.value
@@ -488,15 +504,10 @@ private fun FaviconIcon(
             contentDescription = null,
             modifier = modifier.clip(RoundedCornerShape(6.dp))
         )
-    } else if (loaded.value) {
-        // Fetch completed but no favicon — show letter avatar
-        LetterAvatar(
-            letter = domain.firstOrNull()?.uppercaseChar() ?: '?',
-            tint = fallbackTint,
-            modifier = modifier
-        )
     } else {
-        // Still loading — show category icon as placeholder
+        // Loading, missing, blocked — every non-success state shows the category icon. A letter
+        // avatar here would break this file's own rule that an item may not change glyph depending
+        // on which screen it is read on.
         Icon(
             fallbackIcon,
             contentDescription = null,
@@ -506,36 +517,31 @@ private fun FaviconIcon(
     }
 }
 
-private fun cacheKeyFor(domain: String, useGoogle: Boolean): String =
-    "$domain|${if (useGoogle) "g" else "p"}"
-
 /**
- * When [useGoogleResolver] is true, tries Google s2 first (same as Android), then direct ICO.
- * When false, only `https://domain/favicon.ico` — no third party.
+ * The only network path in this file: one GET to t0.gstatic.com, which answers with a PNG, or with a
+ * 404 for a domain it has no icon for, which this treats as a miss.
+ *
+ * The address is Google's icon CDN rather than `www.google.com/s2/favicons`, and that is the whole
+ * reason redirects can stay off. The s2 address answers 301 and forwards to exactly this URL, so
+ * with [openAndDecodeFavicon] refusing redirects it would return nothing at all — while the setting
+ * still promised the user their addresses were being sent somewhere. Asking the CDN directly makes
+ * the one-host promise both true and enforced.
+ *
+ * The direct `https://<domain>/favicon.ico` hop that used to sit beside this — and was the desktop
+ * default, and its only source — is deleted rather than repaired. ImageIO on JDK 17 has no ICO
+ * reader at all (`getImageReadersByFormatName("ico")` is empty, and no TwelveMonkeys/image4j plugin
+ * is declared here), so that mode paid the full network and privacy cost of contacting every site in
+ * the vault and then discarded the result for every site serving a genuine ICO container.
+ *
+ * `sz=128` matches Android, where the mark is drawn at 60.dp — 180 px on a 3x device.
  */
-private fun loadFavicon(domain: String, useGoogleResolver: Boolean): ImageBitmap? {
-    if (useGoogleResolver) {
-        loadFaviconFromGoogle(domain)?.let { return it }
-    }
-    return loadFaviconDirect(domain)
-}
-
 private fun loadFaviconFromGoogle(domain: String): ImageBitmap? {
     return try {
-        val enc = URLEncoder.encode(domain, StandardCharsets.UTF_8)
-        val url = URI("https://www.google.com/s2/favicons?domain=$enc&sz=64").toURL()
-        openAndDecodeFavicon(url)
-    } catch (_: Exception) {
-        null
-    }
-}
-
-/**
- * Fetches /favicon.ico directly from the domain over HTTPS (private mode).
- */
-private fun loadFaviconDirect(domain: String): ImageBitmap? {
-    return try {
-        val url = URI("https://$domain/favicon.ico").toURL()
+        val enc = URLEncoder.encode("https://$domain", StandardCharsets.UTF_8)
+        val url = URI(
+            "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON" +
+                "&fallback_opts=TYPE,SIZE,URL&url=$enc&size=128"
+        ).toURL()
         openAndDecodeFavicon(url)
     } catch (_: Exception) {
         null
@@ -544,35 +550,24 @@ private fun loadFaviconDirect(domain: String): ImageBitmap? {
 
 private fun openAndDecodeFavicon(url: java.net.URL): ImageBitmap? {
     return try {
-        val conn = url.openConnection()
+        val conn = url.openConnection() as java.net.HttpURLConnection
         conn.connectTimeout = 3000
         conn.readTimeout = 3000
-        conn.setRequestProperty("User-Agent", "PassManager-Desktop/1.0")
-        val awtImage = conn.getInputStream().use { input ->
-            ImageIO.read(input)
-        } ?: return null
-        awtImage.toComposeImageBitmap()
+        // Redirects off, and no User-Agent of our own. HttpURLConnection follows redirects by
+        // default, which on favicon URLs routinely lands on CDNs and marketing domains — silently
+        // contacting hosts this feature promises never to contact. The old "PassManager-Desktop/1.0"
+        // header turned an otherwise anonymous hit into a log line tying the user's IP to a site
+        // they hold credentials for.
+        conn.instanceFollowRedirects = false
+        if (conn.responseCode != 200) {
+            conn.disconnect()
+            return null
+        }
+        val awtImage = conn.inputStream.use { input -> ImageIO.read(input) }
+        conn.disconnect()
+        awtImage?.toComposeImageBitmap()
     } catch (_: Exception) {
         null
-    }
-}
-
-@Composable
-private fun LetterAvatar(letter: Char, tint: Color, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(6.dp),
-        color = tint.copy(alpha = 0.15f)
-    ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-            Text(
-                text = letter.toString(),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = tint,
-                fontSize = 14.sp
-            )
-        }
     }
 }
 

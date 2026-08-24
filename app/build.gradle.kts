@@ -204,6 +204,7 @@ dependencies {
 
     // Image loading (favicons)
     implementation(libs.coil.compose)
+    implementation(libs.okhttp)
 
     // Ktor client (connects to desktop pairing server over LAN)
     implementation(libs.ktor.client.core)

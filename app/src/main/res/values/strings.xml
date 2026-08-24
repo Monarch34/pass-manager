@@ -169,9 +169,9 @@
     <string name="settings_auto_lock_5min">5 minutes</string>
     <string name="settings_auto_lock_15min">15 minutes</string>
     <string name="settings_auto_lock_30min">30 minutes</string>
-    <string name="settings_site_icons_title">Rich site icons</string>
-    <string name="settings_site_icons_subtitle_google">Uses Google’s favicon service for clearer icons. The site address is sent to Google.</string>
-    <string name="settings_site_icons_subtitle_private">Loads each site’s favicon only from that site. Nothing is sent to third parties; some icons may be missing.</string>
+    <string name="settings_site_icons_title">Site icons</string>
+    <string name="settings_site_icons_subtitle_on">On: the site address is sent to Google’s icon service (t0.gstatic.com), which returns the icon. No other host is contacted, and redirects away from it are refused.</string>
+    <string name="settings_site_icons_subtitle_off">Off: no icon is downloaded and no network request is made. Entries show their category icon.</string>
     <string name="settings_change_passphrase_title">Change Master Passphrase</string>
     <string name="settings_change_passphrase_subtitle">Re-encrypt your vault key with a new passphrase</string>
     <string name="settings_change_passphrase_sheet_title">Change Passphrase</string>
@@ -206,6 +206,7 @@
     <string name="ok">OK</string>
     <string name="error_unknown">An unexpected error occurred</string>
     <string name="error_biometric_invalidated">Biometric keys were invalidated. Please unlock with your passphrase.</string>
+    <string name="favicon_content_description">Icon for %1$s</string>
 
     <!-- Navigation -->
     <string name="nav_open_drawer">Open navigation menu</string>

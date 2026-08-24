@@ -11,7 +11,7 @@ The repository contains **two applications** (Android `:app`, desktop under **`d
 | **Android** (`app/`) | Vault, Argon2, biometrics, QR scan to pair |
 | **Desktop** (`desktop/`) | Compose UI + small Ktor server for pairing |
 
-Everything stays on device / LAN. No cloud backend, no accounts.
+The vault, its keys and all cryptography stay on the device; pairing traffic stays on the LAN. No cloud backend, no accounts. The one optional outbound connection anywhere in the product is the **Site icons** setting, which is off by default and, when on, contacts `t0.gstatic.com` and no other host.
 
 ---
 
@@ -25,9 +25,9 @@ License: [MIT](LICENSE). Layout: [docs/REPOSITORY_LAYOUT.md](docs/REPOSITORY_LAY
 - **Biometric unlock** through Android Keystore (new fingerprint enrollment invalidates the key).
 - **Desktop pairing** over LAN: **X25519** per session, **HKDF-SHA256** for the session key, **8-character safety number** for MITM detection before the session is trusted. Subsequent traffic uses **AES-GCM** with direction-prefixed nonces; replay attempts are rejected.
 - Toolbar **refresh** on desktop re-fetches vault metadata from the phone; the phone rate-limits how often that’s allowed.
-- Vault build has **no INTERNET permission** — network is for pairing, and that’s LAN-only.
+- The app declares `android.permission.INTERNET`: pairing is LAN-only, and the single WAN use is the optional **Site icons** lookup, which is off by default.
 - Titles/addresses are stored encrypted per field so the list can render without decrypting whole items.
-- **Rich site icons:** Android defaults to Google’s favicon helper; desktop defaults to direct/private fetch. Both can be toggled in settings.
+- **Site icons:** off by default on both platforms — no icon request is made at all. When switched on (Android: Settings; desktop: the control above the vault list) each entry’s site address is sent to `t0.gstatic.com` — Google’s icon CDN, which is where `www.google.com/s2/favicons` redirects to anyway — and no other host is contacted, because the loader refuses to follow redirects.
 
 ---
 

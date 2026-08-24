@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.passmanager.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.atomic.AtomicInteger
@@ -58,13 +59,15 @@ class DesktopPairingNotificationHelper @Inject constructor(
         // Both versions carry the same copy: the private one is already name-free, and stating the
         // public version explicitly keeps the lock screen safe if that text ever regains detail.
         val publicVersion = NotificationCompat.Builder(appContext, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification_shield)
+            .setColor(ContextCompat.getColor(appContext, R.color.logo_teal_light))
             .setContentTitle(title)
             .setContentText(text)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
         val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification_shield)
+            .setColor(ContextCompat.getColor(appContext, R.color.logo_teal_light))
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

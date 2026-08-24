@@ -37,6 +37,9 @@ kotlinxSerialization = "1.7.3"
 
 # Image loading
 coil = "2.7.0"
+# Coil's HTTP engine. Declared explicitly because the app configures it (redirects off) rather than
+# taking Coil's defaults; keep in step with whatever Coil resolves to.
+okhttp = "4.12.0"
 
 # Ktor (HTTP client for desktop pairing)
 ktor = "2.3.13"
@@ -112,6 +115,7 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 
 # Image loading
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 
 # Ktor client (connects to desktop pairing server)
 ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }

@@ -35,7 +35,7 @@ import com.passmanager.desktop.server.PairingServer
 import com.passmanager.desktop.ui.PairScreen
 import com.passmanager.desktop.ui.Strings
 import com.passmanager.desktop.ui.clearDesktopFaviconMemoryCaches
-import com.passmanager.desktop.ui.components.renderVaultLogoAwt
+import com.passmanager.desktop.ui.components.renderAppIconAwt
 import com.passmanager.desktop.ui.VaultBrowserScreen
 import com.passmanager.desktop.ui.VerifyScreen
 import com.passmanager.desktop.ui.theme.PassManagerDesktopTheme
@@ -61,7 +61,13 @@ fun main() = application {
     // Drawn once and shared: the Compose window decoration takes the ImageBitmap, the OS shell
     // (taskbar, ALT+TAB) reads the AWT image off the frame. Rendering twice would redo the same
     // vector work at every launch.
-    val appIconImage = remember { renderVaultLogoAwt(WINDOW_ICON_SIZE_PX) }
+    //
+    // This is the plated square icon — byte-for-byte the same composition the generated
+    // app-icon.ico carries, so the running window, ALT+TAB, the taskbar and the installed shortcut
+    // all show one mark. The previous renderer returned a non-square 213x256 shield with zero
+    // padding down the sides while the shipped .ico was square with a ~12% margin, so the same app
+    // looked like two products depending on where you saw it.
+    val appIconImage = remember { renderAppIconAwt(WINDOW_ICON_SIZE_PX) }
     val appIcon = remember(appIconImage) { BitmapPainter(appIconImage.toComposeImageBitmap()) }
 
     // Reactive QR content — updates when a new session is generated
@@ -365,7 +371,10 @@ private fun gracefulShutdown(
 
 private const val SHUTDOWN_TIMEOUT_MS = 3000L
 
-/** Rendered once at startup; large enough for HiDPI taskbars, which downscale it themselves. */
+/**
+ * Square edge of the window icon in pixels. Rendered once at startup; large enough for HiDPI
+ * taskbars, which downscale it themselves.
+ */
 private const val WINDOW_ICON_SIZE_PX = 256
 
 /**

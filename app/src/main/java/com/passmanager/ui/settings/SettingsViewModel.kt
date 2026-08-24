@@ -19,6 +19,8 @@ import com.passmanager.ui.common.UserMessage
 import coil.imageLoader
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -147,10 +149,18 @@ class SettingsViewModel @Inject constructor(
     fun setUseGoogleFavicons(enabled: Boolean) {
         viewModelScope.launch {
             appSettings.setUseGoogleFavicons(enabled)
+            // Cleared in both directions, so turning the setting back on retries the domains that
+            // failed while it was last on instead of inheriting a stale session of misses.
+            com.passmanager.ui.components.clearFaviconMissDomains()
             if (!enabled) {
-                val loader = context.imageLoader
-                loader.memoryCache?.clear()
-                loader.diskCache?.clear()
+                // DiskCache.clear() is a synchronous file-tree delete and viewModelScope is
+                // Main.immediate, so leaving it on the calling thread put blocking I/O on the UI
+                // thread at the exact moment a privacy-conscious user flips the switch.
+                withContext(Dispatchers.IO) {
+                    val loader = context.imageLoader
+                    loader.memoryCache?.clear()
+                    loader.diskCache?.clear()
+                }
             }
         }
     }

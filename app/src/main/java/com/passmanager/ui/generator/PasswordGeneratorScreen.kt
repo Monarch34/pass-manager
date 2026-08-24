@@ -183,7 +183,7 @@ fun PasswordGeneratorScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        AppShieldLogo(size = 32.dp, iconSize = 18.dp)
+                        AppShieldLogo(size = 32.dp)
                         Text(
                             text = stringResource(R.string.generator_preview_label),
                             style = MaterialTheme.typography.titleSmall,

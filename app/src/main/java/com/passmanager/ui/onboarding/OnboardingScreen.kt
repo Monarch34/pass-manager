@@ -87,7 +87,7 @@ fun OnboardingScreen(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                AppShieldLogo(size = 96.dp, iconSize = 48.dp)
+                AppShieldLogo(size = 96.dp)
                 Spacer(Modifier.height(20.dp))
                 Text(
                     text = stringResource(R.string.app_name),

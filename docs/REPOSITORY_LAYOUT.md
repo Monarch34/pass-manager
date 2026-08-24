@@ -50,7 +50,7 @@ Separate Gradle project: `settings.gradle.kts`, `gradle/`, `gradlew*`, and `libs
 | `desktop/build.gradle.kts` | Compose Desktop app + `nativeDistributions` (MSI, etc.) |
 | `desktop/gradle.properties.example` | Optional `org.gradle.java.home` for `packageMsi` (full JDK; copy to `gradle.properties`, gitignored) |
 | `desktop/src/main/kotlin/` | UI, Ktor server, crypto glue |
-| `desktop/src/main/resources/` | Fonts and static resources |
+| `desktop/src/main/resources/` | Fonts and static resources (app icons are generated — see `:desktop:generateAppIcons`) |
 
 `desktop/build/` and `desktop/.gradle/` are build outputs (gitignored).
 

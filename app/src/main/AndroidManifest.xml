@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- HTTP client for desktop pairing (LAN). No outbound cloud traffic. -->
+    <!-- HTTP client for desktop pairing (LAN) and, when the Site icons setting is switched on, one
+         request per vault domain to t0.gstatic.com, Google's icon CDN. No other host is ever
+         contacted: the icon loader
+         refuses to follow redirects, so a 3xx away from Google is treated as a miss. Site icons is
+         off by default, and with it off the app makes no WAN request at all. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />

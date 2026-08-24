@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Monochrome layer for Android 13+ themed icons. The launcher keeps only this drawable's alpha
+  channel and then tints it, so the mark has to be one flat silhouette with the keyhole punched out
+  via evenOdd; painting the keyhole in a second colour would only become more silhouette.
+
+  The group transform is the same one ic_launcher_foreground.xml's insets produce (translate
+  24.0/8.625, scale 0.15), so the themed icon registers with the full-colour one instead of sitting
+  a few units off it.
+
+  This is a simplification of ic_vault_shield.xml, not a copy: the V wings, the circuit traces and
+  the inner shield are dropped on purpose, because at themed-icon size they close into the body and
+  read as noise. Do not resync it from the launcher paths. The two subpaths — outer outline and
+  keyhole — must never be allowed to overlap, because evenOdd would refill the overlap.
+
+  The pathData below is byte-identical to ic_notification_shield.xml's and must stay that way.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="24.0"
+        android:translateY="8.625"
+        android:scaleX="0.15"
+        android:scaleY="0.15">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M200,135 L169,140 L169,170 L60,190 C60,340 110,430 200,470 C290,430 340,340 340,190 L231,170 L231,140 Z M215,304 A30,30 0 1,0 185,304 L188,340 L212,340 Z" />
+    </group>
+</vector>

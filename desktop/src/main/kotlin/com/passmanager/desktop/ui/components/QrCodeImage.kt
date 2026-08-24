@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import com.passmanager.desktop.ui.Strings
 import java.awt.image.BufferedImage
 
 @Composable
@@ -20,7 +21,7 @@ fun QrCodeImage(
     val bitmap = remember(content, size) { generateQrBitmap(content, size) }
     Image(
         bitmap = bitmap,
-        contentDescription = "QR Code for pairing",
+        contentDescription = Strings.QR_CONTENT_DESCRIPTION,
         modifier = modifier
     )
 }

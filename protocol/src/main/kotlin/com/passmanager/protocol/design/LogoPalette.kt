@@ -8,9 +8,13 @@ package com.passmanager.protocol.design
  * same shield and must draw it in the same colors. Values are plain ARGB [Long] constants, always
  * fully opaque, so this module stays dependency-free pure JVM.
  *
- * The plate behind the shield is not part of this object — it is the scheme's `primaryContainer`
- * ([Palette.LIGHT_PRIMARY_CONTAINER] / [Palette.DARK_PRIMARY_CONTAINER]), so it follows the theme
- * while the shield art itself stays identical in light and dark.
+ * The plate behind the shield is not part of this object, but it is not free either: it is pinned to
+ * [Palette.LIGHT_PRIMARY_CONTAINER] in both themes on both platforms (mirrored on Android as
+ * `@color/ic_launcher_primary_container`). A theme-following plate was tried and abandoned — the
+ * shield art below is fixed light-scheme colour, so on the dark scheme's `primaryContainer` the
+ * outer shield measured 1.22:1 against its own backdrop and the mark all but vanished. Against the
+ * pinned mint it measures 4.05:1 ([TEAL_LIGHT]) and 5.43:1 ([TEAL_DARK]), and the launcher icon, the
+ * notification chip and both in-app marks become literally the same lockup.
  */
 object LogoPalette {
 

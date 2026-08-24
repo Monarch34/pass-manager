@@ -15,11 +15,20 @@
     <!-- Adaptive launcher plate: Palette.LIGHT_PRIMARY_CONTAINER.
          Night-independent on purpose: the launcher renders the adaptive icon in its own context and
          the store listing icon is a single asset, so a night-varying icon color would make the same
-         app look different from device to device and disagree with the store. -->
+         app look different from device to device and disagree with the store.
+
+         Despite the name, this value is no longer only the launcher's: it is the plate for every
+         surface of the mark — the adaptive-icon background, the Android in-app AppShieldLogo
+         Surface, and (mirrored as Palette.LIGHT_PRIMARY_CONTAINER) the desktop in-app plate and the
+         generated desktop app icon. It is deliberately not renamed to something surface-neutral
+         because ColorResourceTokenTest pins this exact name. -->
     <color name="ic_launcher_primary_container">#FFCCFBF1</color>
 
     <!-- Vault shield logo: LogoPalette, shared with the desktop AppShieldLogo renderer.
-         Used by drawable/ic_launcher_foreground.xml; the shield art is identical in light and dark. -->
+         Consumed by drawable/ic_vault_shield.xml — the single canonical drawing, referenced in turn
+         by the adaptive-icon foreground and by the in-app logo — and by DesktopPairingNotificationHelper,
+         which passes @color/logo_teal_light as the notification accent tint.
+         The shield art is identical in light and dark. -->
     <color name="logo_teal_dark">#FF1A6D68</color>
     <color name="logo_teal_light">#FF21837D</color>
     <color name="logo_inner_left">#FFC8E6DA</color>

@@ -1,6 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The single canonical colour drawing of the vault shield. The adaptive-icon foreground
+  (ic_launcher_foreground.xml) and the in-app AppShieldLogo both reference this file rather than
+  carrying their own copy: the two used to be byte-identical apart from ten stroke colours, and that
+  lone difference is exactly how they drifted apart.
+
+  The viewport is the shield's own bounding box — 280x335, i.e. x 60..340 and y 135..470 once the
+  group translate is applied — so every caller frames the mark by transform alone and none of them
+  has to re-express the geometry in its own units.
+
+  The declared 42 x 50.25dp is the size this art occupies inside the 108dp adaptive-icon canvas, not
+  a size anything renders at. <inset> has no dimensions of its own and takes its intrinsic size from
+  the child, so declaring the raw 280x335 viewport here made @mipmap/ic_launcher report an intrinsic
+  ~720dp square. Nothing on screen changed — AdaptiveIconDrawable scales every layer to its bounds —
+  but anything that measures the app icon read the wrong number. In-app the vector is drawn through
+  fillMaxSize + ContentScale.Fit, which is indifferent to the declared dp.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="280dp"
-    android:height="335dp"
+    android:width="42dp"
+    android:height="50.25dp"
     android:viewportWidth="280"
     android:viewportHeight="335">
 
@@ -28,19 +46,19 @@
 
     <!-- Circuit Traces Left -->
     <group>
-        <path android:strokeColor="#A5D4C4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 155 260 L 130 260 L 130 230" />
+        <path android:strokeColor="@color/logo_circuit_left" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 155 260 L 130 260 L 130 230" />
         <path android:fillColor="@color/logo_circuit_left" android:pathData="M 127 230 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
 
-        <path android:strokeColor="#A5D4C4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 155 285 L 115 285 L 115 310" />
+        <path android:strokeColor="@color/logo_circuit_left" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 155 285 L 115 285 L 115 310" />
         <path android:fillColor="@color/logo_circuit_left" android:pathData="M 112 310 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
 
-        <path android:strokeColor="#A5D4C4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 155 310 L 140 310 L 140 340 L 120 340" />
+        <path android:strokeColor="@color/logo_circuit_left" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 155 310 L 140 310 L 140 340 L 120 340" />
         <path android:fillColor="@color/logo_circuit_left" android:pathData="M 117 340 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
 
-        <path android:strokeColor="#A5D4C4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 170 335 L 170 370 L 145 370" />
+        <path android:strokeColor="@color/logo_circuit_left" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 170 335 L 170 370 L 145 370" />
         <path android:fillColor="@color/logo_circuit_left" android:pathData="M 142 370 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
 
-        <path android:strokeColor="#A5D4C4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 180 345 L 180 390 L 160 390" />
+        <path android:strokeColor="@color/logo_circuit_left" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 180 345 L 180 390 L 160 390" />
         <path android:fillColor="@color/logo_circuit_left" android:pathData="M 157 390 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
 
         <!-- Standalone dots Left -->
@@ -52,19 +70,19 @@
 
     <!-- Circuit Traces Right -->
     <group>
-        <path android:strokeColor="#BCE0D4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 245 260 L 270 260 L 270 230" />
+        <path android:strokeColor="@color/logo_circuit_right" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 245 260 L 270 260 L 270 230" />
         <path android:fillColor="@color/logo_circuit_right" android:pathData="M 267 230 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
 
-        <path android:strokeColor="#BCE0D4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 245 285 L 285 285 L 285 310" />
+        <path android:strokeColor="@color/logo_circuit_right" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 245 285 L 285 285 L 285 310" />
         <path android:fillColor="@color/logo_circuit_right" android:pathData="M 282 310 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
 
-        <path android:strokeColor="#BCE0D4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 245 310 L 260 310 L 260 340 L 280 340" />
+        <path android:strokeColor="@color/logo_circuit_right" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 245 310 L 260 310 L 260 340 L 280 340" />
         <path android:fillColor="@color/logo_circuit_right" android:pathData="M 277 340 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
 
-        <path android:strokeColor="#BCE0D4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 230 335 L 230 370 L 255 370" />
+        <path android:strokeColor="@color/logo_circuit_right" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 230 335 L 230 370 L 255 370" />
         <path android:fillColor="@color/logo_circuit_right" android:pathData="M 252 370 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
 
-        <path android:strokeColor="#BCE0D4" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 220 345 L 220 390 L 240 390" />
+        <path android:strokeColor="@color/logo_circuit_right" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 220 345 L 220 390 L 240 390" />
         <path android:fillColor="@color/logo_circuit_right" android:pathData="M 237 390 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0" />
 
         <!-- Standalone dots Right -->

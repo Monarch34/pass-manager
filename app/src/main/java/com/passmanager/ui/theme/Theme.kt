@@ -85,7 +85,12 @@ private val LightColorScheme = lightColorScheme(
  *
  * A password manager leans on color to carry meaning: the category tints ([CategoryLoginTint] and
  * friends) are fixed hues that let a vault entry be recognized at a glance, and the same vault is
- * rendered by the desktop client from the same [com.passmanager.protocol.design.Palette] tokens.
+ * rendered by the desktop client from the same [com.passmanager.protocol.design.Palette] tokens —
+ * though not from all the same ones, as Color.kt already notes: the desktop substitutes the
+ * `_LIFTED` variants for background, surface, surfaceVariant, outline, surfaceDim and the five
+ * surfaceContainer steps, and again for background and surfaceBright in its light scheme, because a
+ * non-emissive LCD needs a lift a phone panel does not. The two platforms therefore agree on hue and
+ * on the fixed category tints, but not tone-for-tone.
  * Reseeding the scheme from the user's wallpaper would break that recognition, clash with the fixed
  * tints, and make the phone and desktop disagree about what the same vault looks like — so the
  * brand palette wins and the dynamic-color branch is not built at all.

@@ -5,17 +5,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import com.passmanager.protocol.design.LogoPalette as LogoTokens
+import com.passmanager.desktop.ui.Strings
+import com.passmanager.protocol.design.LogoPalette
+import com.passmanager.protocol.design.Palette
 import java.awt.BasicStroke
 import java.awt.Graphics2D
 import java.awt.RenderingHints
@@ -25,88 +28,135 @@ import java.awt.image.BufferedImage
 import kotlin.math.*
 
 /**
- * Matches the Android adaptive icon: same shield as [ic_vault_logo.xml] / [ic_launcher_foreground.xml]
- * on [MaterialTheme.colorScheme.primaryContainer], which tracks
- * `@color/ic_launcher_primary_container` (light: `#CCFBF1`, night: `#0D9488`).
+ * The app's brand mark: the vault shield on a rounded mint plate.
+ *
+ * The plate is the fixed [Palette.LIGHT_PRIMARY_CONTAINER] in *both* themes — the same value
+ * Android carries as `@color/ic_launcher_primary_container` — and deliberately not the running
+ * scheme's `primaryContainer`. The shield art is fixed light-scheme colour, so a theme-following
+ * plate put the `#21837D` half of the shield on `#0D9488` in dark: 1.22:1, effectively invisible.
+ * Against the pinned `#CCFBF1` the same two teals measure 4.05:1 and 5.43:1.
+ *
+ * [SHIELD_FILL_FRACTION] is `50.25 / 72`: the shield's share of the height of the Android adaptive
+ * icon's guaranteed-visible region. Every plated surface — this composable, the Android in-app
+ * plate, the launcher icon and the generated desktop app icon — treats its own square as that
+ * region, so all four are literally the same lockup rather than four similar ones.
+ *
+ * The AWT drawing below is the desktop's copy of the geometry, in the canonical `x 60..340`,
+ * `y 135..470` coordinate space. A JVM renderer cannot read an AAPT-compiled VectorDrawable, so the
+ * copy is unavoidable; it is coordinate-for-coordinate identical to
+ * `app/src/main/res/drawable/ic_vault_shield.xml` and any change to one must be made in the other
+ * in the same edit.
  */
 @Composable
 fun AppShieldLogo(
     size: Dp,
     modifier: Modifier = Modifier
 ) {
-    val logoSize = size.value.toInt().coerceAtLeast(16)
-    val bitmap = remember(logoSize) {
-        renderVaultLogo(logoSize)
-    }
+    val density = LocalDensity.current
+    // Keyed on the *pixel* height of the art, not the dp size, so a 150%/200% display — or a drag
+    // between monitors with different scaling — re-renders instead of upscaling a stale raster.
+    val artHeightPx = with(density) { (size * SHIELD_FILL_FRACTION).roundToPx() }.coerceIn(8, 2048)
+    val bitmap = remember(artHeightPx) { renderVaultShield(artHeightPx) }
 
     Surface(
-        shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
+        // Percent, not dp: the corner radius has to stay 25% of the edge at 32.dp and at 112.dp.
+        // The old absolute 22.dp was 92% of maximum at PairScreen's 48.dp (a circle) and 34% at 64.dp.
+        shape = RoundedCornerShape(25),
+        color = Color(Palette.LIGHT_PRIMARY_CONTAINER),
         modifier = modifier.size(size)
     ) {
         Box(contentAlignment = Alignment.Center) {
             Image(
                 bitmap = bitmap,
-                contentDescription = "PassManager logo",
-                modifier = Modifier.fillMaxSize(0.78f)
+                contentDescription = Strings.LOGO_CONTENT_DESCRIPTION,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(SHIELD_FILL_FRACTION)
             )
         }
     }
 }
 
-/**
- * Renders the vault logo into a BufferedImage, faithfully reproducing
- * ic_vault_logo.xml (viewportWidth=280, viewportHeight=335, group translate(-60,-135)).
- */
-private data class LogoPalette(
-    val tealDark: java.awt.Color,
-    val tealLight: java.awt.Color,
-    val innerLeft: java.awt.Color,
-    val innerRight: java.awt.Color,
-    val circuitLeft: java.awt.Color,
-    val circuitRight: java.awt.Color
-)
+/** Shield height as a fraction of the plate edge; the width follows from the 280:335 art aspect. */
+internal const val SHIELD_FILL_FRACTION = 0.697917f
 
-/** Wraps an ARGB token from [LogoTokens] into AWT's color type (`true` = honor the alpha channel). */
+// Canonical art box: x 60..340, y 135..470. Only the transform differs between renderers.
+private const val ART_W = 280f
+private const val ART_H = 335f
+private const val ART_CX = 200f
+private const val ART_CY = 302.5f
+
+/** Wraps an ARGB token from [LogoPalette] into AWT's color type (`true` = honor the alpha channel). */
 private fun argb(token: Long) = java.awt.Color(token.toInt(), true)
 
-/** Matches [ic_vault_logo.xml] / launcher foreground (single art for all themes). */
-private val LogoPaletteVault = LogoPalette(
-    tealDark = argb(LogoTokens.TEAL_DARK),
-    tealLight = argb(LogoTokens.TEAL_LIGHT),
-    innerLeft = argb(LogoTokens.INNER_LEFT),
-    innerRight = argb(LogoTokens.INNER_RIGHT),
-    circuitLeft = argb(LogoTokens.CIRCUIT_LEFT),
-    circuitRight = argb(LogoTokens.CIRCUIT_RIGHT)
-)
+/** Compose-typed shield art, for use inside the UI tree. */
+internal fun renderVaultShield(heightPx: Int): ImageBitmap =
+    renderVaultShieldAwt(heightPx).toComposeImageBitmap()
 
-/** Compose-typed logo, for use inside the UI tree. */
-internal fun renderVaultLogo(outputSize: Int): ImageBitmap =
-    renderVaultLogoAwt(outputSize).toComposeImageBitmap()
-
-/** AWT-typed logo, for the window/taskbar icon which the OS shell reads off the AWT frame. */
-internal fun renderVaultLogoAwt(outputSize: Int): BufferedImage {
-    val p = LogoPaletteVault
-    val vw = 280f
-    val vh = 335f
-    val scale = outputSize / vh.coerceAtLeast(vw)
-    val w = (vw * scale).toInt().coerceAtLeast(1)
-    val h = (vh * scale).toInt().coerceAtLeast(1)
+/**
+ * The bare shield art, tightly cropped to the 280:335 box and with no plate — the plate is drawn by
+ * whatever composes this in (see [AppShieldLogo]).
+ */
+internal fun renderVaultShieldAwt(heightPx: Int): BufferedImage {
+    val h = heightPx.coerceAtLeast(1)
+    val scale = h / ART_H
+    val w = Math.round(ART_W * scale).coerceAtLeast(1)
 
     val image = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
     val g: Graphics2D = image.createGraphics()
     g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
     g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+    g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
 
+    g.translate(w / 2.0 - ART_CX * scale, h / 2.0 - ART_CY * scale)
     g.scale(scale.toDouble(), scale.toDouble())
-    g.translate(-60.0, -135.0)
+    drawShieldArt(g)
 
-    val tealDark = p.tealDark
-    val tealLight = p.tealLight
-    val innerLeft = p.innerLeft
-    val innerRight = p.innerRight
-    val circuitLeft = p.circuitLeft
-    val circuitRight = p.circuitRight
+    g.dispose()
+    return image
+}
+
+/**
+ * The plated square app icon: the same lockup the launcher shows, for the window/taskbar icon and
+ * for the generated `app-icon.png` / `app-icon.ico`.
+ *
+ * `scale = s / 480f` is the whole framing rule: the art is 280x335 in a 480-unit square, so it
+ * lands on `0.583333 x 0.697917` of the edge, centred. At `s = 256` that is x 53.333..202.667 and
+ * y 38.667..217.333.
+ */
+internal fun renderAppIconAwt(sizePx: Int): BufferedImage {
+    val s = sizePx.coerceAtLeast(8)
+
+    val image = BufferedImage(s, s, BufferedImage.TYPE_INT_ARGB)
+    val g: Graphics2D = image.createGraphics()
+    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+    g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+    g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
+
+    g.color = java.awt.Color(Palette.LIGHT_PRIMARY_CONTAINER.toInt(), true)
+    // RoundRectangle2D takes arc width/height, which is twice the corner radius, so s * 0.5f is the
+    // 25% radius RoundedCornerShape(25) produces on the Compose side.
+    g.fill(java.awt.geom.RoundRectangle2D.Float(0f, 0f, s.toFloat(), s.toFloat(), s * 0.5f, s * 0.5f))
+
+    val scale = s / 480f
+    g.translate(s / 2.0 - ART_CX * scale, s / 2.0 - ART_CY * scale)
+    g.scale(scale.toDouble(), scale.toDouble())
+    drawShieldArt(g)
+
+    g.dispose()
+    return image
+}
+
+/**
+ * Draws the shield in raw art coordinates. Callers own the transform, so the coordinates below are
+ * the canonical ones and can be diffed against `ic_vault_shield.xml` literally.
+ */
+private fun drawShieldArt(g: Graphics2D) {
+    val tealDark = argb(LogoPalette.TEAL_DARK)
+    val tealLight = argb(LogoPalette.TEAL_LIGHT)
+    val innerLeft = argb(LogoPalette.INNER_LEFT)
+    val innerRight = argb(LogoPalette.INNER_RIGHT)
+    val circuitLeft = argb(LogoPalette.CIRCUIT_LEFT)
+    val circuitRight = argb(LogoPalette.CIRCUIT_RIGHT)
 
     // ── Top Cap ──
     g.color = tealDark;  g.fill(tri(200f,135f, 169f,140f, 200f,170f))
@@ -193,9 +243,6 @@ internal fun renderVaultLogoAwt(outputSize: Int): BufferedImage {
         svgArcTo(200f, 277f, 8f, 8f, 0f, largeArc = false, sweep = true, 206.5f, 289.5f)
         lineTo(210f, 305f); lineTo(200f, 305f); closePath()
     })
-
-    g.dispose()
-    return image
 }
 
 // ── Geometry helpers ──

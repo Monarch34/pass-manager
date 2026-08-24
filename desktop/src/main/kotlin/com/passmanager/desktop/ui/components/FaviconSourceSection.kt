@@ -28,7 +28,10 @@ import com.passmanager.desktop.ui.Strings
 private val ChipShape = RoundedCornerShape(12.dp)
 
 /**
- * Choice between private favicon loading and Google’s helper (matches Android Settings).
+ * The two site-icon states: Off, which makes no network request at all, and On, which makes exactly
+ * one request, to www.google.com. That is now precisely what Android's switch does, so the two
+ * platforms teach the same mental model.
+ *
  * Uses rounded surfaces + bounded ripple so hover/press isn’t a sharp rectangle.
  *
  * @param compact Smaller padding and a single-line explainer (e.g. footer on vault screen).
@@ -36,8 +39,8 @@ private val ChipShape = RoundedCornerShape(12.dp)
 @Composable
 fun FaviconSourceSection(
     useGoogleFavicons: Boolean,
-    onSelectPrivate: () -> Unit,
-    onSelectGoogle: () -> Unit,
+    onSelectOff: () -> Unit,
+    onSelectOn: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false
 ) {
@@ -82,19 +85,19 @@ fun FaviconSourceSection(
                             .padding(top = if (compact) 2.dp else 0.dp)
                     ) {
                         FaviconModeChip(
-                            label = Strings.FAVICON_MODE_PRIVATE_LABEL,
+                            label = Strings.FAVICON_MODE_OFF_LABEL,
                             icon = Icons.Default.Lock,
                             selected = !useGoogleFavicons,
-                            onClick = onSelectPrivate,
+                            onClick = onSelectOff,
                             usePrimaryAccent = false,
                             compact = compact,
                             modifier = Modifier.fillMaxWidth()
                         )
                         FaviconModeChip(
-                            label = Strings.FAVICON_MODE_GOOGLE_LABEL,
+                            label = Strings.FAVICON_MODE_ON_LABEL,
                             icon = Icons.Default.Public,
                             selected = useGoogleFavicons,
-                            onClick = onSelectGoogle,
+                            onClick = onSelectOn,
                             usePrimaryAccent = true,
                             compact = compact,
                             modifier = Modifier.fillMaxWidth()
@@ -109,19 +112,19 @@ fun FaviconSourceSection(
                             .padding(top = if (compact) 2.dp else 0.dp)
                     ) {
                         FaviconModeChip(
-                            label = Strings.FAVICON_MODE_PRIVATE_LABEL,
+                            label = Strings.FAVICON_MODE_OFF_LABEL,
                             icon = Icons.Default.Lock,
                             selected = !useGoogleFavicons,
-                            onClick = onSelectPrivate,
+                            onClick = onSelectOff,
                             usePrimaryAccent = false,
                             compact = compact,
                             modifier = Modifier.weight(1f)
                         )
                         FaviconModeChip(
-                            label = Strings.FAVICON_MODE_GOOGLE_LABEL,
+                            label = Strings.FAVICON_MODE_ON_LABEL,
                             icon = Icons.Default.Public,
                             selected = useGoogleFavicons,
-                            onClick = onSelectGoogle,
+                            onClick = onSelectOn,
                             usePrimaryAccent = true,
                             compact = compact,
                             modifier = Modifier.weight(1f)
@@ -131,9 +134,9 @@ fun FaviconSourceSection(
 
                 Text(
                     text = if (useGoogleFavicons) {
-                        if (compact) Strings.FAVICON_COMPACT_GOOGLE_LINE else Strings.FAVICON_MODE_GOOGLE_EXPLAINER
+                        if (compact) Strings.FAVICON_COMPACT_ON_LINE else Strings.FAVICON_MODE_ON_EXPLAINER
                     } else {
-                        if (compact) Strings.FAVICON_COMPACT_PRIVATE_LINE else Strings.FAVICON_MODE_PRIVATE_EXPLAINER
+                        if (compact) Strings.FAVICON_COMPACT_OFF_LINE else Strings.FAVICON_MODE_OFF_EXPLAINER
                     },
                     style = explainerStyle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

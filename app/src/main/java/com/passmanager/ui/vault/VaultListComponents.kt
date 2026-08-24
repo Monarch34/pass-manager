@@ -279,7 +279,6 @@ fun VaultListEmptyState(
         ) {
             AppShieldLogo(
                 size = 72.dp,
-                iconSize = 36.dp,
                 modifier = Modifier.alpha(0.45f)
             )
             Text(

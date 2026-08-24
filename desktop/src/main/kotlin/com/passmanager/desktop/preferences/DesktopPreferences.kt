@@ -10,7 +10,7 @@ object DesktopPreferences {
     private const val KEY_USE_GOOGLE_FAVICONS = "use_google_favicons"
     private const val KEY_USE_DARK_THEME = "use_dark_theme"
 
-    /** When false (default), only `https://domain/favicon.ico` is fetched — no third party. */
+    /** When false (default), no icon request is made at all; when true, one request to t0.gstatic.com. */
     fun getUseGoogleFavicons(): Boolean =
         Preferences.userRoot().node(NODE).getBoolean(KEY_USE_GOOGLE_FAVICONS, false)
 

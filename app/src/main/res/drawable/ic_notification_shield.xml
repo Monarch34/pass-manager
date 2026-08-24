@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Notification small icon: a flat silhouette of the vault shield.
+
+  Android does not draw a small icon in its own colours. It keeps only the alpha channel, then
+  tints the result — white on the status bar and in a dark shade. Anything fully opaque therefore
+  arrives as a solid block, which is why @mipmap/ic_launcher (an adaptive icon whose background
+  layer is an opaque plate) used to render as a plain white square.
+
+  So: one path, transparent everywhere else, and the keyhole punched out with evenOdd rather than
+  painted in a second colour — a second colour would simply become more silhouette.
+  The colour below is irrelevant at runtime; only the coverage matters.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- The same simplified silhouette as ic_vault_shield_mono.xml, the themed-icon layer: the two
+         pathData strings must stay byte-identical. It is a simplification of ic_vault_shield.xml and
+         not a copy of it, so do not resync it from the launcher paths — the detail it drops is what
+         stops it rendering as a solid block.
+
+         It exists as a second drawable rather than an <inset> on the mono layer because the platform
+         hands a notification small icon to an ImageView whose measured size and scale type we do not
+         control, so the status-bar padding has to be baked into a self-contained 24dp vector. An
+         inset's fractions are applied to the post-fitCenter rect, which would distort the 280:335
+         aspect here.
+
+         The transform maps the art box to x 2.806..21.194, y 1.0..23.0 of the 24-unit viewport:
+         22dp tall, 18.388dp wide, 1dp of padding top and bottom, centred on both axes. -->
+    <group
+        android:translateX="-1.1343"
+        android:translateY="-7.8657"
+        android:scaleX="0.065672"
+        android:scaleY="0.065672">
+
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M200,135 L169,140 L169,170 L60,190 C60,340 110,430 200,470 C290,430 340,340 340,190 L231,170 L231,140 Z M215,304 A30,30 0 1,0 185,304 L188,340 L212,340 Z" />
+
+    </group>
+</vector>

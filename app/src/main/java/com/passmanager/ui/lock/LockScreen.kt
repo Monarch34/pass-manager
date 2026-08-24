@@ -120,7 +120,7 @@ fun LockScreen(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                AppShieldLogo(size = 112.dp, iconSize = 56.dp)
+                AppShieldLogo(size = 112.dp)
 
                 Spacer(Modifier.height(24.dp))
                 Text(

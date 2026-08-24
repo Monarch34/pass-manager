@@ -2,7 +2,14 @@
 <!-- Adaptive icon background: the light scheme's primaryContainer mint plate.
      @color/ic_launcher_primary_container has no values-night/ override, so the plate is the same on
      every device and matches the store listing icon. The shield foreground is night-independent too,
-     so the pair always renders as dark teal art on mint. -->
+     so the pair always renders as dark teal art on mint.
+
+     That same colour is now also the plate behind the in-app AppShieldLogo on Android and, mirrored
+     as Palette.LIGHT_PRIMARY_CONTAINER, on the desktop — so the launcher icon, the Android 12+
+     splash, both in-app marks and the desktop app icon are one lockup rather than four variants.
+     Pinning it is not cosmetic: the shield art is fixed light-scheme colour, so a plate that
+     followed the theme dropped the #21837D shield onto #0D9488 in dark, a 1.22:1 contrast that
+     erased the mark. Against this mint the same art measures 4.05:1. -->
 
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <solid android:color="@color/ic_launcher_primary_container" />

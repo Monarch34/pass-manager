@@ -84,6 +84,10 @@ From the repository root:
 
 `./gradlew -p desktop run` or `.\gradlew.bat -p desktop run`
 
+### App icons
+
+`app-icon.png` and `app-icon.ico` are no longer checked in: **`:desktop:generateAppIcons`** renders them into **`desktop/build/generated/app-icons/`** from the `LogoPalette` tokens in `protocol/`, and the Windows and Linux packaging tasks depend on it, so there is no manual step. They used to be frozen binaries with no generator in the repo, which is why the installer icon drifted away from the Android launcher icon and could not follow a palette change.
+
 **`packageMsi`:** Compose Desktop calls **`jpackage`**, which ships with a **full JDK**, not Android Studio’s **`jbr`**. If Gradle’s effective JDK is Studio’s JBR, `packageMsi` fails with **`jpackage.exe` is missing**.
 
 **Fix (Windows, no global env changes):**

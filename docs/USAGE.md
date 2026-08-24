@@ -23,7 +23,7 @@ How to run PassManager after a successful build. **Build prerequisites and comma
 |------|------------|
 | **Vault** | Browse items, search, filter by category, sort. Open an item to view or edit. |
 | **Add item** | Create logins, cards, notes, identity, or bank entries (categories match vault item types). |
-| **Settings** | Auto-lock timeout, passphrase change, favicon mode (Google vs private fetch), biometric toggle. |
+| **Settings** | Auto-lock timeout, passphrase change, site icons (off, or on via Google’s favicon service), biometric toggle. |
 | **Lock** | Use the lock action when you want the vault key cleared from memory; auto-lock also applies after the timeout when the app backgrounds (see Settings). |
 
 ### Desktop pairing (LAN)
@@ -34,7 +34,7 @@ How to run PassManager after a successful build. **Build prerequisites and comma
 4. **Compare the safety number** on both screens before confirming; then complete verification on the desktop as prompted.
 5. After the session is active, the desktop can request allowed actions (e.g. vault list refresh, password send) subject to **rate limits** on the phone.
 
-Traffic stays on the LAN; there is no cloud vault backend.
+Pairing traffic stays on the LAN and there is no cloud vault backend. The only optional outbound connection in the app is the **Site icons** lookup, which is off by default and contacts `t0.gstatic.com` and nothing else when on.
 
 ### Debug-only: demo vault data
 

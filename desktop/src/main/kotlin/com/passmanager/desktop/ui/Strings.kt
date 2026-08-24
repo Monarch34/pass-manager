@@ -29,21 +29,28 @@ object Strings {
     const val SWITCH_TO_LIGHT_THEME = "Switch to light theme"
     const val SWITCH_TO_DARK_THEME = "Switch to dark theme"
 
-    // Site icons (vault browser — mirrors Android Settings → Rich site icons)
+    // Site icons — identical behaviour to Android: Off makes no network request at all, On makes
+    // exactly one, to t0.gstatic.com, and no other host is ever contacted. The explainers below are
+    // word-for-word the Android settings_site_icons_subtitle_off / _on strings.
     const val FAVICON_SECTION_TITLE = "Site icons"
-    const val FAVICON_SECTION_HINT = "Choose how the desktop loads website icons next to entries."
-    const val FAVICON_MODE_PRIVATE_LABEL = "Private"
-    const val FAVICON_MODE_GOOGLE_LABEL = "Rich (Google)"
-    const val FAVICON_MODE_PRIVATE_EXPLAINER =
-        "Only your PC contacts each website for favicon.ico. No third party sees which sites you use. Some icons may be missing."
-    const val FAVICON_MODE_GOOGLE_EXPLAINER =
-        "Uses Google’s favicon service first for clearer icons. The site address is sent to Google."
+    const val FAVICON_SECTION_HINT = "Choose whether website icons are downloaded next to entries."
+    const val FAVICON_MODE_OFF_LABEL = "Off"
+    const val FAVICON_MODE_ON_LABEL = "On (Google)"
+    const val FAVICON_MODE_OFF_EXPLAINER =
+        "Off: no icon is downloaded and no network request is made. Entries show their category icon."
+    const val FAVICON_MODE_ON_EXPLAINER =
+        "On: the site address is sent to Google’s icon service (t0.gstatic.com), which returns the icon. No other host is contacted, and redirects away from it are refused."
 
     /** One-line hints for the compact footer control. */
-    const val FAVICON_COMPACT_PRIVATE_LINE =
-        "Direct favicon only — private. Some icons may be missing."
-    const val FAVICON_COMPACT_GOOGLE_LINE =
-        "Google helper for clearer icons; site address goes to Google."
+    const val FAVICON_COMPACT_OFF_LINE =
+        "No icons downloaded — no network request."
+    const val FAVICON_COMPACT_ON_LINE =
+        "Icons from t0.gstatic.com — the site address is sent to Google."
+
+    // Accessibility labels. They live here, not inline at the call site, so the i18n sweep this
+    // object exists to enable does not miss the two strings a screen reader actually announces.
+    const val LOGO_CONTENT_DESCRIPTION = "PassManager logo"
+    const val QR_CONTENT_DESCRIPTION = "QR code for pairing"
 
     // Status messages
     const val ERROR_GENERIC = "Something went wrong. Please try again."

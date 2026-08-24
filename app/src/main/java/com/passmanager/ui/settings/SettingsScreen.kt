@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -74,6 +75,9 @@ import com.passmanager.ui.components.ErrorSnackbarEffect
 import com.passmanager.ui.components.LoadingButton
 import com.passmanager.ui.components.PasswordStrengthBar
 import com.passmanager.ui.components.SecureTextField
+
+/** Width of the auto-lock dropdown anchor. Fits "30 minutes" plus the chevron at labelLarge. */
+private val AutoLockAnchorWidth = 168.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -215,9 +219,9 @@ fun SettingsScreen(
                     Text(
                         stringResource(
                             if (uiState.useGoogleFavicons) {
-                                R.string.settings_site_icons_subtitle_google
+                                R.string.settings_site_icons_subtitle_on
                             } else {
-                                R.string.settings_site_icons_subtitle_private
+                                R.string.settings_site_icons_subtitle_off
                             }
                         ),
                         style = MaterialTheme.typography.bodySmall,
@@ -283,9 +287,14 @@ fun SettingsScreen(
                             autoLockDropdownExpanded = expanded
                             if (!expanded) focusManager.clearAllFocus()
                         },
+                        // A definite width, not a range. ListItem measures its trailing slot against
+                        // the full row width, so anything elastic here wins the whole row: the text
+                        // field inside fills whatever it is given, a widthIn range let that reach
+                        // 280.dp, and the headline and supporting text were left about 26.dp to wrap
+                        // in. They collapsed to nothing and the row grew to roughly 1.5 screens tall
+                        // — that was the empty space you could scroll into below the settings list.
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .widthIn(min = 168.dp, max = 280.dp)
+                            .width(AutoLockAnchorWidth)
                             .onGloballyPositioned { coordinates ->
                                 val w = coordinates.size.width
                                 if (w > 0) autoLockAnchorWidthPx = w

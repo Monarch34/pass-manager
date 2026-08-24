@@ -76,7 +76,7 @@ fun SkeletonLoading(
                     this.alpha = alpha
                 }
             ) {
-                AppShieldLogo(size = 96.dp, iconSize = 48.dp)
+                AppShieldLogo(size = 96.dp)
             }
         }
 
