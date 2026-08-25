@@ -122,19 +122,13 @@ fun PairScreen(
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = Strings.PAIR_LISTENING,
+                    // One instruction, one status: this row used to restate the subtitle's
+                    // "scan the QR code with your phone" and push the actual status a line down.
+                    text = Strings.PAIR_WAITING,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-
-            Spacer(Modifier.height(4.dp))
-
-            Text(
-                text = Strings.PAIR_WAITING,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.outline
-            )
             }
         }
     }

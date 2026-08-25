@@ -89,8 +89,7 @@ fun FaviconSourceSection(
                             icon = Icons.Default.Lock,
                             selected = !useGoogleFavicons,
                             onClick = onSelectOff,
-                            usePrimaryAccent = false,
-                            compact = compact,
+                                    compact = compact,
                             modifier = Modifier.fillMaxWidth()
                         )
                         FaviconModeChip(
@@ -98,8 +97,7 @@ fun FaviconSourceSection(
                             icon = Icons.Default.Public,
                             selected = useGoogleFavicons,
                             onClick = onSelectOn,
-                            usePrimaryAccent = true,
-                            compact = compact,
+                                    compact = compact,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -116,8 +114,7 @@ fun FaviconSourceSection(
                             icon = Icons.Default.Lock,
                             selected = !useGoogleFavicons,
                             onClick = onSelectOff,
-                            usePrimaryAccent = false,
-                            compact = compact,
+                                    compact = compact,
                             modifier = Modifier.weight(1f)
                         )
                         FaviconModeChip(
@@ -125,8 +122,7 @@ fun FaviconSourceSection(
                             icon = Icons.Default.Public,
                             selected = useGoogleFavicons,
                             onClick = onSelectOn,
-                            usePrimaryAccent = true,
-                            compact = compact,
+                                    compact = compact,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -155,21 +151,18 @@ private fun FaviconModeChip(
     icon: ImageVector,
     selected: Boolean,
     onClick: () -> Unit,
-    usePrimaryAccent: Boolean,
     compact: Boolean,
     modifier: Modifier = Modifier
 ) {
     val outline = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-    val containerColor = when {
-        selected && usePrimaryAccent -> MaterialTheme.colorScheme.primaryContainer
-        selected && !usePrimaryAccent -> MaterialTheme.colorScheme.secondaryContainer
-        else -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f)
-    }
-    val contentColor = when {
-        selected && usePrimaryAccent -> MaterialTheme.colorScheme.onPrimaryContainer
-        selected && !usePrimaryAccent -> MaterialTheme.colorScheme.onSecondaryContainer
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    // One control, one accent: the previous per-chip flag selected Off in indigo and On in
+    // teal, splitting a single two-state switch across two colour families.
+    val containerColor =
+        if (selected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f)
+    val contentColor =
+        if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSurfaceVariant
     val border = if (!selected) BorderStroke(1.dp, outline) else null
     val labelStyle =
         if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelLarge

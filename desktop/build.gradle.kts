@@ -60,6 +60,22 @@ val generateAppIcons = tasks.register<JavaExec>("generateAppIcons") {
     outputs.dir(appIconsDir)
 }
 
+// Design-review renderer: draws every screen with representative fake state into
+// build/ui-previews/*.png, both themes, no window and no paired phone needed. The screens behind
+// the pairing handshake (Verify, VaultBrowser) are otherwise a two-device ritual to even look at.
+val renderUiPreviews = tasks.register<JavaExec>("renderUiPreviews") {
+    group = "verification"
+    description = "Renders each desktop screen to build/ui-previews as PNGs, in both themes."
+    // project.the<>(): inside the task-configuration block the receiver is the task, which has
+    // no SourceSetContainer of its own — same trap generateAppIcons already documents.
+    classpath = project.the<SourceSetContainer>()["test"].runtimeClasspath
+    mainClass.set("com.passmanager.desktop.tools.UiPreviewRendererKt")
+    argumentProviders.add(CommandLineArgumentProvider {
+        listOf(layout.buildDirectory.dir("ui-previews").get().asFile.absolutePath)
+    })
+    outputs.dir(layout.buildDirectory.dir("ui-previews"))
+}
+
 compose.desktop {
     application {
         mainClass = "com.passmanager.desktop.MainKt"

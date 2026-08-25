@@ -9,7 +9,6 @@ object Strings {
     const val APP_TITLE = "PassManager Desktop"
     const val PAIR_INSTRUCTION = "Scan this QR code with your phone to connect"
     const val PAIR_WAITING = "Waiting for phone\u2026"
-    const val PAIR_LISTENING = "Ready — scan the QR code with your phone"
 
     // VerifyScreen
     const val VERIFY_TITLE = "Verify Connection"

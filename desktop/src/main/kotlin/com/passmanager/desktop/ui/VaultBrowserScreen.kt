@@ -179,12 +179,12 @@ fun VaultBrowserScreen(
                 Spacer(Modifier.height(8.dp))
                 Surface(
                     shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.secondaryContainer
+                    color = MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Text(
                         text = clipboardStatus,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                     )
                 }
@@ -451,13 +451,21 @@ private fun FaviconIcon(
 ) {
     if (!useGoogleFavicons) {
         // Off means the request is never made, not made and discarded: no LaunchedEffect is started
-        // and no socket is opened. Same behaviour as the phone.
-        Icon(
-            fallbackIcon,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = fallbackTint
-        )
+        // and no socket is opened. Same behaviour as the phone. The tile matches the no-URL branch
+        // of VaultItemRow, so the list keeps one leading shape whichever branch a row takes.
+        Box(
+            modifier = modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(fallbackTint.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                fallbackIcon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = fallbackTint
+            )
+        }
         return
     }
 
