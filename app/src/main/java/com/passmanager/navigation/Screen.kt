@@ -7,6 +7,9 @@ import java.net.URLEncoder
 sealed class Screen(val route: String) {
     data object Onboarding : Screen("onboarding")
     data object Lock : Screen("lock")
+
+    /** Dead end for a vault whose device key is permanently gone: erase and start over. */
+    data object VaultRecovery : Screen("vault_recovery")
     data object Main : Screen("main")
     data object VaultList : Screen("vault_list")
     data object AddEditItem : Screen("add_edit_item/{itemId}?initialCategory={initialCategory}") {

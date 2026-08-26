@@ -2,6 +2,8 @@ package com.passmanager.domain.usecase
 
 import java.security.SecureRandom
 import javax.inject.Inject
+import kotlin.math.ln
+import kotlin.math.roundToInt
 
 class GeneratePasswordUseCase @Inject constructor() {
 
@@ -12,6 +14,44 @@ class GeneratePasswordUseCase @Inject constructor() {
         const val LOWERCASE = "abcdefghijklmnopqrstuvwxyz"
         const val DIGITS = "0123456789"
         const val SYMBOLS = "!@#\$%^&*()-_=+[]{}|;:,.<>?"
+
+        /**
+         * Size of the alphabet [invoke] actually draws from.
+         *
+         * Derived from the same constants rather than restated as numbers. The displayed entropy
+         * used to hard-code 32 for the symbol class while only 26 symbols were ever drawn, which
+         * is the failure mode a single source of truth removes: change [SYMBOLS] and the reported
+         * strength follows it.
+         */
+        fun poolSize(
+            includeUppercase: Boolean = true,
+            includeLowercase: Boolean = true,
+            includeDigits: Boolean = true,
+            includeSymbols: Boolean = true
+        ): Int =
+            (if (includeUppercase) UPPERCASE.length else 0) +
+                (if (includeLowercase) LOWERCASE.length else 0) +
+                (if (includeDigits) DIGITS.length else 0) +
+                (if (includeSymbols) SYMBOLS.length else 0)
+
+        /**
+         * `round(length * log2(poolSize))`, per `docs/IOS_PARITY.md`.
+         *
+         * Rounded, not truncated. Truncation happens to bias downward, which is the safe
+         * direction, but it was paired with an inflated pool size and the two together reported
+         * more strength than the generator delivers. A password manager may never overstate that.
+         */
+        fun entropyBits(
+            length: Int,
+            includeUppercase: Boolean = true,
+            includeLowercase: Boolean = true,
+            includeDigits: Boolean = true,
+            includeSymbols: Boolean = true
+        ): Int {
+            val pool = poolSize(includeUppercase, includeLowercase, includeDigits, includeSymbols)
+            if (pool <= 1 || length <= 0) return 0
+            return (length * (ln(pool.toDouble()) / ln(2.0))).roundToInt()
+        }
     }
 
     operator fun invoke(

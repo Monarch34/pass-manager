@@ -22,6 +22,9 @@ interface VaultMetadataDao {
     @Update
     suspend fun update(metadata: VaultMetadataEntity)
 
+    @Query("DELETE FROM vault_metadata")
+    suspend fun deleteAll()
+
     @Query("SELECT EXISTS(SELECT 1 FROM vault_metadata WHERE id = 1)")
     suspend fun exists(): Boolean
 }

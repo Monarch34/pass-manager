@@ -63,7 +63,8 @@ class SaveVaultItemUseCase @Inject constructor(
                 keyVersion = metadata.currentKeyVersion,
                 createdAt = now,
                 category = finalPayload.category,
-                headerEncryption = header
+                headerEncryption = header,
+                updatedAt = now
             )
         } else {
             vaultRepository.update(
@@ -79,7 +80,8 @@ class SaveVaultItemUseCase @Inject constructor(
     }
 }
 
-private fun ItemPayload.withId(id: String): ItemPayload = when (this) {
+/** Stamps the row id into the payload so the blob can never disagree with its primary key. */
+internal fun ItemPayload.withId(id: String): ItemPayload = when (this) {
     is ItemPayload.Login      -> copy(id = id)
     is ItemPayload.Card       -> copy(id = id)
     is ItemPayload.Bank       -> copy(id = id)

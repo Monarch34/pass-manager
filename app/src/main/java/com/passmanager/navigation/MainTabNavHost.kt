@@ -25,6 +25,7 @@ import com.passmanager.ui.generator.GENERATOR_CONSTRAINT_CATEGORY_ARG
 import com.passmanager.ui.generator.PasswordGeneratorScreen
 import com.passmanager.ui.item.AddEditItemScreen
 import com.passmanager.ui.item.AddEditItemViewModel
+import com.passmanager.ui.nudge.VaultNudgeHost
 import com.passmanager.ui.settings.SettingsScreen
 import com.passmanager.ui.vault.VaultListScreen
 import kotlinx.coroutines.launch
@@ -32,13 +33,39 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainTabNavHost(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    openSettingsOnStart: Boolean = false
 ) {
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    // Read once: the Settings ViewModel clears the pending request as soon as it opens, and this
+    // must not re-trigger if that clear recomposes the caller first.
+    val resumeInSettings = remember { openSettingsOnStart }
+    LaunchedEffect(Unit) {
+        if (resumeInSettings) {
+            navController.navigate(Screen.DrawerSettings.route) {
+                popUpTo(Screen.VaultList.route) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
+
+    // Hosted here rather than on the vault list: this is the one place every unlocked session
+    // passes through exactly once, and the prompts only hand off to Settings anyway.
+    VaultNudgeHost(
+        onOpenSettings = {
+            navController.navigate(Screen.DrawerSettings.route) {
+                popUpTo(Screen.VaultList.route) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    )
 
     ModalNavigationDrawer(
         drawerState = drawerState,

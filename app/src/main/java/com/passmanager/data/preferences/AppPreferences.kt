@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.passmanager.domain.model.ItemCategory
@@ -32,6 +33,11 @@ class AppPreferences @Inject constructor(
         private val USE_GOOGLE_FAVICONS = booleanPreferencesKey("use_google_favicons")
         private val VAULT_LIST_SORT = stringPreferencesKey("vault_list_sort")
         private val VAULT_GROUP_FILTER = stringPreferencesKey("vault_group_filter")
+        private val LAST_EXPORT_AT_MS = longPreferencesKey("last_export_at_ms")
+        private val DEVICE_BINDING_PROMPT_DECLINED = booleanPreferencesKey("device_binding_prompt_declined")
+        private val BACKUP_REMINDER_SNOOZED_AT_MS = longPreferencesKey("backup_reminder_snoozed_at_ms")
+        private val FAILED_UNLOCK_ATTEMPTS = intPreferencesKey("failed_unlock_attempts")
+        private val UNLOCK_LOCKOUT_ANCHOR_MS = longPreferencesKey("unlock_lockout_anchor_ms")
         private const val ALL_CATEGORIES = "__all__"
     }
 
@@ -61,6 +67,30 @@ class AppPreferences @Inject constructor(
         }
     }
 
+    override val lastExportAtMs: Flow<Long?> = context.dataStore.data.recoverToEmpty().map { preferences ->
+        preferences[LAST_EXPORT_AT_MS]
+    }
+
+    override val deviceBindingPromptDeclined: Flow<Boolean> =
+        context.dataStore.data.recoverToEmpty().map { preferences ->
+            preferences[DEVICE_BINDING_PROMPT_DECLINED] ?: false
+        }
+
+    override val backupReminderSnoozedAtMs: Flow<Long?> =
+        context.dataStore.data.recoverToEmpty().map { preferences ->
+            preferences[BACKUP_REMINDER_SNOOZED_AT_MS]
+        }
+
+    override val failedUnlockAttempts: Flow<Int> =
+        context.dataStore.data.recoverToEmpty().map { preferences ->
+            preferences[FAILED_UNLOCK_ATTEMPTS] ?: 0
+        }
+
+    override val unlockLockoutAnchorMs: Flow<Long> =
+        context.dataStore.data.recoverToEmpty().map { preferences ->
+            preferences[UNLOCK_LOCKOUT_ANCHOR_MS] ?: 0L
+        }
+
     override suspend fun setAutoLockTimeout(seconds: Int) {
         context.dataStore.edit { preferences ->
             preferences[AUTO_LOCK_TIMEOUT_SECONDS] = seconds
@@ -82,6 +112,45 @@ class AppPreferences @Inject constructor(
     override suspend fun setVaultGroupFilter(category: ItemCategory?) {
         context.dataStore.edit { preferences ->
             preferences[VAULT_GROUP_FILTER] = category?.name ?: ALL_CATEGORIES
+        }
+    }
+
+    override suspend fun setLastExportAt(epochMillis: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[LAST_EXPORT_AT_MS] = epochMillis
+        }
+    }
+
+    override suspend fun setDeviceBindingPromptDeclined(declined: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[DEVICE_BINDING_PROMPT_DECLINED] = declined
+        }
+    }
+
+    override suspend fun setBackupReminderSnoozedAt(epochMillis: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[BACKUP_REMINDER_SNOOZED_AT_MS] = epochMillis
+        }
+    }
+
+    /**
+     * The read-modify-write happens inside DataStore's own transaction, which serializes
+     * edits, so concurrent unlock attempts cannot collapse two failures into one increment.
+     * `edit` also suspends until the write is durable, which is what lets the caller await it
+     * before starting an expensive derivation.
+     */
+    override suspend fun recordFailedUnlockAttempt(anchorRealtimeMs: Long): Int {
+        val updated = context.dataStore.edit { preferences ->
+            preferences[FAILED_UNLOCK_ATTEMPTS] = (preferences[FAILED_UNLOCK_ATTEMPTS] ?: 0) + 1
+            preferences[UNLOCK_LOCKOUT_ANCHOR_MS] = anchorRealtimeMs
+        }
+        return updated[FAILED_UNLOCK_ATTEMPTS] ?: 1
+    }
+
+    override suspend fun clearFailedUnlockAttempts() {
+        context.dataStore.edit { preferences ->
+            preferences.remove(FAILED_UNLOCK_ATTEMPTS)
+            preferences.remove(UNLOCK_LOCKOUT_ANCHOR_MS)
         }
     }
 }

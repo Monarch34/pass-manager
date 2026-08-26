@@ -94,6 +94,15 @@ android {
         }
     }
 
+    testOptions {
+        unitTests {
+            // android.util.Log and friends are stubs that throw "not mocked" by default, so a
+            // single AppLogger line on an error path fails a test that is exercising exactly the
+            // behaviour it should. Returning defaults makes those calls the no-ops they are here.
+            isReturnDefaultValues = true
+        }
+    }
+
     sourceSets {
         getByName("androidTest") {
             // MigrationTestHelper resolves schemas as "<dotted db class>/<version>.json" relative to

@@ -12,6 +12,7 @@ import com.passmanager.ui.common.UserMessage
 import com.passmanager.domain.usecase.DeleteVaultItemsByIdsUseCase
 import com.passmanager.domain.usecase.ObserveVaultHeadersUseCase
 import com.passmanager.domain.usecase.ProcessVaultListHeadersUseCase
+import com.passmanager.domain.util.foldForSearch
 import com.passmanager.R
 import com.passmanager.domain.model.LockState
 import com.passmanager.domain.port.LockStateProvider
@@ -149,7 +150,7 @@ class VaultListViewModel @Inject constructor(
             appSettings.vaultGroupFilter
         ) { items, query, headerCache, sortOrder, groupFilter ->
             val filtered = filterBySearchAndGroup(items, query, headerCache, groupFilter)
-            val sorted = sortVaultItems(filtered, sortOrder, headerCache.titles)
+            val sorted = sortVaultItems(filtered, sortOrder, headerCache.titlesLower)
             VaultListPipelineResult(sorted, sortOrder, groupFilter, headerCache)
         }.flowOn(Dispatchers.Default)
             .onEach { result ->
@@ -231,42 +232,49 @@ class VaultListViewModel @Inject constructor(
     }
 }
 
+/**
+ * Case-insensitive substring match on title, address, category label and category dbKey.
+ *
+ * Every operand is case-folded ahead of the inner loop — the query once per pipeline pass here,
+ * titles/addresses once per decrypt batch in [VaultListDecryptionManager], the category strings
+ * once at enum init — so the match itself is a plain, case-sensitive [String.contains]. The
+ * previous version re-folded both operands on every comparison, i.e. up to 4x per item per
+ * keystroke. Match results are unchanged; see `foldForSearch` for why it is not `lowercase()`.
+ */
 private fun filterBySearchAndGroup(
     items: List<VaultItemHeader>,
     query: String,
     headerCache: VaultListHeaderCache,
     groupFilter: ItemCategory?
 ): List<VaultItemHeader> {
-    val q = query.trim()
+    val q = query.trim().foldForSearch()
     return items.filter { item ->
         val groupOk = groupFilter == null || item.category == groupFilter
         if (!groupOk) return@filter false
         if (q.isEmpty()) return@filter true
-        val title = headerCache.titles[item.id].orEmpty()
-        val address = headerCache.addresses[item.id].orEmpty()
-        title.contains(q, ignoreCase = true) ||
-            address.contains(q, ignoreCase = true) ||
-            item.category.label.contains(q, ignoreCase = true) ||
-            item.category.dbKey.contains(q, ignoreCase = true)
+        val title = headerCache.titlesLower[item.id].orEmpty()
+        val address = headerCache.addressesLower[item.id].orEmpty()
+        title.contains(q) ||
+            address.contains(q) ||
+            item.category.labelLower.contains(q) ||
+            item.category.dbKeyLower.contains(q)
     }
 }
 
 private fun sortVaultItems(
     items: List<VaultItemHeader>,
     order: VaultSortOrder,
-    titles: Map<String, String>
+    titlesLower: Map<String, String>
 ): List<VaultItemHeader> {
     return when (order) {
-        VaultSortOrder.NAME_ASC -> {
-            // The comparator runs O(n log n) times, so lowercasing inside it allocated a fresh
-            // String per comparison. Precomputing the key allocates once per item instead.
-            val sortKeys = HashMap<String, String>(items.size)
-            items.forEach { sortKeys[it.id] = titles[it.id].orEmpty().lowercase() }
+        VaultSortOrder.NAME_ASC ->
+            // The comparator runs O(n log n) times, so folding inside it allocated a fresh String
+            // per comparison. The decrypt batch already produced the folded titles, so this now
+            // reads them straight out of the cache and builds no per-emission map at all.
             items.sortedWith(
-                compareBy<VaultItemHeader> { sortKeys[it.id].orEmpty() }
+                compareBy<VaultItemHeader> { titlesLower[it.id].orEmpty() }
                     .thenBy { it.id }
             )
-        }
         VaultSortOrder.DATE_NEWEST -> items.sortedByDescending { it.updatedAt }
         VaultSortOrder.DATE_OLDEST -> items.sortedBy { it.updatedAt }
     }

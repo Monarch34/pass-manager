@@ -1,5 +1,7 @@
 package com.passmanager.domain.model
 
+import com.passmanager.domain.util.foldForSearch
+
 /**
  * Vault item category — pure domain enum with no UI dependencies.
  *
@@ -12,8 +14,25 @@ enum class ItemCategory(val label: String) {
     IDENTITY("Identity"),
     BANK("Bank");
 
-    /** Lowercase name used for DB storage (e.g. `"login"`, `"card"`). */
-    val dbKey: String get() = name.lowercase()
+    /**
+     * Lowercase name used for DB storage (e.g. `"login"`, `"card"`).
+     *
+     * Stored rather than computed: it is read on every vault-list row and on every keystroke of
+     * the search filter, and the old `get() = name.lowercase()` allocated a fresh String each time.
+     */
+    val dbKey: String = name.lowercase()
+
+    /**
+     * Case-folded [label], precomputed so the search filter's category branch can use a plain,
+     * case-sensitive `contains` instead of a per-keystroke `ignoreCase = true` comparison.
+     */
+    val labelLower: String = label.foldForSearch()
+
+    /**
+     * Case-folded [dbKey]. Already lowercase ASCII, but folded through the same function as the
+     * query so both category comparisons in the filter stay symmetric.
+     */
+    val dbKeyLower: String = dbKey.foldForSearch()
 
     companion object {
         /**

@@ -172,13 +172,16 @@ class PasswordGeneratorViewModel @Inject constructor(
             else -> true
         }
 
-    private fun computeEntropyBits(state: GeneratorUiState): Int {
-        var poolSize = 0
-        if (state.includeUppercase) poolSize += 26
-        if (state.includeLowercase) poolSize += 26
-        if (state.includeDigits)    poolSize += 10
-        if (state.includeSymbols)   poolSize += 32
-        return if (poolSize <= 0) 0
-        else (state.length * (kotlin.math.ln(poolSize.toDouble()) / kotlin.math.ln(2.0))).toInt()
-    }
+    /**
+     * Asks the generator itself how much entropy its own draw carries, instead of keeping a second
+     * copy of the alphabet sizes here. The copy had drifted: it counted 32 symbols against a set
+     * of 26, so the default settings advertised 104 bits for a 103-bit password.
+     */
+    private fun computeEntropyBits(state: GeneratorUiState): Int = GeneratePasswordUseCase.entropyBits(
+        length = state.length,
+        includeUppercase = state.includeUppercase,
+        includeLowercase = state.includeLowercase,
+        includeDigits = state.includeDigits,
+        includeSymbols = state.includeSymbols
+    )
 }

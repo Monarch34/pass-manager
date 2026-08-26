@@ -21,6 +21,13 @@ interface VaultItemDao {
     @Query("SELECT * FROM vault_items WHERE id = :id")
     fun observeById(id: String): Flow<VaultItemEntity?>
 
+    /**
+     * Every row, full width. Only the exporter uses this: it has to decrypt every payload anyway,
+     * so one query beats [getHeaders] followed by a [getById] per row.
+     */
+    @Query("SELECT * FROM vault_items")
+    suspend fun getAll(): List<VaultItemEntity>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(item: VaultItemEntity)
 
@@ -52,6 +59,9 @@ interface VaultItemDao {
 
     @Query("DELETE FROM vault_items WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>)
+
+    @Query("DELETE FROM vault_items")
+    suspend fun deleteAll()
 
     @Query("SELECT COUNT(*) FROM vault_items")
     suspend fun count(): Int

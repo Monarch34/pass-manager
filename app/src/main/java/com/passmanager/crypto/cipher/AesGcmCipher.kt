@@ -43,6 +43,32 @@ class AesGcmCipher @Inject constructor() {
     }
 
     /**
+     * Encrypt [plaintext] with [keyBytes], binding [aad] into the authentication tag.
+     *
+     * The additional authenticated data is not stored in the returned [EncryptedData] — it is
+     * whatever the caller can reconstruct byte-for-byte at decryption time (for `.pmvault` that
+     * is the file's magic + length prefix + header). Decrypting with different AAD fails the tag
+     * check exactly like a wrong key does.
+     */
+    fun encrypt(plaintext: ByteArray, keyBytes: ByteArray, aad: ByteArray): EncryptedData {
+        val iv = ByteArray(IV_LENGTH_BYTES).also { secureRandom.nextBytes(it) }
+        val cipher = buildCipher(Cipher.ENCRYPT_MODE, keyBytes, iv)
+        cipher.updateAAD(aad)
+        val ciphertext = cipher.doFinal(plaintext)
+        return EncryptedData(ciphertext = ciphertext, iv = iv)
+    }
+
+    /**
+     * Decrypt [encryptedData] with [keyBytes] and the same [aad] used to encrypt it.
+     * Throws [javax.crypto.AEADBadTagException] if the key, the ciphertext or the AAD differ.
+     */
+    fun decrypt(encryptedData: EncryptedData, keyBytes: ByteArray, aad: ByteArray): ByteArray {
+        val cipher = buildCipher(Cipher.DECRYPT_MODE, keyBytes, encryptedData.iv)
+        cipher.updateAAD(aad)
+        return cipher.doFinal(encryptedData.ciphertext)
+    }
+
+    /**
      * Decrypt using an already-initialised [Cipher] (biometric path).
      * The cipher must have been initialised for DECRYPT_MODE by the Keystore.
      */

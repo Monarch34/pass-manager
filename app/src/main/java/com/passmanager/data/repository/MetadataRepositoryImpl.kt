@@ -43,6 +43,10 @@ class MetadataRepositoryImpl @Inject constructor(
         dao.update(metadata.toEntity())
     }
 
+    override suspend fun delete() {
+        dao.deleteAll()
+    }
+
     private fun VaultMetadataEntity.toDomain(): VaultMetadata {
         // Missing keys still fall back to the KdfParams defaults, which keeps pre-v8 rows
         // readable; MIGRATION_7_8 back-fills them so the fallback stops mattering.
@@ -58,7 +62,9 @@ class MetadataRepositoryImpl @Inject constructor(
             biometricEnabled = this.biometricEnabled == 1,
             biometricWrappedKey = if (this.biometricWrappedKey != null && this.biometricWrapperIv != null)
                 EncryptedData(ciphertext = this.biometricWrappedKey, iv = this.biometricWrapperIv)
-            else null
+            else null,
+            wrapVersion = this.wrapVersion,
+            pepperIv = this.pepperIv
         )
     }
 
@@ -71,6 +77,8 @@ class MetadataRepositoryImpl @Inject constructor(
         kdfParamsJson = kdfJson.encodeToString(KdfParams.serializer(), this.kdfParams),
         biometricEnabled = if (this.biometricEnabled) 1 else 0,
         biometricWrappedKey = this.biometricWrappedKey?.ciphertext,
-        biometricWrapperIv = this.biometricWrappedKey?.iv
+        biometricWrapperIv = this.biometricWrappedKey?.iv,
+        wrapVersion = this.wrapVersion,
+        pepperIv = this.pepperIv
     )
 }
