@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Security
 import PassVaultCore
 import PassVaultStorage
 
@@ -28,8 +29,12 @@ final class AppSession: ObservableObject {
         }
     }
 
-    /// Placeholder until B4 wires up the Keychain and `LAContext`.
-    @Published var biometricEnabled: Bool = false
+    /// Reflects whether a `.biometryCurrentSet` Keychain item actually exists —
+    /// read without prompting, so the settings toggle can render honestly.
+    @Published private(set) var biometricEnabled: Bool = false
+    /// Set when biometrics are permanently invalidated, so the UI can offer
+    /// re-enrolment instead of just reporting a failure.
+    @Published var biometricNeedsReEnrolment: Bool = false
 
     private static let timeoutKey = "autoLockTimeoutSeconds"
 
@@ -69,13 +74,27 @@ final class AppSession: ObservableObject {
                 return
             }
         }
+        // A vault exists only if BOTH halves are present: the non-secret
+        // parameters in SQLite and the wrapped key in the Keychain. Either alone
+        // is unusable, which is the point — see `persist(_:)`.
         var hasVault = false
         if let store = store {
             // `try?` on a throwing function returning an Optional flattens, so
             // this is exactly "a metadata row exists and could be read".
-            hasVault = (try? store.metadata()) != nil
+            let hasRow = (try? store.metadata()) != nil
+            var hasKey = false
+            if case .success = KeychainVaultStore.loadWrappedKey() {
+                hasKey = true
+            }
+            hasVault = hasRow && hasKey
         }
         lockState = LockStateMachine.stateAtLaunch(hasVault: hasVault)
+        refreshBiometricState()
+    }
+
+    /// Reads whether an enrolment exists WITHOUT prompting for a face.
+    func refreshBiometricState() {
+        biometricEnabled = KeychainVaultStore.hasBiometricEnrolment()
     }
 
     static func databasePath() -> String {
@@ -151,7 +170,7 @@ final class AppSession: ObservableObject {
     // MARK: - Setup and unlock
 
     func createVault(passphrase: String) async {
-        guard let store = store else {
+        guard store != nil else {
             return
         }
         isBusy = true
@@ -160,7 +179,10 @@ final class AppSession: ObservableObject {
             let metadata = try await Task.detached(priority: .userInitiated) {
                 try VaultCore.createVault(passphrase: passphrase)
             }.value
-            try store.saveMetadata(StoredVaultMetadata(metadata))
+            if let failure = persist(metadata) {
+                errorMessage = failure.message
+                return
+            }
             Self.protectDatabaseFile()
             await unlock(passphrase: passphrase)
         } catch {
@@ -169,24 +191,17 @@ final class AppSession: ObservableObject {
     }
 
     func unlock(passphrase: String) async {
-        guard let store = store else {
-            return
-        }
-        guard let stored = try? store.metadata() else {
-            errorMessage = "This vault has no metadata."
+        guard let core = loadVaultMetadata() else {
+            errorMessage = "This vault's key could not be read from secure storage."
             return
         }
         isBusy = true
         defer { isBusy = false }
-        let core = stored.coreMetadata
         do {
             let key = try await Task.detached(priority: .userInitiated) {
                 try VaultCore.unlock(passphrase: passphrase, metadata: core)
             }.value
-            vaultKey = key
-            lockState = .unlocked
-            backgroundedAt = nil
-            reload()
+            finishUnlock(with: key)
         } catch {
             // GCM cannot distinguish a wrong passphrase from corruption, and
             // neither does the message.
@@ -194,13 +209,67 @@ final class AppSession: ObservableObject {
         }
     }
 
+    /// Unlock with Face ID / Touch ID.
+    ///
+    /// Reads the RAW vault key straight out of the Keychain — there is no
+    /// Argon2 pass here, which is the whole point of the second item.
+    func unlockWithBiometrics() async {
+        errorMessage = nil
+        let result = KeychainVaultStore.loadBiometricKey(
+            prompt: "Unlock your vault"
+        )
+        switch result {
+        case .success(let key):
+            guard key.count == VaultCore.vaultKeyByteCount else {
+                // A wrong-sized key is a corrupted enrolment, not a bad face.
+                disableBiometrics()
+                biometricNeedsReEnrolment = true
+                errorMessage = DeviceKeyError
+                    .permanentlyInvalidated(reason: .biometricsChanged).message
+                return
+            }
+            finishUnlock(with: key)
+        case .failure(let error):
+            handleBiometricFailure(error)
+        }
+    }
+
+    /// Store the raw vault key behind `.biometryCurrentSet`. Only possible while
+    /// unlocked, because that is the only time the raw key exists.
+    @discardableResult
+    func enableBiometrics() -> Bool {
+        guard let key = vaultKey else {
+            return false
+        }
+        if case .failure(let error) = KeychainVaultStore.biometryAvailability() {
+            errorMessage = error.message
+            return false
+        }
+        switch KeychainVaultStore.enrolBiometrics(vaultKey: key) {
+        case .success:
+            biometricEnabled = true
+            biometricNeedsReEnrolment = false
+            persistBiometricFlag(true)
+            return true
+        case .failure(let error):
+            errorMessage = error.message
+            refreshBiometricState()
+            return false
+        }
+    }
+
+    func disableBiometrics() {
+        KeychainVaultStore.removeBiometricEnrolment()
+        biometricEnabled = false
+        persistBiometricFlag(false)
+    }
+
     func changePassphrase(current: String, new: String) async -> Bool {
-        guard let store = store, let stored = try? store.metadata() else {
+        guard let core = loadVaultMetadata() else {
             return false
         }
         isBusy = true
         defer { isBusy = false }
-        let core = stored.coreMetadata
         do {
             let updated = try await Task.detached(priority: .userInitiated) {
                 try VaultCore.changePassphrase(
@@ -209,19 +278,115 @@ final class AppSession: ObservableObject {
                     metadata: core
                 )
             }.value
-            var next = StoredVaultMetadata(updated)
-            // A passphrase change invalidates biometric unlock; it must be
-            // re-enrolled. B4 will also delete the Keychain item here.
-            next.biometricEnabled = false
-            next.biometricWrappedKey = nil
-            next.biometricWrapperIv = nil
-            try store.saveMetadata(next)
-            biometricEnabled = false
+            // A passphrase change re-wraps the vault key, so the OLD biometric
+            // item now guards a key wrapped under a passphrase that no longer
+            // opens anything. Android disables biometric unlock here; so does
+            // this, and the user re-enrols from Settings.
+            disableBiometrics()
+            if let failure = persist(updated) {
+                errorMessage = failure.message
+                return false
+            }
             return true
         } catch {
             errorMessage = "Current passphrase is wrong."
             return false
         }
+    }
+
+    private func finishUnlock(with key: Data) {
+        vaultKey = key
+        lockState = .unlocked
+        backgroundedAt = nil
+        biometricNeedsReEnrolment = false
+        errorMessage = nil
+        reload()
+    }
+
+    /// The error split that matters: a changed enrolment throws the item away and
+    /// asks for re-enrolment; a failed match just says "try again". Treating the
+    /// second like the first would discard a working enrolment over one bad
+    /// scan.
+    private func handleBiometricFailure(_ error: DeviceKeyError) {
+        if error.isCancellation {
+            return
+        }
+        if error.requiresReEnrolment {
+            disableBiometrics()
+            biometricNeedsReEnrolment = true
+        }
+        errorMessage = error.message
+    }
+
+    // MARK: - Where the key material lives
+
+    /// SPLIT STORAGE, and the reason for it.
+    ///
+    /// The wrapped vault key goes to the Keychain under
+    /// `kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly`; SQLite keeps only the
+    /// salt, the KDF cost and the key version, none of which is secret.
+    ///
+    /// So a copy of the database file on its own cannot even be attacked
+    /// offline: there is no wrapped key in it to run a dictionary against. And
+    /// the Keychain item is device-bound, passcode-gated and excluded from
+    /// backups, which is the threat-model equivalent of Android's Keystore
+    /// pepper wrap — `docs/IOS_PARITY.md` asks for equivalence, not API parity.
+    ///
+    /// The `wrapped_vault_key` / `wrapper_iv` columns stay in the schema for
+    /// Android parity and are written EMPTY.
+    private func persist(_ metadata: VaultMetadata) -> DeviceKeyError? {
+        guard let store = store else {
+            return .unexpected(status: errSecNotAvailable)
+        }
+        var blob = Data()
+        blob.append(metadata.wrapNonce)
+        blob.append(metadata.wrappedVaultKey)
+        if case .failure(let error) = KeychainVaultStore.saveWrappedKey(blob) {
+            return error
+        }
+
+        var record = StoredVaultMetadata(metadata)
+        record.wrappedVaultKey = Data()
+        record.wrapperIv = Data()
+        record.biometricEnabled = biometricEnabled
+        do {
+            try store.saveMetadata(record)
+        } catch {
+            return .unexpected(status: errSecIO)
+        }
+        return nil
+    }
+
+    /// Recombine the two halves into the metadata the pure core expects.
+    private func loadVaultMetadata() -> VaultMetadata? {
+        guard let store = store, let record = try? store.metadata() else {
+            return nil
+        }
+        guard case .success(let blob) = KeychainVaultStore.loadWrappedKey() else {
+            return nil
+        }
+        let bytes = [UInt8](blob)
+        guard bytes.count > AesGcm.nonceByteCount else {
+            return nil
+        }
+        return VaultMetadata(
+            keyVersion: record.currentKeyVersion,
+            wrappedVaultKey: Data(bytes[AesGcm.nonceByteCount..<bytes.count]),
+            wrapNonce: Data(bytes[0..<AesGcm.nonceByteCount]),
+            kdfSalt: record.kdfSalt,
+            kdfParams: record.kdfParams
+        )
+    }
+
+    /// Mirrors the flag into the row so the schema stays meaningful, but the
+    /// Keychain remains the source of truth — a stale `1` here can never make the
+    /// app believe in an enrolment the system already destroyed.
+    private func persistBiometricFlag(_ enabled: Bool) {
+        guard let store = store, var record = try? store.metadata() else {
+            return
+        }
+        record.biometricEnabled = enabled
+        try? store.saveMetadata(record)
     }
 
     // MARK: - Items

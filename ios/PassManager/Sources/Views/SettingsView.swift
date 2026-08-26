@@ -7,6 +7,22 @@ struct SettingsView: View {
 
     @State private var showingChangePassphrase = false
 
+    /// Enrolling needs the raw vault key, so it can only ever happen while
+    /// unlocked. The toggle reflects what the Keychain actually holds, not a
+    /// stored boolean — the system can destroy the item behind our back.
+    private var biometricBinding: Binding<Bool> {
+        return Binding(
+            get: { session.biometricEnabled },
+            set: { wanted in
+                if wanted {
+                    session.enableBiometrics()
+                } else {
+                    session.disableBiometrics()
+                }
+            }
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -27,11 +43,16 @@ struct SettingsView: View {
                         showingChangePassphrase = true
                     }
 
-                    Toggle("Unlock with Face ID", isOn: $session.biometricEnabled)
-                        .disabled(true)
-                    Text("Face ID unlock arrives with the Keychain work in B4.")
-                        .font(.caption)
-                        .foregroundStyle(AppColor.onSurfaceVariant)
+                    Toggle("Unlock with Face ID", isOn: biometricBinding)
+                    if session.biometricNeedsReEnrolment {
+                        Text("Face ID changed on this device, so the saved key was discarded. Turn it back on to enrol again.")
+                            .font(.caption)
+                            .foregroundStyle(AppColor.onSurfaceVariant)
+                    } else {
+                        Text("Stores the vault key in the Keychain behind Face ID. It is discarded automatically if the enrolled biometrics change, or if you change your passphrase.")
+                            .font(.caption)
+                            .foregroundStyle(AppColor.onSurfaceVariant)
+                    }
                 }
 
                 Section {

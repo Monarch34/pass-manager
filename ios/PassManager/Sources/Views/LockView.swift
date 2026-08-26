@@ -6,6 +6,7 @@ struct LockView: View {
 
     @EnvironmentObject private var session: AppSession
     @State private var passphrase: String = ""
+    @State private var didAutoPrompt = false
 
     private var canUnlock: Bool {
         return !passphrase.isEmpty && !session.isBusy
@@ -55,20 +56,27 @@ struct LockView: View {
                 // offer biometrics.
                 if session.lockState.allowsBiometrics && session.biometricEnabled {
                     Button {
-                        // B4: LAContext + the .biometryCurrentSet Keychain item.
+                        Task { @MainActor in
+                            await session.unlockWithBiometrics()
+                        }
                     } label: {
                         Label("Unlock with Face ID", systemImage: "faceid")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                     }
-                    .disabled(true)
+                    .disabled(session.isBusy)
                 }
             }
 
-            if let message = session.errorMessage {
+            if let message = session.errorMessage, !message.isEmpty {
                 Text(message)
                     .font(.footnote)
-                    .foregroundStyle(AppColor.error)
+                    // A permanently invalidated enrolment is not something the
+                    // user did wrong, so it is an instruction rather than an
+                    // error shouted in red.
+                    .foregroundStyle(session.biometricNeedsReEnrolment
+                                     ? AppColor.onSurfaceVariant
+                                     : AppColor.error)
                     .multilineTextAlignment(.center)
             }
 
@@ -77,6 +85,20 @@ struct LockView: View {
         }
         .padding(.horizontal, 28)
         .background(AppColor.background.ignoresSafeArea())
+        .onAppear(perform: autoPromptIfEnrolled)
+    }
+
+    /// Offer Face ID immediately on a warm lock, which is what the user expects
+    /// from a password manager — but only once per appearance, so a cancel or a
+    /// failed match does not re-present the sheet in a loop.
+    private func autoPromptIfEnrolled() {
+        guard !didAutoPrompt, session.lockState.allowsBiometrics, session.biometricEnabled else {
+            return
+        }
+        didAutoPrompt = true
+        Task { @MainActor in
+            await session.unlockWithBiometrics()
+        }
     }
 
     private func unlock() {
