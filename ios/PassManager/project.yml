@@ -1,0 +1,70 @@
+name: PassManager
+
+options:
+  bundleIdPrefix: com.passmanager
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+packages:
+  PassVaultCore:
+    path: ../PassVaultCore
+
+targets:
+
+  PassManager:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Sources
+    dependencies:
+      - package: PassVaultCore
+        product: PassVaultCore
+      - package: PassVaultCore
+        product: PassVaultStorage
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.passmanager.ios
+        PRODUCT_NAME: PassManager
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_CFBundleDisplayName: PassManager
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGN_IDENTITY: ""
+
+  PassManagerTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Tests
+    dependencies:
+      - target: PassManager
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.passmanager.ios.tests
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGN_IDENTITY: ""
+
+schemes:
+  PassManager:
+    build:
+      targets:
+        PassManager: all
+        PassManagerTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - PassManagerTests

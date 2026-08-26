@@ -11,27 +11,33 @@ public enum VaultSearch {
 
     /// Case-folding for search, matched to Android's behaviour.
     ///
-    /// Android uses Kotlin's `String.contains(q, ignoreCase = true)`, which is
-    /// Java's per-character `regionMatches`: two characters match when they are
-    /// equal, or their simple uppercase mappings are equal, or their simple
-    /// lowercase mappings are equal. Two consequences worth spelling out, because
-    /// getting either wrong makes iOS search behave differently from Android on
-    /// the same vault:
+    /// Android uses Kotlin's `String.contains(q, ignoreCase = true)`, which
+    /// compares two characters as:
+    ///
+    /// ```
+    /// thisUpper == otherUpper || thisUpper.lowercaseChar() == otherUpper.lowercaseChar()
+    /// ```
+    ///
+    /// — uppercase both, and failing that, lowercase both of those uppercased
+    /// forms. Two consequences worth spelling out, because getting either wrong
+    /// makes iOS search behave differently from Android on the same vault:
     ///
     /// 1. **No diacritic folding.** `ş` does not match `s`, `ğ` does not match
     ///    `g`. Swift's `folding(options:)` with `.diacriticInsensitive` WOULD fold
     ///    them, so it is deliberately not used here.
-    /// 2. **The Turkish dotted/dotless I collapses.** Java maps `i`, `I` and `ı`
-    ///    to the same uppercase `I`, and `İ`, `I` to the same lowercase `i`, so on
-    ///    Android all of `i I ı İ` match one another. Swift's plain `lowercased()`
-    ///    does not do this — it leaves `ı` alone and expands `İ` to `i` plus a
-    ///    combining dot — which would make "iş" fail to find "İş Bankası" on iOS
-    ///    while finding it on Android. Mapping `İ` and `ı` to `i` before
-    ///    lowercasing restores parity.
+    /// 2. **The Turkish dotted/dotless I collapses — all four of `i I ı İ`.**
+    ///    `i`/`I`/`ı` share the uppercase `I`, so the first branch matches them.
+    ///    `ı` and `İ` differ there (`I` vs `İ`), but the second branch lowercases
+    ///    both: `I` → `i`, and per-character `İ` → `i`, so they match too. Swift's
+    ///    plain `lowercased()` reproduces none of this — it leaves `ı` alone and
+    ///    expands `İ` to `i` plus a combining dot, which would make "iş" fail to
+    ///    find "İş Bankası" on iOS while finding it on Android. Mapping `İ` and
+    ///    `ı` to `i` before lowercasing collapses the same four characters Kotlin
+    ///    collapses.
     ///
-    /// Known residual difference: this folding also makes `ı` match `İ`, which
-    /// Android does not. That is the only pair where the two disagree, and it
-    /// errs towards finding more rather than fewer items.
+    /// This fold is equivalent to `ignoreCase`, not merely close to it: Track A
+    /// verified the equivalence independently over an ASCII + Turkish character
+    /// table. If you are tempted to "fix" a difference here, measure it first.
     public static func foldForSearch(_ text: String) -> String {
         var folded = ""
         folded.reserveCapacity(text.count)
