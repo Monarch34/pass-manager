@@ -122,38 +122,39 @@ public enum PasswordGenerator {
 
     /// Shown under the password as "≈ N bits".
     ///
-    /// DELIBERATE ANDROID PARITY QUIRK, twice over:
+    /// `round(length * log2(actual pool size))`, per `docs/IOS_PARITY.md`.
     ///
-    /// 1. The symbol pool counts as 32 here, but `symbols` above is 26 characters
-    ///    long. Android's `computeEntropyBits` uses 32 and its actual pool is the
-    ///    same 26, so the number both apps display is equally optimistic. Fixing
-    ///    it on one platform only would make the two disagree in front of the
-    ///    user, which is worse than being consistently off.
-    /// 2. The result is TRUNCATED, not rounded. `docs/IOS_PARITY.md` says
-    ///    `round(...)`, but `PasswordGeneratorViewModel.kt` ends in `.toInt()`,
-    ///    and at the default settings that is the difference between 104 and 105.
-    ///    The shipped Android behaviour wins.
+    /// This used to copy Android bug-for-bug, and the bug ran in the one
+    /// direction a password manager must never err: it OVERSTATED strength. The
+    /// symbol class was counted as 32 when the pool holds 26, and the result was
+    /// truncated rather than rounded, so the default settings advertised 104 bits
+    /// for a password actually worth 103.35. Rounding is fine; claiming more
+    /// security than is delivered is not. Track A is making the same correction
+    /// on Android — both sides move to the truth together rather than one side
+    /// staying wrong for the sake of matching.
     ///
-    /// Both are flagged for Track A to change on both sides at once.
+    /// Pool sizes are read from the pools themselves rather than written out as
+    /// literals, so editing `symbols` can never silently desynchronise the number
+    /// from the thing it claims to describe again.
     public static func entropyBits(_ options: Options) -> Int {
         var poolSize = 0
         if options.includeUppercase {
-            poolSize += 26
+            poolSize += uppercase.count
         }
         if options.includeLowercase {
-            poolSize += 26
+            poolSize += lowercase.count
         }
         if options.includeDigits {
-            poolSize += 10
+            poolSize += digits.count
         }
         if options.includeSymbols {
-            poolSize += 32
+            poolSize += symbols.count
         }
         if poolSize <= 0 {
             return 0
         }
         let bits = Double(options.length) * (log(Double(poolSize)) / log(2.0))
-        return Int(bits)
+        return Int(bits.rounded())
     }
 
     // MARK: - Randomness

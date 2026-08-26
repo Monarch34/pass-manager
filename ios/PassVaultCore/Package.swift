@@ -45,7 +45,19 @@ let package = Package(
         ),
         .testTarget(
             name: "PassVaultCoreTests",
-            dependencies: ["PassVaultCore"]
+            dependencies: [
+                "PassVaultCore",
+                // Only for hashing the interop fixtures in an integrity check.
+                .product(name: "Crypto", package: "swift-crypto")
+            ],
+            // Cross-platform interop fixtures. SwiftPM only bundles resources
+            // that live inside the target directory, so these are copies of the
+            // canonical files in the repository-root `fixtures/` directory. Their
+            // digests are pinned in CrossPlatformInteropTests, which fails loudly
+            // if the two copies ever drift apart.
+            resources: [
+                .copy("Fixtures")
+            ]
         ),
         .testTarget(
             name: "PassVaultStorageTests",

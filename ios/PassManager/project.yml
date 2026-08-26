@@ -6,15 +6,20 @@ options:
     iOS: "16.0"
   createIntermediateGroups: true
   groupSortPosition: top
-  # CI installs XcodeGen from Homebrew, which tracks latest — 2.45.4 today — and
-  # writes pbxproj objectVersion 77 (Xcode 16). The runner is Xcode 15.4 and
-  # refuses to open that: "a future Xcode project file format (77)".
+  # SAFETY BELT — normally a no-op now. The workflow pins XCODEGEN_VERSION and
+  # selects the runner's Xcode explicitly, so the generator and the toolchain
+  # agree on a format and this should never trigger.
   #
-  # `objectVersion` below is the documented knob but 2.45.4 ignores it, so the
-  # postGenCommand is what actually enforces the downgrade. 56 is the Xcode 14+
-  # format and covers everything here, local SPM packages included; the sed is a
-  # no-op if a future XcodeGen starts honouring the option. Both live here rather
-  # than in the workflow because .github/ is frozen.
+  # Kept because the failure it prevents is silent and total: an unpinned
+  # XcodeGen (Homebrew was shipping 2.45.4) writes pbxproj objectVersion 77, and
+  # an Xcode predating that format refuses to open the project at all — "a future
+  # Xcode project file format (77)" — before one line is compiled. `objectVersion`
+  # below is the documented knob but 2.45.4 ignores it, so the postGenCommand is
+  # what actually enforces the format. 56 is Xcode 14+ and covers everything used
+  # here, local SPM packages included.
+  #
+  # If this project ever needs a genuinely newer pbxproj feature, delete both
+  # lines rather than fighting them.
   objectVersion: 56
   postGenCommand: sed -i '' -e 's/objectVersion = [0-9][0-9]*;/objectVersion = 56;/' -e 's/compatibilityVersion = "[^"]*";/compatibilityVersion = "Xcode 14.0";/' PassManager.xcodeproj/project.pbxproj
 

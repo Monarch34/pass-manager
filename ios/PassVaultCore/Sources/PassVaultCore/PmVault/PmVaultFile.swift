@@ -132,8 +132,7 @@ public enum PmVaultFile {
         passphrase: String,
         params: KdfParams = KdfParams.standard
     ) throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let encoder = makeEncoder()
 
         var plaintext = try encoder.encode(body)
         var passphraseBytes = Array(passphrase.utf8)
@@ -291,6 +290,25 @@ public enum PmVaultFile {
     }
 
     // MARK: - Helpers
+
+    /// The encoder used for both the header and the body.
+    ///
+    /// `.sortedKeys` makes an export reproducible: the same body always produces
+    /// the same bytes, which is what lets a test assert a committed fixture is
+    /// byte-for-byte what this writer emits. `.withoutEscapingSlashes` is
+    /// required for interop — Foundation otherwise writes `https:\/\/github.com`,
+    /// which Kotlin never produces.
+    ///
+    /// A consequence worth knowing: sorted keys put `"type"` in the middle of a
+    /// payload object rather than first. `docs/FORMAT.md` does not require any
+    /// particular key order, and kotlinx.serialization locates the discriminator
+    /// wherever it sits, but this is the property the cross-platform fixtures
+    /// exist to prove rather than assume.
+    public static func makeEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return encoder
+    }
 
     /// `magic || headerLen (big-endian UInt16) || header` — the exact byte range
     /// used as AAD.
