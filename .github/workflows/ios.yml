@@ -1,0 +1,77 @@
+name: iOS
+
+on:
+  push:
+    branches: [ios-app]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-test:
+    name: Core package tests
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Build and test PassVaultCore
+        working-directory: ios/PassVaultCore
+        run: swift test 2>&1 | tee core-test.log
+      - name: Upload core test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-log
+          path: ios/PassVaultCore/core-test.log
+
+  app-build:
+    name: App build (simulator, unsigned)
+    runs-on: macos-14
+    needs: core-test
+    if: hashFiles('ios/PassManager/project.yml') != ''
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: ios/PassManager
+        run: xcodegen generate
+      - name: Build for simulator
+        working-directory: ios/PassManager
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project PassManager.xcodeproj \
+            -scheme PassManager \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee xcodebuild.log | tail -80
+      - name: Run app tests on simulator
+        working-directory: ios/PassManager
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project PassManager.xcodeproj \
+            -scheme PassManager \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee xcodetest.log | tail -80
+      - name: Export simulator .app artifact
+        if: success()
+        run: |
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -type d -name "PassManager.app" -path "*iphonesimulator*" | head -1)
+          echo "Found: $APP_PATH"
+          mkdir -p out && cp -R "$APP_PATH" out/
+      - name: Upload logs and artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-build-output
+          path: |
+            ios/PassManager/xcodebuild.log
+            ios/PassManager/xcodetest.log
+            out/
