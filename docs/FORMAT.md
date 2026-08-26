@@ -40,9 +40,11 @@ the app before any authenticity check runs.
 
 - `version == 1`
 - `memory >= 8192` and `memory <= 262144` (KiB: 8 MiB floor, 256 MiB ceiling)
-- `memory >= 8 * parallelism` — Argon2's own structural minimum. A header can satisfy
-  every other bound and still be rejected inside the library (e.g. m=16, p=8); catching
-  it here keeps every reader failure inside this document's typed error set.
+- `memory >= 8 * parallelism` — Argon2's own structural minimum, stated so that every
+  reader failure stays inside this document's typed error set instead of escaping from
+  inside the library. At the bounds above the rule is unreachable (8 × 8 = 64 KiB sits
+  far below the 8192 KiB floor); implement it anyway, because it becomes live the day
+  the floor moves.
 - `iterations <= 16` and `>= 1`
 - `parallelism <= 8` and `>= 1`
 - `hashLength == 32`
