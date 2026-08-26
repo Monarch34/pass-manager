@@ -21,7 +21,9 @@ License: [MIT](LICENSE). Layout: [docs/REPOSITORY_LAYOUT.md](docs/REPOSITORY_LAY
 
 ## What it does
 
-- **AES-256-GCM** at rest; **Argon2id** for the master key (64 MiB, 10 iterations, parallelism 4).
+- **AES-256-GCM** at rest; **Argon2id** for the master key (64 MiB, 3 iterations, parallelism 4 — memory is where Argon2's resistance lives, and 64 MiB sits well above every OWASP reference configuration; the rationale for the iteration count is in `KdfParams.kt`).
+- **Device-bound vault key:** the wrapped key is sealed a second time with an Android Keystore key that cannot leave the phone, so a stolen copy of the database is useless on another machine. New vaults get this from the start; existing ones are offered the upgrade once a backup exists.
+- **Encrypted export/import** (`.pmvault`): passphrase-protected, portable, and the only way to move a vault between devices or platforms — see [docs/FORMAT.md](docs/FORMAT.md).
 - **Biometric unlock** through Android Keystore (new fingerprint enrollment invalidates the key).
 - **Desktop pairing** over LAN: **X25519** per session, **HKDF-SHA256** for the session key, **8-character safety number** for MITM detection before the session is trusted. Subsequent traffic uses **AES-GCM** with direction-prefixed nonces; replay attempts are rejected.
 - Toolbar **refresh** on desktop re-fetches vault metadata from the phone; the phone rate-limits how often that’s allowed.
@@ -70,12 +72,13 @@ The HTTP/WebSocket leg is **not TLS**. The session key never goes over the wire 
 | Concern | What we did |
 |---------|-------------|
 | Stolen phone | Vault encrypted; need passphrase or biometric |
-| Weak passphrase | Argon2id makes offline guessing slow |
+| Weak passphrase | Argon2id makes offline guessing slow; the lock screen also backs off after repeated failures (2 s doubling to 60 s) |
+| Stolen database file | v2 vaults add a Keystore-sealed outer layer, so the file cannot be attacked off-device — losing the phone or clearing app data makes that vault unrecoverable without a `.pmvault` backup |
 | Backup leaking data | `allowBackup=false`, extraction rules lock it down |
 | Screenshots | `FLAG_SECURE` on the sensitive UI |
 | LAN MITM while pairing | ECDH + manual comparison of the safety number on both devices |
 | Replay after pairing | Nonces with direction byte; reuse throws |
-| Keys/passwords in heap | Sensitive material uses off-heap buffers / bytes where we could; passwords aren’t carried as `String` in the hot path |
+| Keys/passwords in heap | Keys, passphrases and the desktop-send path use `ByteArray`/`CharArray` that are zeroed after use. Item payloads are not: JSON decoding and Compose text fields both produce immutable `String`s, so decrypted field values do sit on the heap until GC — an accepted residual, noted in the code where it happens |
 | Spamming “send password” | Cap per session + cooldown on the phone |
 | Handshake spam | Rate limit on `/v1/pair/handshake` |
 | Desktop listening everywhere | Binds to the chosen LAN address, not `0.0.0.0` |

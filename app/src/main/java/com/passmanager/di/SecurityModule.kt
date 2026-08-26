@@ -3,6 +3,8 @@ package com.passmanager.di
 import com.passmanager.domain.port.BiometricLockPort
 import com.passmanager.domain.port.DesktopPairingPort
 import com.passmanager.crypto.keystore.PepperKeyManager
+import com.passmanager.data.time.SystemElapsedRealtimeSource
+import com.passmanager.domain.port.ElapsedRealtimeSource
 import com.passmanager.domain.port.LockStateProvider
 import com.passmanager.domain.port.PepperPort
 import com.passmanager.domain.port.UnlockSessionRecorder
@@ -44,4 +46,10 @@ abstract class SecurityModule {
     @Binds
     @Singleton
     abstract fun bindPepperPort(impl: PepperKeyManager): PepperPort
+
+    @Binds
+    @Singleton
+    abstract fun bindElapsedRealtimeSource(
+        impl: SystemElapsedRealtimeSource
+    ): ElapsedRealtimeSource
 }

@@ -26,6 +26,7 @@
     <string name="lock_unlock_failed">Unlock failed</string>
     <string name="lock_biometric_unlock_failed">Biometric unlock failed</string>
     <string name="lock_or_divider">or</string>
+    <string name="lock_throttled_countdown">Too many attempts. Try again in %1$d s.</string>
 
     <!-- Vault List -->
     <string name="vault_title">Vault</string>

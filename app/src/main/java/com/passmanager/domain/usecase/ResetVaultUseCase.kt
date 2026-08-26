@@ -1,6 +1,7 @@
 package com.passmanager.domain.usecase
 
 import com.passmanager.domain.port.BiometricLockPort
+import com.passmanager.domain.port.LockStateProvider
 import com.passmanager.domain.port.PepperPort
 import com.passmanager.domain.repository.MetadataRepository
 import com.passmanager.domain.repository.VaultRepository
@@ -23,9 +24,14 @@ class ResetVaultUseCase @Inject constructor(
     private val vaultRepository: VaultRepository,
     private val metadataRepository: MetadataRepository,
     private val biometricLockPort: BiometricLockPort,
-    private val pepper: PepperPort
+    private val pepper: PepperPort,
+    private val lockStateProvider: LockStateProvider
 ) {
     suspend operator fun invoke() {
+        // Only reachable from the lock screen today, so the key is already null - but the
+        // guarantee that an erased vault leaves no key in memory belongs here, not in a
+        // navigation graph that a later screen could route around.
+        lockStateProvider.lock()
         vaultRepository.deleteAll()
         metadataRepository.delete()
         // Clears the biometric wrapped key and its Keystore alias. Tolerates an already-empty

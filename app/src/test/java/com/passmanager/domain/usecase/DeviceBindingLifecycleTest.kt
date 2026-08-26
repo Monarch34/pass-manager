@@ -18,6 +18,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
@@ -135,6 +136,7 @@ class DeviceBindingLifecycleTest {
 
     @Test
     fun `reset erases items, metadata and both device keys`() = runTest {
+        val lockProvider = lockProvider(LockState.Unlocked)
         val vaultRepository = FakeVaultRepository()
         vaultRepository.seedItem(
             cipher,
@@ -145,9 +147,14 @@ class DeviceBindingLifecycleTest {
         )
         val biometricLockPort = mockk<BiometricLockPort>(relaxed = true)
 
-        ResetVaultUseCase(vaultRepository, metadataRepository, biometricLockPort, pepper).invoke()
+        ResetVaultUseCase(
+            vaultRepository, metadataRepository, biometricLockPort, pepper, lockProvider
+        ).invoke()
 
         assertTrue(vaultRepository.rows.isEmpty())
+        // Belt and braces: the vault key must not outlive the rows it decrypted, whatever
+        // route the caller took to get here.
+        verify(exactly = 1) { lockProvider.lock() }
         coVerify(exactly = 1) { metadataRepository.delete() }
         coVerify(exactly = 1) { biometricLockPort.disable() }
         assertFalse(pepper.isKeyPresent())
@@ -155,13 +162,16 @@ class DeviceBindingLifecycleTest {
 
     @Test
     fun `reset still completes when disabling biometric fails`() = runTest {
+        val lockProvider = lockProvider(LockState.Unlocked)
         val vaultRepository = FakeVaultRepository()
         val biometricLockPort = mockk<BiometricLockPort>()
         coEvery { biometricLockPort.disable() } throws IllegalStateException("no metadata row")
 
         // The metadata row is already gone by this point, so a complaining biometric teardown must
         // not strand the user on the recovery screen with nothing left to recover.
-        ResetVaultUseCase(vaultRepository, metadataRepository, biometricLockPort, pepper).invoke()
+        ResetVaultUseCase(
+            vaultRepository, metadataRepository, biometricLockPort, pepper, lockProvider
+        ).invoke()
 
         assertFalse(pepper.isKeyPresent())
     }

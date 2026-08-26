@@ -10,11 +10,15 @@ import com.passmanager.domain.port.LockStateProvider
 import com.passmanager.domain.exception.BiometricKeyInvalidatedException
 import com.passmanager.domain.exception.DeviceKeyLostException
 import com.passmanager.domain.exception.DeviceKeyUnavailableException
+import com.passmanager.domain.exception.UnlockThrottledException
 import com.passmanager.domain.port.BiometricLockPort
+import com.passmanager.domain.usecase.UnlockThrottle
 import com.passmanager.security.biometric.BiometricHelper
 import com.passmanager.ui.common.AppLogger
 import com.passmanager.ui.common.UserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -25,6 +29,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.Immutable
 import javax.crypto.Cipher
 import javax.inject.Inject
+import kotlin.math.ceil
 
 @Immutable
 data class LockUiState(
@@ -37,7 +42,13 @@ data class LockUiState(
      * The device key that seals this vault is permanently gone. Distinct from [error] because it
      * is not a message the user can act on by trying again — it routes to the recovery screen.
      */
-    val deviceKeyLost: Boolean = false
+    val deviceKeyLost: Boolean = false,
+    /**
+     * Seconds left on the back-pressure delay after repeated failures; 0 when unlocking is
+     * allowed. Shown as a countdown so the wait reads as a deliberate limit rather than a
+     * frozen screen.
+     */
+    val lockoutRemainingSeconds: Int = 0
 )
 
 @HiltViewModel
@@ -45,7 +56,8 @@ class LockViewModel @Inject constructor(
     private val unlockWithPassphraseUseCase: UnlockWithPassphraseUseCase,
     private val biometricLockPort: BiometricLockPort,
     private val lockStateProvider: LockStateProvider,
-    private val biometricHelper: BiometricHelper
+    private val biometricHelper: BiometricHelper,
+    private val unlockThrottle: UnlockThrottle
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LockUiState())
@@ -54,8 +66,35 @@ class LockViewModel @Inject constructor(
     private val _biometricCipherEvent = MutableSharedFlow<Cipher>(extraBufferCapacity = 1)
     val biometricCipherEvent: SharedFlow<Cipher> = _biometricCipherEvent
 
+    private var countdownJob: Job? = null
+
     init {
         checkBiometricAvailability()
+        // A lockout survives the screen being closed and reopened, so it has to be read back
+        // rather than only tracked in memory from the failure that caused it.
+        viewModelScope.launch { startCountdown(unlockThrottle.remainingLockoutMs()) }
+    }
+
+    /**
+     * Ticks the visible countdown down to zero. Purely cosmetic - the real gate is re-checked in
+     * the use case on every attempt, so a cancelled or stale timer cannot let an attempt through
+     * early.
+     */
+    private fun startCountdown(remainingMs: Long) {
+        countdownJob?.cancel()
+        if (remainingMs <= 0L) {
+            _uiState.update { it.copy(lockoutRemainingSeconds = 0) }
+            return
+        }
+        countdownJob = viewModelScope.launch {
+            var remaining = ceil(remainingMs / 1000.0).toInt()
+            while (remaining > 0) {
+                _uiState.update { it.copy(lockoutRemainingSeconds = remaining) }
+                delay(1_000)
+                remaining--
+            }
+            _uiState.update { it.copy(lockoutRemainingSeconds = 0) }
+        }
     }
 
     private fun checkBiometricAvailability() {
@@ -80,6 +119,10 @@ class LockViewModel @Inject constructor(
                         shouldShakePassphraseField = true
                     )
                 }
+                startCountdown(unlockThrottle.remainingLockoutMs())
+            } catch (e: UnlockThrottledException) {
+                _uiState.update { it.copy(isLoading = false) }
+                startCountdown(e.remainingMs)
             } catch (e: DeviceKeyLostException) {
                 // The only failure that earns the recovery screen. Everything else — including
                 // every other Keystore complaint — is a retry, because the recovery screen's only
@@ -136,7 +179,9 @@ class LockViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 biometricLockPort.unlock(authenticatedCipher)
-                _uiState.update { it.copy(isLoading = false, isUnlocked = true) }
+                unlockThrottle.clear()
+                countdownJob?.cancel()
+                _uiState.update { it.copy(isLoading = false, isUnlocked = true, lockoutRemainingSeconds = 0) }
             } catch (e: Exception) {
                 AppLogger.e("LockViewModel", "Biometric unlock failed", e)
                 _uiState.update {

@@ -5,6 +5,7 @@ import com.passmanager.crypto.kdf.KdfProvider
 import com.passmanager.crypto.model.KdfParams
 import com.passmanager.domain.exception.DeviceKeyLostException
 import com.passmanager.domain.exception.DeviceKeyUnavailableException
+import com.passmanager.domain.exception.UnlockThrottledException
 import com.passmanager.domain.exception.WrongPassphraseException
 import com.passmanager.domain.model.VaultMetadata
 import com.passmanager.domain.model.VaultWrapVersion
@@ -16,10 +17,12 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.coVerify
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -37,8 +40,12 @@ class UnlockWithPassphraseUseCaseTest {
     private val vaultKeyProvider = mockk<VaultKeyProvider>(relaxed = true)
     private val sessionRecorder = mockk<UnlockSessionRecorder>(relaxed = true)
 
+    private val throttle = mockk<UnlockThrottle>(relaxed = true).also {
+        coEvery { it.remainingLockoutMs() } returns 0L
+    }
+
     private val useCase = UnlockWithPassphraseUseCase(
-        metadataRepository, kdfProvider, keyWrapper, vaultKeyProvider, sessionRecorder
+        metadataRepository, kdfProvider, keyWrapper, vaultKeyProvider, sessionRecorder, throttle
     )
 
     private val correctKek = ByteArray(32) { 0x42 }
@@ -190,5 +197,72 @@ class UnlockWithPassphraseUseCaseTest {
         failureOf { useCase(passphrase) }
 
         passphrase.forEach { assertEquals('\u0000', it) }
+    }
+
+    // -- Back-pressure ordering -----------------------
+
+    @Test
+    fun `the attempt is booked before the derivation starts`() = runTest {
+        coEvery { metadataRepository.get() } returns metadata(deviceBound = false)
+        var booked = false
+        var bookedWhenDeriving = false
+        coEvery { throttle.registerAttempt() } coAnswers { booked = true; 1 }
+        every { kdfProvider.deriveKey(any(), any(), any()) } answers {
+            bookedWhenDeriving = booked
+            correctKek.copyOf()
+        }
+
+        useCase("correct".toCharArray())
+
+        // Argon2 takes about a second. A counter bumped after it would hand every attempt fired
+        // into that window the same pre-increment count, so a burst of guesses would cost one
+        // tick between them instead of one each.
+        assertTrue("the counter must be written before any derivation", bookedWhenDeriving)
+    }
+
+    @Test
+    fun `a throttled attempt never reaches the kdf and books nothing`() = runTest {
+        coEvery { throttle.remainingLockoutMs() } returns 5_000L
+        coEvery { metadataRepository.get() } returns metadata(deviceBound = false)
+
+        val failure = failureOf { useCase("correct".toCharArray()) }
+
+        assertEquals(UnlockThrottledException::class.java, failure?.javaClass)
+        assertEquals(5_000L, (failure as UnlockThrottledException).remainingMs)
+        verify(exactly = 0) { kdfProvider.deriveKey(any(), any(), any()) }
+        // A refused attempt is not a failed one; counting it would let the penalty feed itself.
+        coVerify(exactly = 0) { throttle.registerAttempt() }
+    }
+
+    @Test
+    fun `a refused attempt still zeroes the passphrase`() = runTest {
+        coEvery { throttle.remainingLockoutMs() } returns 5_000L
+        coEvery { metadataRepository.get() } returns metadata(deviceBound = false)
+
+        val passphrase = "correct".toCharArray()
+        failureOf { useCase(passphrase) }
+
+        passphrase.forEach { assertEquals('\u0000', it) }
+    }
+
+    @Test
+    fun `a successful unlock clears the penalty`() = runTest {
+        coEvery { metadataRepository.get() } returns metadata(deviceBound = false)
+        every { kdfProvider.deriveKey(any(), any(), any()) } returns correctKek.copyOf()
+
+        useCase("correct".toCharArray())
+
+        coVerify(exactly = 1) { throttle.clear() }
+    }
+
+    @Test
+    fun `a wrong passphrase leaves the booked attempt standing`() = runTest {
+        coEvery { metadataRepository.get() } returns metadata(deviceBound = false)
+        every { kdfProvider.deriveKey(any(), any(), any()) } returns wrongKek.copyOf()
+
+        failureOf { useCase("wrong".toCharArray()) }
+
+        coVerify(exactly = 1) { throttle.registerAttempt() }
+        coVerify(exactly = 0) { throttle.clear() }
     }
 }

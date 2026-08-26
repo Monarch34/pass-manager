@@ -168,7 +168,7 @@ fun LockScreen(
                     label = stringResource(R.string.lock_passphrase_hint),
                     imeAction = ImeAction.Done,
                     onImeAction = {
-                        if (!uiState.isLoading) {
+                        if (!uiState.isLoading && uiState.lockoutRemainingSeconds == 0) {
                             viewModel.unlockWithPassphrase(passphrase.toCharArray())
                             passphrase = ""
                         }
@@ -177,6 +177,18 @@ fun LockScreen(
                         .fillMaxWidth()
                         .shakeOnTrigger(shakeCount)
                 )
+
+                if (uiState.lockoutRemainingSeconds > 0) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = stringResource(
+                            R.string.lock_throttled_countdown,
+                            uiState.lockoutRemainingSeconds
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
 
                 Spacer(Modifier.height(16.dp))
 
@@ -188,7 +200,7 @@ fun LockScreen(
                         passphrase = ""
                     },
                     isLoading = uiState.isLoading,
-                    enabled = passphrase.isNotEmpty(),
+                    enabled = passphrase.isNotEmpty() && uiState.lockoutRemainingSeconds == 0,
                     modifier = Modifier
                         .fillMaxWidth()
                         .semantics {

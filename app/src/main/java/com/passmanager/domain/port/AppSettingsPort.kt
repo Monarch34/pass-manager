@@ -33,6 +33,15 @@ interface AppSettingsPort {
     /** When a backup reminder was last dismissed, so it stays quiet for a while afterwards. */
     val backupReminderSnoozedAtMs: Flow<Long?>
 
+    /** Consecutive failed passphrase unlocks. Reset by any successful unlock. */
+    val failedUnlockAttempts: Flow<Int>
+
+    /**
+     * `elapsedRealtime()` at the moment of the most recent failed unlock - the anchor the
+     * lockout counts down from. Deliberately not wall-clock time.
+     */
+    val unlockLockoutAnchorMs: Flow<Long>
+
     suspend fun setAutoLockTimeout(seconds: Int)
     suspend fun setUseGoogleFavicons(value: Boolean)
     suspend fun setVaultListSort(order: VaultSortOrder)
@@ -40,4 +49,14 @@ interface AppSettingsPort {
     suspend fun setLastExportAt(epochMillis: Long)
     suspend fun setDeviceBindingPromptDeclined(declined: Boolean)
     suspend fun setBackupReminderSnoozedAt(epochMillis: Long)
+
+    /**
+     * Increments the failure counter and stamps [anchorRealtimeMs] in one atomic write,
+     * returning the new count. Atomic because two attempts racing must produce two
+     * increments: a read-modify-write from the caller would let both see the same value and
+     * one of the increments would be lost.
+     */
+    suspend fun recordFailedUnlockAttempt(anchorRealtimeMs: Long): Int
+
+    suspend fun clearFailedUnlockAttempts()
 }
