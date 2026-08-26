@@ -92,15 +92,36 @@ targets:
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGN_IDENTITY: ""
 
+  # Drives the app on a simulator to capture the screenshot tour. Kept separate
+  # from PassManagerTests because it needs a running app rather than a test host,
+  # and because it is far slower than the logic suites.
+  PassManagerUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: UITests
+    dependencies:
+      - target: PassManager
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.passmanager.ios.uitests
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGN_IDENTITY: ""
+
 schemes:
   PassManager:
     build:
       targets:
         PassManager: all
         PassManagerTests: [test]
+        PassManagerUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
         - PassManagerTests
+        - PassManagerUITests

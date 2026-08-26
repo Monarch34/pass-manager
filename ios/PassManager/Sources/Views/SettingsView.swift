@@ -23,6 +23,22 @@ struct SettingsView: View {
         )
     }
 
+    /// Dismisses this sheet, THEN triggers the state change that presents the
+    /// next one.
+    ///
+    /// UIKit will not present a sheet while another is still dismissing — the
+    /// request is dropped and nothing happens, which looks exactly like a dead
+    /// button. Doing both in the same runloop turn is the classic way to hit
+    /// that. The transfer sheets are hosted by RootView (so an auto-lock cannot
+    /// tear them down with this view), which makes this hand-off unavoidable, so
+    /// it is sequenced explicitly rather than left to luck.
+    private func dismissThen(_ action: @escaping () -> Void) {
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            action()
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -72,14 +88,12 @@ struct SettingsView: View {
                     // view is torn down if the vault auto-locks mid-transfer and
                     // anything presented from here would go with it.
                     Button("Export vault…") {
-                        session.beginExport()
-                        dismiss()
+                        dismissThen { session.beginExport() }
                     }
                     .disabled(session.itemCount == 0)
 
                     Button("Import vault…") {
-                        session.requestImportPicker()
-                        dismiss()
+                        dismissThen { session.requestImportPicker() }
                     }
                 } header: {
                     Text("Transfer")

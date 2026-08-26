@@ -69,6 +69,8 @@ final class AppSession: ObservableObject {
     }
 
     func bootstrap() {
+        // No-op in release: this call's entire body sits inside `#if DEBUG`.
+        UITestMode.resetIfRequested(databasePath: Self.databasePath())
         if store == nil {
             do {
                 store = try VaultStore.open(path: Self.databasePath())
@@ -195,9 +197,43 @@ final class AppSession: ObservableObject {
             }
             Self.protectDatabaseFile()
             await unlock(passphrase: passphrase)
+            seedForUITestsIfRequested()
         } catch {
             errorMessage = "Could not create the vault."
         }
+    }
+
+    /// Fills a freshly created vault with sample items so the screenshot tour has
+    /// something to show. Does nothing unless this is a DEBUG build launched with
+    /// the seed flag — `UITestMode.wantsSeed` is a compile-time `false` in
+    /// release.
+    private func seedForUITestsIfRequested() {
+        guard UITestMode.wantsSeed, let store = store, let vaultKey = vaultKey else {
+            return
+        }
+        guard (try? store.count()) == 0 else {
+            return
+        }
+        // Backdated deliberately: the import fixture carries a NEWER timestamp
+        // for one of these ids, which is what makes the import summary show a
+        // real overwrite instead of "everything skipped".
+        let now = Self.nowMillis()
+        let day: Int64 = 86_400_000
+        var offset: Int64 = 0
+        for payload in UITestMode.samplePayloads() {
+            offset += 1
+            let row = try? ItemCrypto.makeRow(
+                payload: payload,
+                vaultKey: vaultKey,
+                keyVersion: 1,
+                createdAt: now - (120 * day) - offset,
+                updatedAt: now - (30 * day) - offset
+            )
+            if let row = row {
+                try? store.insert(row)
+            }
+        }
+        reload()
     }
 
     func unlock(passphrase: String) async {
@@ -527,6 +563,14 @@ final class AppSession: ObservableObject {
 
     func requestImportPicker() {
         errorMessage = nil
+        // The screenshot tour cannot drive the system Files picker, so in a DEBUG
+        // build launched with the fixture flag it is handed a container built in
+        // memory instead. Everything downstream — decrypt, plan, summary, apply —
+        // is the real code path.
+        if UITestMode.wantsImportFixture, let fixture = UITestMode.makeImportFixture() {
+            beginImport(fileData: fixture)
+            return
+        }
         isPickingImportFile = true
     }
 

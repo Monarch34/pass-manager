@@ -132,6 +132,28 @@ public enum KeychainVaultStore {
 
     public static let service = "com.passmanager.ios.vault"
 
+    /// The protection class every item is written with.
+    ///
+    /// Normally `kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly`, which is what
+    /// the contract asks for — and which a simulator with NO device passcode
+    /// cannot satisfy, so `SecItemAdd` fails with `errSecNotAvailable` and no
+    /// vault can be created at all. That is correct on a real device and a hard
+    /// stop for an automated screenshot run.
+    ///
+    /// In a DEBUG build launched with the relaxed flag it drops to
+    /// `AfterFirstUnlockThisDeviceOnly`: still device-only, still excluded from
+    /// backups, but not requiring a passcode. This changes ONLY which constant is
+    /// passed — every surrounding code path is the shipping one — and in release
+    /// the branch does not exist in the binary.
+    static var accessibility: CFString {
+        #if DEBUG
+        if UITestMode.wantsRelaxedKeychain {
+            return kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        }
+        #endif
+        return kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly
+    }
+
     public enum Account: String {
         /// The wrapped blob. Reading it needs no biometric prompt — it is still
         /// encrypted under the passphrase-derived KEK.
@@ -168,7 +190,7 @@ public enum KeychainVaultStore {
 
     public static func saveWrappedKey(_ blob: Data) -> Result<Void, DeviceKeyError> {
         var query = baseQuery(.wrappedVaultKey)
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly
+        query[kSecAttrAccessible as String] = accessibility
 
         SecItemDelete(baseQuery(.wrappedVaultKey) as CFDictionary)
         query[kSecValueData as String] = blob
@@ -207,7 +229,7 @@ public enum KeychainVaultStore {
         var accessError: Unmanaged<CFError>?
         let control = SecAccessControlCreateWithFlags(
             nil,
-            kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
+            accessibility,
             .biometryCurrentSet,
             &accessError
         )
