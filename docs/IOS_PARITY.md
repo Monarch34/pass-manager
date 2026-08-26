@@ -65,9 +65,12 @@ Onboarding (create vault: passphrase + confirm, strength meter, min 8 chars) →
 Lock (passphrase + Face ID button when enrolled) →
 Vault list (search field, category filter chips, item rows: 40pt category tile +
 title + category label, count line) →
-Add/Edit (category picker + per-category fields incl. validation: title required;
-login/bank password required; card number 16 digits, CVC 3-4, expiry MM/YY;
-bank password 6-12 chars with complexity — reference `domain/validation/`) →
+Add/Edit (category picker + per-category fields; validation blocks saving on:
+title required, login/bank password required, card number 16 digits, expiry MM/YY,
+bank password 6-12 chars with complexity — reference `domain/validation/`. A weak
+card CVC is surfaced as a *warning only* and never blocks the save, matching
+`AddEditItemSaveValidator`; a card that saves on one platform must save on the
+other) →
 View item (masked password with reveal + copy; clipboard clears after 15 s — iOS:
 `UIPasteboard` `expirationDate` + `localOnly`) →
 Generator (length 8-64 slider default 16, four character-class toggles at least one on,
@@ -90,8 +93,15 @@ plate. Dark and light themes both required; follow the system setting.
 ## Generator rules (reference `PasswordGeneratorViewModel.kt`)
 
 Length 8-64 (default 16); classes: upper/lower/digits/symbols; at least one class always
-on; result must contain at least one char from each enabled class; entropy shown as
-`round(length * log2(poolSize))` bits.
+on; result must contain at least one char from each enabled class.
+
+Entropy is `round(length * log2(poolSize))` bits, where **poolSize is the size of the
+character set actually drawn from** — 26 + 26 + 10 + 26 for the four classes, the symbol
+set being the 26 characters in `GeneratePasswordUseCase.SYMBOLS`. Two historical Android
+bugs are being corrected rather than mirrored: the symbol class was counted as 32 while
+26 characters were drawn, and the result was truncated instead of rounded. Both inflated
+the number, which is the wrong direction for a security claim. Both platforms adopt the
+corrected formula together; neither should replicate the old one for the sake of matching.
 
 ## Definition of parity
 
