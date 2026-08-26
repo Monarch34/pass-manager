@@ -82,7 +82,10 @@ object PmVaultFile {
 
     // Pre-KDF validation gate (docs/FORMAT.md).
     const val MAX_HEADER_LENGTH = 4096
+    const val MIN_KDF_MEMORY_KIB = 8192
     const val MAX_KDF_MEMORY_KIB = 262_144
+    /** Argon2's structural minimum: it needs 8 KiB per lane, so `memory >= 8 * parallelism`. */
+    const val MIN_MEMORY_PER_LANE_KIB = 8
     const val MIN_KDF_ITERATIONS = 1
     const val MAX_KDF_ITERATIONS = 16
     const val MIN_KDF_PARALLELISM = 1
@@ -237,19 +240,24 @@ object PmVaultFile {
     }
 
     /**
-     * The DoS gate. `docs/FORMAT.md` states no lower bound for `memory`; [KdfParams.MIN_MEMORY] is
-     * applied on top because Argon2 rejects sub-`8*p` memory anyway and a floor here keeps the
-     * failure typed instead of surfacing as an IllegalArgumentException from KdfParams.
+     * The DoS gate, in the order `docs/FORMAT.md` lists it.
+     *
+     * The `memory >= 8 * parallelism` rule is Argon2's own structural minimum: without it a header
+     * can clear every other bound and still be rejected from inside the library, as a raw
+     * IllegalArgumentException rather than one of this file's typed errors. At the pinned bounds it
+     * is subsumed by the 8192 KiB floor — 8 * the maximum parallelism of 8 is only 64 KiB — so it
+     * is carried for fidelity to the spec and for the day that floor moves, not because any header
+     * reaches it today.
      */
     private fun validateKdf(kdf: KdfHeaderJson) {
+        if (kdf.memory < MIN_KDF_MEMORY_KIB) {
+            throw PmVaultInvalidParametersException(
+                "kdf.memory ${kdf.memory} is below $MIN_KDF_MEMORY_KIB KiB"
+            )
+        }
         if (kdf.memory > MAX_KDF_MEMORY_KIB) {
             throw PmVaultInvalidParametersException(
                 "kdf.memory ${kdf.memory} exceeds $MAX_KDF_MEMORY_KIB KiB"
-            )
-        }
-        if (kdf.memory < KdfParams.MIN_MEMORY) {
-            throw PmVaultInvalidParametersException(
-                "kdf.memory ${kdf.memory} is below ${KdfParams.MIN_MEMORY} KiB"
             )
         }
         if (kdf.iterations !in MIN_KDF_ITERATIONS..MAX_KDF_ITERATIONS) {
@@ -260,6 +268,13 @@ object PmVaultFile {
         if (kdf.parallelism !in MIN_KDF_PARALLELISM..MAX_KDF_PARALLELISM) {
             throw PmVaultInvalidParametersException(
                 "kdf.parallelism ${kdf.parallelism} outside $MIN_KDF_PARALLELISM..$MAX_KDF_PARALLELISM"
+            )
+        }
+        if (kdf.memory < MIN_MEMORY_PER_LANE_KIB * kdf.parallelism) {
+            throw PmVaultInvalidParametersException(
+                "kdf.memory ${kdf.memory} is below Argon2's structural minimum of " +
+                    "${MIN_MEMORY_PER_LANE_KIB * kdf.parallelism} KiB " +
+                    "for parallelism ${kdf.parallelism}"
             )
         }
         if (kdf.hashLength != KDF_HASH_LENGTH) {

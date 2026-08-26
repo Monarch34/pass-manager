@@ -7,19 +7,14 @@ import com.passmanager.crypto.model.KdfParams
 import com.passmanager.domain.exception.PmVaultAuthenticationException
 import com.passmanager.domain.exception.PmVaultInvalidParametersException
 import com.passmanager.domain.exception.PmVaultMalformedException
-import com.passmanager.domain.model.HeaderEncryption
-import com.passmanager.domain.model.ItemCategory
 import com.passmanager.domain.model.ItemPayload
 import com.passmanager.domain.model.PayloadJson
 import com.passmanager.domain.model.PmVaultFile
-import com.passmanager.domain.model.VaultItem
-import com.passmanager.domain.model.VaultItemHeader
 import com.passmanager.domain.model.VaultMetadata
-import com.passmanager.domain.port.VaultKeyProvider
-import com.passmanager.domain.repository.MetadataRepository
-import com.passmanager.domain.repository.VaultRepository
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
+import com.passmanager.test.FakeKeyProvider
+import com.passmanager.test.FakeMetadataRepository
+import com.passmanager.test.FakeVaultRepository
+import com.passmanager.test.seedItem
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -57,88 +52,6 @@ class VaultExportImportTest {
         }
     }
 
-    private class FakeKeyProvider(private val key: ByteArray) : VaultKeyProvider {
-        override fun requireUnlockedKey(): ByteArray = key.copyOf()
-        override fun unlock(vaultKey: ByteArray) = Unit
-    }
-
-    private class FakeMetadataRepository(private val value: VaultMetadata) : MetadataRepository {
-        override fun observe(): Flow<VaultMetadata?> = flowOf(value)
-        override suspend fun get(): VaultMetadata = value
-        override suspend fun isVaultSetup(): Boolean = true
-        override suspend fun save(metadata: VaultMetadata) = Unit
-        override suspend fun update(metadata: VaultMetadata) = Unit
-    }
-
-    private class FakeVaultRepository : VaultRepository {
-        class Row(val item: VaultItem, val header: HeaderEncryption?)
-
-        val rows = linkedMapOf<String, Row>()
-
-        override fun observeHeaders(): Flow<List<VaultItemHeader>> = flowOf(headers())
-        override suspend fun getHeaders(): List<VaultItemHeader> = headers()
-        override fun observeById(id: String): Flow<VaultItem?> = flowOf(rows[id]?.item)
-        override suspend fun getById(id: String): VaultItem? = rows[id]?.item
-        override suspend fun getAll(): List<VaultItem> = rows.values.map { it.item }
-
-        override suspend fun insert(
-            id: String,
-            encryptedData: EncryptedData,
-            keyVersion: Int,
-            createdAt: Long,
-            category: ItemCategory,
-            headerEncryption: HeaderEncryption?,
-            updatedAt: Long
-        ) {
-            check(!rows.containsKey(id)) { "insert on an existing id: $id" }
-            rows[id] = Row(
-                VaultItem(id, encryptedData, keyVersion, createdAt, updatedAt, category),
-                headerEncryption
-            )
-        }
-
-        override suspend fun update(
-            id: String,
-            encryptedData: EncryptedData,
-            keyVersion: Int,
-            updatedAt: Long,
-            category: ItemCategory,
-            headerEncryption: HeaderEncryption
-        ) {
-            val existing = requireNotNull(rows[id]) { "update on a missing id: $id" }
-            rows[id] = Row(
-                existing.item.copy(
-                    encryptedData = encryptedData,
-                    keyVersion = keyVersion,
-                    updatedAt = updatedAt,
-                    category = category
-                ),
-                headerEncryption
-            )
-        }
-
-        override suspend fun updateHeaderColumns(id: String, headerEncryption: HeaderEncryption) {
-            val existing = requireNotNull(rows[id])
-            rows[id] = Row(existing.item, headerEncryption)
-        }
-
-        override suspend fun deleteById(id: String) { rows.remove(id) }
-        override suspend fun deleteByIds(ids: List<String>) { ids.forEach { rows.remove(it) } }
-        override suspend fun isVaultEmpty(): Boolean = rows.isEmpty()
-
-        private fun headers(): List<VaultItemHeader> = rows.values.map { row ->
-            VaultItemHeader(
-                id = row.item.id,
-                encryptedTitle = row.header?.title?.ciphertext,
-                titleIv = row.header?.title?.iv,
-                encryptedAddress = row.header?.address?.ciphertext,
-                addressIv = row.header?.address?.iv,
-                category = row.item.category,
-                updatedAt = row.item.updatedAt
-            )
-        }
-    }
-
     private suspend fun failureOf(block: suspend () -> Unit): Throwable? =
         try {
             block()
@@ -152,21 +65,7 @@ class VaultExportImportTest {
         payload: ItemPayload,
         createdAt: Long,
         updatedAt: Long
-    ) {
-        val json = PayloadJson.encode(payload).toByteArray(Charsets.UTF_8)
-        val title = payload.title.toByteArray(Charsets.UTF_8)
-        repo.rows[payload.id] = FakeVaultRepository.Row(
-            VaultItem(
-                id = payload.id,
-                encryptedData = cipher.encrypt(json, vaultKey),
-                keyVersion = 1,
-                createdAt = createdAt,
-                updatedAt = updatedAt,
-                category = payload.category
-            ),
-            HeaderEncryption(cipher.encrypt(title, vaultKey), null)
-        )
-    }
+    ) = repo.seedItem(cipher, vaultKey, payload, createdAt, updatedAt)
 
     private fun decrypt(repo: FakeVaultRepository, id: String): ItemPayload {
         val row = requireNotNull(repo.rows[id]) { "no row for $id" }

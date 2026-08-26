@@ -148,6 +148,42 @@ class PmVaultFileTest {
     }
 
     @Test
+    fun `rejects memory below the 8 MiB floor`() {
+        assertThrows(PmVaultInvalidParametersException::class.java) {
+            PmVaultFile.parse(container(header(memory = 8191)))
+        }
+    }
+
+    @Test
+    fun `accepts memory exactly at the floor`() {
+        val parsed = PmVaultFile.parse(container(header(memory = 8192)))
+        assertEquals(8192, parsed.kdfParams.memory)
+    }
+
+    @Test
+    fun `rejects a header argon2 itself would refuse for too little memory per lane`() {
+        // m=16, p=8 clears every range bound taken one at a time. Rejecting it at the gate is what
+        // keeps the failure inside the typed error set instead of coming back untyped from the KDF.
+        assertThrows(PmVaultInvalidParametersException::class.java) {
+            PmVaultFile.parse(container(header(memory = 16, parallelism = 8)))
+        }
+    }
+
+    @Test
+    fun `the container bounds never sit outside what KdfParams accepts`() {
+        // parse() builds a KdfParams from the validated header. If KdfParams' own bounds were ever
+        // tightened past the container's, that constructor would throw untyped from inside a parse
+        // that had already declared the header valid.
+        assertTrue(PmVaultFile.MIN_KDF_MEMORY_KIB >= KdfParams.MIN_MEMORY)
+        assertTrue(PmVaultFile.MAX_KDF_MEMORY_KIB <= KdfParams.MAX_MEMORY)
+        assertTrue(PmVaultFile.MIN_KDF_ITERATIONS >= KdfParams.MIN_ITERATIONS)
+        assertTrue(PmVaultFile.MAX_KDF_ITERATIONS <= KdfParams.MAX_ITERATIONS)
+        assertTrue(PmVaultFile.MIN_KDF_PARALLELISM >= KdfParams.MIN_PARALLELISM)
+        assertTrue(PmVaultFile.MAX_KDF_PARALLELISM <= KdfParams.MAX_PARALLELISM)
+        assertTrue(PmVaultFile.KDF_HASH_LENGTH in KdfParams.MIN_HASH_LEN..KdfParams.MAX_HASH_LEN)
+    }
+
+    @Test
     fun `rejects iterations outside 1 to 16`() {
         assertThrows(PmVaultInvalidParametersException::class.java) {
             PmVaultFile.parse(container(header(iterations = 0)))
