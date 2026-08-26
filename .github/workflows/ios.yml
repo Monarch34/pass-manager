@@ -10,6 +10,13 @@ concurrency:
   group: ios-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Pinned rather than `brew install xcodegen`: XcodeGen 2.45.x started writing
+  # pbxproj objectVersion 77, which the runner image's Xcode cannot open, and the
+  # failure arrives as an unrelated-looking parse error. Pinning makes the generated
+  # project format a decision instead of whatever Homebrew resolved that morning.
+  XCODEGEN_VERSION: "2.44.1"
+
 jobs:
   core-test:
     name: Core package tests
@@ -55,9 +62,27 @@ jobs:
             echo "present=false" >> "$GITHUB_OUTPUT"
             echo "::notice::ios/PassManager/project.yml not present yet — skipping."
           fi
-      - name: Install XcodeGen
+      - name: Select newest Xcode on the runner
         if: steps.probe.outputs.present == 'true'
-        run: brew install xcodegen
+        run: |
+          set -euo pipefail
+          LATEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Available: $(ls -d /Applications/Xcode*.app | tr '\n' ' ')"
+          echo "Selecting: $LATEST"
+          sudo xcode-select -s "$LATEST/Contents/Developer"
+          xcodebuild -version
+
+      - name: Install pinned XcodeGen
+        if: steps.probe.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/xcodegen.zip \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
+          BIN=$(find /tmp/xcodegen -type f -name xcodegen -perm +111 | head -1)
+          chmod +x "$BIN"
+          echo "$(dirname "$BIN")" >> "$GITHUB_PATH"
+          "$BIN" --version
       - name: Generate Xcode project
         if: steps.probe.outputs.present == 'true'
         working-directory: ios/PassManager
