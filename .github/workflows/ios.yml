@@ -116,12 +116,43 @@ jobs:
         working-directory: ios/PassManager
         run: |
           set -o pipefail
+          rm -rf TestResults.xcresult
           xcodebuild test \
             -project PassManager.xcodeproj \
             -scheme PassManager \
             -destination "id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee xcodetest.log | tail -80
+
+      # The UI test attaches one screenshot per screen with lifetime .keepAlways, so they
+      # survive a passing run and land in the result bundle. Never fail the job over this:
+      # a missing screenshot is a documentation gap, not a broken build.
+      - name: Export screenshots from the result bundle
+        if: always() && steps.probe.outputs.present == 'true'
+        working-directory: ios/PassManager
+        continue-on-error: true
+        run: |
+          set -x
+          mkdir -p "$GITHUB_WORKSPACE/screenshots"
+          xcrun xcresulttool export attachments \
+            --path TestResults.xcresult \
+            --output-path "$GITHUB_WORKSPACE/screenshots" || \
+          xcrun xcresulttool export --type directory \
+            --path TestResults.xcresult \
+            --output-path "$GITHUB_WORKSPACE/screenshots" || true
+          find "$GITHUB_WORKSPACE/screenshots" -type f | head -40
+          find "$GITHUB_WORKSPACE/screenshots" -name "*.png" | wc -l
+
+      - name: Upload screenshots
+        if: always() && steps.probe.outputs.present == 'true'
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-screenshots
+          path: screenshots/
+          if-no-files-found: warn
+
       - name: Export simulator .app artifact
         if: success() && steps.probe.outputs.present == 'true'
         run: |
