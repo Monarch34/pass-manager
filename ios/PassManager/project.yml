@@ -6,6 +6,13 @@ options:
     iOS: "16.0"
   createIntermediateGroups: true
   groupSortPosition: top
+  # CI installs XcodeGen from Homebrew, which tracks latest and now defaults to
+  # pbxproj objectVersion 77 (Xcode 16). The runner is Xcode 15.4 and refuses to
+  # open that: "a future Xcode project file format (77)". 56 is the Xcode 14+
+  # format and supports everything used here, local SPM packages included.
+  # Pinned here rather than in the workflow because .github/ is frozen.
+  objectVersion: 56
+  xcodeVersion: "15.4"
 
 packages:
   PassVaultCore:
