@@ -84,7 +84,10 @@ public enum CardRules {
 }
 
 /// Why an add/edit form cannot be saved. Mirrors `AddEditSaveFailure`.
-public enum SaveFailure: Equatable {
+///
+/// Conforms to `Error` so it can be the failure type of the `Result` that
+/// `makePayload` returns.
+public enum SaveFailure: Error, Equatable {
     case titleRequired
     case cardPanInvalid
     case cardExpiryInvalid
