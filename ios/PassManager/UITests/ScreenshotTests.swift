@@ -17,6 +17,7 @@ final class ScreenshotTests: XCTestCase {
     private var app: XCUIApplication!
     private var captured: [String] = []
     private var skipped: [String] = []
+    private var notes: [String] = []
 
     private let masterPassphrase = "Screenshot-Master-2026"
     /// Must match `UITestMode.importFixturePassphrase` in the app target.
@@ -52,7 +53,10 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(
             captured.count,
             5,
-            "Only \(captured.count) screens captured — the app is probably not starting. Skipped: \(skipped)"
+            "Only \(captured.count) screens captured.\n"
+                + "captured: \(captured)\n"
+                + "skipped: \(skipped)\n"
+                + "notes: \(notes)"
         )
     }
 
@@ -71,24 +75,43 @@ final class ScreenshotTests: XCTestCase {
 
     private func createVault() {
         let master = app.secureTextFields["Master passphrase"]
-        guard master.waitForExistence(timeout: 10) else {
+        guard master.waitForExistence(timeout: 15) else {
+            note("master passphrase field never appeared")
             return
         }
         master.tap()
         master.typeText(masterPassphrase)
 
         let confirm = app.secureTextFields["Confirm passphrase"]
-        if confirm.waitForExistence(timeout: 5) && confirm.isHittable {
-            confirm.tap()
-            confirm.typeText(masterPassphrase)
+        guard confirm.waitForExistence(timeout: 5) else {
+            note("confirm field never appeared")
+            return
+        }
+        if !confirm.isHittable {
+            app.swipeUp()
+        }
+        guard confirm.isHittable else {
+            note("confirm field not hittable — probably under the keyboard")
+            return
+        }
+        confirm.tap()
+        // Return submits the form, which avoids depending on a button the
+        // keyboard may be covering. The button tap below is the fallback.
+        confirm.typeText(masterPassphrase + "\n")
+
+        if app.navigationBars["Vault"].waitForExistence(timeout: 25) {
+            return
         }
 
         let create = button(startingWith: "Create vault")
-        if create.waitForExistence(timeout: 5) {
+        note("after return: create exists=\(create.exists) "
+             + "enabled=\(create.exists ? String(create.isEnabled) : "n/a") "
+             + "hittable=\(create.exists ? String(create.isHittable) : "n/a")")
+        if create.exists {
             if !create.isHittable {
                 app.swipeUp()
             }
-            if create.isHittable {
+            if create.isHittable && create.isEnabled {
                 create.tap()
             }
         }
@@ -96,6 +119,12 @@ final class ScreenshotTests: XCTestCase {
 
     private func captureVaultList() {
         guard app.navigationBars["Vault"].waitForExistence(timeout: 40) else {
+            // Whatever went wrong, the screen itself says so — an unsatisfiable
+            // Keychain protection class, a mismatched passphrase, a disabled
+            // button. Capture it and scrape the labels, so the next round is
+            // driven by evidence rather than another guess.
+            capture("00-diagnostic-stuck-on-create")
+            note("visible text: \(visibleText())")
             skip("02-vault-list", "the vault list never appeared after vault creation")
             return
         }
@@ -290,6 +319,21 @@ final class ScreenshotTests: XCTestCase {
         skipped.append("\(name) — \(reason)")
     }
 
+    private func note(_ text: String) {
+        notes.append(text)
+    }
+
+    /// Every visible label, joined. The failure message is the only channel out
+    /// of CI until the attachment-export step exists, so the diagnosis has to
+    /// travel in it.
+    private func visibleText() -> String {
+        let labels = app.staticTexts.allElementsBoundByIndex
+            .prefix(30)
+            .map { $0.label }
+            .filter { !$0.isEmpty }
+        return labels.joined(separator: " | ")
+    }
+
     /// A machine-readable record of what the tour managed, attached alongside the
     /// images so a missing screenshot has a stated reason rather than being
     /// silently absent from the artefact.
@@ -300,6 +344,10 @@ final class ScreenshotTests: XCTestCase {
         }
         lines.append("skipped (\(skipped.count)):")
         for entry in skipped {
+            lines.append("  \(entry)")
+        }
+        lines.append("notes (\(notes.count)):")
+        for entry in notes {
             lines.append("  \(entry)")
         }
         let attachment = XCTAttachment(

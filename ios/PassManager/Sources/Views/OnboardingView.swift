@@ -57,6 +57,11 @@ struct OnboardingView: View {
                         SecureField("Confirm passphrase", text: $confirmation)
                             .textContentType(.newPassword)
                             .textFieldStyle(.roundedBorder)
+                            // Return creates the vault, so the flow completes
+                            // without reaching for a button the keyboard may be
+                            // covering.
+                            .submitLabel(.go)
+                            .onSubmit(create)
                         if isMismatched {
                             Text("Passphrases do not match")
                                 .font(.caption)
@@ -65,12 +70,7 @@ struct OnboardingView: View {
                     }
                 }
 
-                Button {
-                    let value = passphrase
-                    Task { @MainActor in
-                        await session.createVault(passphrase: value)
-                    }
-                } label: {
+                Button(action: create) {
                     HStack {
                         if session.isBusy {
                             ProgressView()
@@ -92,5 +92,18 @@ struct OnboardingView: View {
             .padding(.horizontal, 24)
         }
         .background(AppColor.background.ignoresSafeArea())
+        // Lets the user swipe the keyboard away to reach the button, rather than
+        // being stuck behind it on a short screen.
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private func create() {
+        guard canCreate else {
+            return
+        }
+        let value = passphrase
+        Task { @MainActor in
+            await session.createVault(passphrase: value)
+        }
     }
 }
