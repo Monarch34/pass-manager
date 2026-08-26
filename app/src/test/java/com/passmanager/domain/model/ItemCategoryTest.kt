@@ -1,5 +1,6 @@
 package com.passmanager.domain.model
 
+import com.passmanager.domain.util.foldForSearch
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -38,5 +39,36 @@ class ItemCategoryTest {
         assertEquals("note", ItemCategory.NOTE.dbKey)
         assertEquals("identity", ItemCategory.IDENTITY.dbKey)
         assertEquals("bank", ItemCategory.BANK.dbKey)
+    }
+
+    @Test
+    fun `labelLower and dbKeyLower are precomputed case folds`() {
+        for (category in ItemCategory.entries) {
+            assertEquals(category.label.lowercase(), category.labelLower)
+            assertEquals(category.dbKey.lowercase(), category.dbKeyLower)
+        }
+        assertEquals("login", ItemCategory.LOGIN.labelLower)
+        assertEquals("identity", ItemCategory.IDENTITY.labelLower)
+    }
+
+    @Test
+    fun `search fold of label and dbKey matches the legacy ignoreCase contains`() {
+        // The vault filter matches a folded query against these two vals with a plain `contains`;
+        // it must agree with the `contains(ignoreCase = true)` it replaced.
+        val queries = listOf("log", "LOGIN", "Card", "note", "IDENT", "bank", "zzz")
+        for (category in ItemCategory.entries) {
+            for (q in queries) {
+                assertEquals(
+                    "label mismatch for $category / '$q'",
+                    category.label.contains(q, ignoreCase = true),
+                    category.labelLower.contains(q.foldForSearch())
+                )
+                assertEquals(
+                    "dbKey mismatch for $category / '$q'",
+                    category.dbKey.contains(q, ignoreCase = true),
+                    category.dbKeyLower.contains(q.foldForSearch())
+                )
+            }
+        }
     }
 }

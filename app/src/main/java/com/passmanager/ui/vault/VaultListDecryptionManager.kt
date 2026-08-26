@@ -3,6 +3,7 @@ package com.passmanager.ui.vault
 import com.passmanager.R
 import com.passmanager.domain.model.VaultItemHeader
 import com.passmanager.domain.usecase.ProcessVaultListHeadersUseCase
+import com.passmanager.domain.util.foldForSearch
 import com.passmanager.ui.common.AppLogger
 import com.passmanager.ui.common.UserMessage
 import kotlinx.coroutines.CoroutineScope
@@ -50,13 +51,17 @@ class VaultListDecryptionManager(
         decryptJob = scope.launch(Dispatchers.Default) {
             val currentIds = headers.map { it.id }.toSet()
             val prev = _headerCache.value
-            val titles   = prev.titles.toMutableMap()
-            val addresses = prev.addresses.toMutableMap()
-            val keys     = decryptCacheKey.value.toMutableMap()
+            val titles        = prev.titles.toMutableMap()
+            val addresses     = prev.addresses.toMutableMap()
+            val titlesLower   = prev.titlesLower.toMutableMap()
+            val addressesLower = prev.addressesLower.toMutableMap()
+            val keys          = decryptCacheKey.value.toMutableMap()
 
             // Prune entries for items that were deleted
             titles.keys.retainAll(currentIds)
             addresses.keys.retainAll(currentIds)
+            titlesLower.keys.retainAll(currentIds)
+            addressesLower.keys.retainAll(currentIds)
             keys.keys.retainAll(currentIds)
 
             // Only process headers whose cache is stale or missing
@@ -64,7 +69,7 @@ class VaultListDecryptionManager(
                 keys[h.id] != h.updatedAt || h.id !in titles
             }
             if (stale.isEmpty()) {
-                _headerCache.value = VaultListHeaderCache(titles, addresses)
+                _headerCache.value = VaultListHeaderCache(titles, addresses, titlesLower, addressesLower)
                 decryptCacheKey.value = keys
                 return@launch
             }
@@ -78,12 +83,20 @@ class VaultListDecryptionManager(
             }
 
             outcome.rows.forEach { r ->
-                titles[r.id]    = r.title
-                addresses[r.id] = r.address
-                keys[r.id]      = r.updatedAt
+                titles[r.id]         = r.title
+                addresses[r.id]      = r.address
+                // Fold once, here, so the filter/sort hot paths consume the precomputed form.
+                titlesLower[r.id]    = r.title.foldForSearch()
+                addressesLower[r.id] = r.address.foldForSearch()
+                keys[r.id]           = r.updatedAt
             }
 
-            _headerCache.value = VaultListHeaderCache(HashMap(titles), HashMap(addresses))
+            _headerCache.value = VaultListHeaderCache(
+                HashMap(titles),
+                HashMap(addresses),
+                HashMap(titlesLower),
+                HashMap(addressesLower)
+            )
             decryptCacheKey.value = keys
 
             if (outcome.hadDecryptFailure) {
