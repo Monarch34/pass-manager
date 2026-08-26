@@ -88,11 +88,7 @@ final class AppSession: ObservableObject {
             // `try?` on a throwing function returning an Optional flattens, so
             // this is exactly "a metadata row exists and could be read".
             let hasRow = (try? store.metadata()) != nil
-            var hasKey = false
-            if case .success = KeychainVaultStore.loadWrappedKey() {
-                hasKey = true
-            }
-            hasVault = hasRow && hasKey
+            hasVault = hasRow && (loadWrappedKeyBlob() != nil)
         }
         lockState = LockStateMachine.stateAtLaunch(hasVault: hasVault)
         refreshBiometricState()
@@ -390,7 +386,7 @@ final class AppSession: ObservableObject {
         var blob = Data()
         blob.append(metadata.wrapNonce)
         blob.append(metadata.wrappedVaultKey)
-        if case .failure(let error) = KeychainVaultStore.saveWrappedKey(blob) {
+        if let error = saveWrappedKeyBlob(blob) {
             return error
         }
 
@@ -406,12 +402,35 @@ final class AppSession: ObservableObject {
         return nil
     }
 
+    /// Write the wrapped key to secure storage.
+    ///
+    /// The fallback returns `false` in every shipping build, so a Keychain
+    /// failure surfaces as an error exactly as before; it only absorbs the write
+    /// in a DEBUG build launched with the relaxed flag. See
+    /// `UITestMode.storeWrappedKeyFallback`.
+    private func saveWrappedKeyBlob(_ blob: Data) -> DeviceKeyError? {
+        if case .failure(let error) = KeychainVaultStore.saveWrappedKey(blob) {
+            if UITestMode.storeWrappedKeyFallback(blob) {
+                return nil
+            }
+            return error
+        }
+        return nil
+    }
+
+    private func loadWrappedKeyBlob() -> Data? {
+        if case .success(let blob) = KeychainVaultStore.loadWrappedKey() {
+            return blob
+        }
+        return UITestMode.loadWrappedKeyFallback()
+    }
+
     /// Recombine the two halves into the metadata the pure core expects.
     private func loadVaultMetadata() -> VaultMetadata? {
         guard let store = store, let record = try? store.metadata() else {
             return nil
         }
-        guard case .success(let blob) = KeychainVaultStore.loadWrappedKey() else {
+        guard let blob = loadWrappedKeyBlob() else {
             return nil
         }
         let bytes = [UInt8](blob)

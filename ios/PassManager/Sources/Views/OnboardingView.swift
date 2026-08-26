@@ -87,6 +87,19 @@ struct OnboardingView: View {
                 }
                 .disabled(!canCreate)
 
+                // Vault creation can fail for reasons the user can act on — no
+                // device passcode, secure storage refusing the write — and it
+                // used to fail SILENTLY here, leaving the button looking dead
+                // with nothing on screen to explain it. Found by a UI test that
+                // could not get past this screen and could not say why.
+                if let message = session.errorMessage, !message.isEmpty {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(AppColor.error)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                }
+
                 Spacer(minLength: 24)
             }
             .padding(.horizontal, 24)
