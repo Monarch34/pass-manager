@@ -41,5 +41,11 @@ interface VaultRepository {
     suspend fun updateHeaderColumns(id: String, headerEncryption: HeaderEncryption)
     suspend fun deleteById(id: String)
     suspend fun deleteByIds(ids: List<String>)
+
+    /** Wipes every row. Only the vault reset flow may call this. */
+    suspend fun deleteAll()
     suspend fun isVaultEmpty(): Boolean
+
+    /** How many items the vault holds. */
+    suspend fun count(): Int
 }

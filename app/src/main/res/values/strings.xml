@@ -218,6 +218,50 @@
     <string name="settings_import_unsupported_version">This file was written by a newer version of PassManager</string>
     <string name="settings_import_invalid_file">This is not a valid PassManager backup file</string>
 
+    <!-- Device binding: the vault key sealed with a key that cannot leave this phone -->
+    <string name="device_binding_title">Device-bound protection</string>
+    <string name="device_binding_status_on">On. Your vault key is sealed with a key that cannot leave this phone.</string>
+    <string name="device_binding_status_off">Off. A copy of your vault file could be attacked on another machine.</string>
+    <string name="device_binding_dialog_title">Bind this vault to this phone?</string>
+    <string name="device_binding_dialog_body">Your vault key gets a second lock that only this phone can open, so a stolen copy of the vault file is useless anywhere else. Your passphrase keeps working exactly as before.</string>
+    <string name="device_binding_dialog_warning">If you lose this phone, factory reset it, or clear the app\'s data, the vault on it can never be opened again — not even with the right passphrase. An encrypted backup file is the only way back.</string>
+    <string name="device_binding_export_required">Export a backup first. The button below turns on once the file is saved.</string>
+    <string name="device_binding_export_done">Backup saved. You can turn on device binding now.</string>
+    <string name="device_binding_export_action">Export backup</string>
+    <string name="device_binding_confirm">Turn on device binding</string>
+    <string name="device_binding_skip_backup">Continue without a backup</string>
+    <string name="device_binding_skip_backup_title">Continue without a backup?</string>
+    <string name="device_binding_skip_backup_body">Without a backup file there is no way to recover this vault if the phone or its app data is lost. Everything in it would be gone permanently.</string>
+    <string name="device_binding_skip_backup_confirm">I understand, continue</string>
+    <string name="device_binding_enabled">Device-bound protection is on</string>
+    <string name="device_binding_failed">Could not turn on device-bound protection. Try again.</string>
+    <string name="device_binding_prompt_title">Add device-bound protection</string>
+    <string name="device_binding_prompt_body">This vault was created before device binding existed. Turning it on seals your vault key with a key that never leaves this phone.</string>
+    <string name="device_binding_prompt_review">Review in settings</string>
+    <string name="device_binding_prompt_dismiss">Not now</string>
+
+    <!-- Backup reminders -->
+    <string name="backup_reminder_title">Back up your vault</string>
+    <string name="backup_reminder_overdue">Your last backup was %1$d days ago. A backup file is the only way to move this vault to another phone or recover it.</string>
+    <string name="backup_reminder_first">You have items worth keeping and no backup yet. An encrypted backup file is the only way to recover this vault.</string>
+    <string name="backup_reminder_action">Back up now</string>
+    <string name="backup_reminder_dismiss">Later</string>
+
+    <!-- Permanent device-key loss recovery -->
+    <string name="recovery_title">This vault cannot be opened</string>
+    <string name="recovery_headline">The device key for this vault is gone</string>
+    <string name="recovery_body">This vault was sealed with a key stored on this phone, and that key no longer exists. It is usually gone because the app\'s data was cleared, the phone was reset, or the vault was restored onto different hardware. Your passphrase is not the problem and cannot help here.</string>
+    <string name="recovery_next_steps">Resetting erases every item on this phone and starts over. If you have a .pmvault backup file, create a new vault and import it straight after.</string>
+    <string name="recovery_type_to_confirm">Type %1$s to confirm</string>
+    <string name="recovery_confirmation_word">RESET</string>
+    <string name="recovery_input_hint">Confirmation</string>
+    <string name="recovery_reset_action">Erase this vault</string>
+    <string name="recovery_cancel">Go back</string>
+    <string name="recovery_failed">Could not reset the vault. Try again.</string>
+    <string name="lock_device_key_lost">This vault\'s device key is gone. Your passphrase cannot open it.</string>
+    <string name="lock_device_key_lost_action">What now?</string>
+    <string name="lock_device_key_unavailable">The device key could not be used just now. Try again in a moment.</string>
+
     <!-- Debug-only: demo vault seeding (Settings) -->
     <string name="settings_debug_section">DEVELOPMENT</string>
     <string name="settings_debug_seed_demo_title">Load demo items</string>

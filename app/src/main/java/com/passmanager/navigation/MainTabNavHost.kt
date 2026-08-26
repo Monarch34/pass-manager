@@ -25,6 +25,7 @@ import com.passmanager.ui.generator.GENERATOR_CONSTRAINT_CATEGORY_ARG
 import com.passmanager.ui.generator.PasswordGeneratorScreen
 import com.passmanager.ui.item.AddEditItemScreen
 import com.passmanager.ui.item.AddEditItemViewModel
+import com.passmanager.ui.nudge.VaultNudgeHost
 import com.passmanager.ui.settings.SettingsScreen
 import com.passmanager.ui.vault.VaultListScreen
 import kotlinx.coroutines.launch
@@ -53,6 +54,18 @@ fun MainTabNavHost(
             }
         }
     }
+
+    // Hosted here rather than on the vault list: this is the one place every unlocked session
+    // passes through exactly once, and the prompts only hand off to Settings anyway.
+    VaultNudgeHost(
+        onOpenSettings = {
+            navController.navigate(Screen.DrawerSettings.route) {
+                popUpTo(Screen.VaultList.route) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    )
 
     ModalNavigationDrawer(
         drawerState = drawerState,

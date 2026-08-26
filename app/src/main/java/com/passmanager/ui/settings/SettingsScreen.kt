@@ -24,6 +24,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.PhonelinkErase
+import androidx.compose.material.icons.filled.PhonelinkLock
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Upload
@@ -222,6 +224,40 @@ fun SettingsScreen(
                     )
                 },
                 modifier = Modifier.clickable { viewModel.openChangePassphraseSheet() }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            ListItem(
+                headlineContent = {
+                    Text(stringResource(R.string.device_binding_title), style = MaterialTheme.typography.titleSmall)
+                },
+                supportingContent = {
+                    Text(
+                        stringResource(
+                            if (uiState.isDeviceBound) {
+                                R.string.device_binding_status_on
+                            } else {
+                                R.string.device_binding_status_off
+                            }
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                leadingContent = {
+                    SettingIconBox(
+                        icon = if (uiState.isDeviceBound) Icons.Default.PhonelinkLock else Icons.Default.PhonelinkErase,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        iconTint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                // Deliberately one-way: there is no downgrade action here. Unsealing a vault back
+                // to passphrase-only would quietly undo the protection the user opted into.
+                modifier = if (uiState.isDeviceBound) {
+                    Modifier
+                } else {
+                    Modifier.clickable { viewModel.openDeviceBindingDialog() }
+                }
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
@@ -498,6 +534,28 @@ fun SettingsScreen(
             onConfirm = { addOnly -> viewModel.applyImport(addOnly) }
         )
         null -> Unit
+    }
+
+    if (uiState.transferDialog == null) {
+        when (val dialog = uiState.deviceBindingDialog) {
+            is DeviceBindingDialog.Explain -> DeviceBindingExplainDialog(
+                backupDone = dialog.backupDone,
+                isBusy = uiState.isDeviceBindingBusy,
+                onDismiss = { viewModel.dismissDeviceBindingDialog() },
+                onExportBackup = {
+                    viewModel.onUpgradeExportRequested()
+                    exportPicker.launch(exportFileName)
+                },
+                onContinueWithoutBackup = { viewModel.requestUpgradeWithoutBackup() },
+                onConfirm = { viewModel.confirmDeviceBinding() }
+            )
+            DeviceBindingDialog.ConfirmWithoutBackup -> DeviceBindingSkipBackupDialog(
+                isBusy = uiState.isDeviceBindingBusy,
+                onDismiss = { viewModel.cancelUpgradeWithoutBackup() },
+                onConfirm = { viewModel.confirmDeviceBinding() }
+            )
+            null -> Unit
+        }
     }
 
     if (uiState.showChangePassphraseSheet) {

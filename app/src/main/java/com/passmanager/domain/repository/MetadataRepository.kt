@@ -9,4 +9,7 @@ interface MetadataRepository {
     suspend fun isVaultSetup(): Boolean
     suspend fun save(metadata: VaultMetadata)
     suspend fun update(metadata: VaultMetadata)
+
+    /** Removes the metadata row. Only the vault reset flow may call this. */
+    suspend fun delete()
 }

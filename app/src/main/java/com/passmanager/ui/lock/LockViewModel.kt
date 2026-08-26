@@ -8,6 +8,8 @@ import com.passmanager.domain.exception.WrongPassphraseException
 import com.passmanager.domain.model.LockState
 import com.passmanager.domain.port.LockStateProvider
 import com.passmanager.domain.exception.BiometricKeyInvalidatedException
+import com.passmanager.domain.exception.DeviceKeyLostException
+import com.passmanager.domain.exception.DeviceKeyUnavailableException
 import com.passmanager.domain.port.BiometricLockPort
 import com.passmanager.security.biometric.BiometricHelper
 import com.passmanager.ui.common.AppLogger
@@ -30,7 +32,12 @@ data class LockUiState(
     val error: UserMessage? = null,
     val shouldShakePassphraseField: Boolean = false,
     val isUnlocked: Boolean = false,
-    val biometricAvailable: Boolean = false
+    val biometricAvailable: Boolean = false,
+    /**
+     * The device key that seals this vault is permanently gone. Distinct from [error] because it
+     * is not a message the user can act on by trying again — it routes to the recovery screen.
+     */
+    val deviceKeyLost: Boolean = false
 )
 
 @HiltViewModel
@@ -71,6 +78,26 @@ class LockViewModel @Inject constructor(
                         isLoading = false,
                         error = UserMessage.Resource(R.string.lock_wrong_passphrase),
                         shouldShakePassphraseField = true
+                    )
+                }
+            } catch (e: DeviceKeyLostException) {
+                // The only failure that earns the recovery screen. Everything else — including
+                // every other Keystore complaint — is a retry, because the recovery screen's only
+                // exit is erasing the vault and no transient fault is worth that.
+                AppLogger.e("LockViewModel", "Device key permanently lost", e)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        deviceKeyLost = true,
+                        error = UserMessage.Resource(R.string.lock_device_key_lost)
+                    )
+                }
+            } catch (e: DeviceKeyUnavailableException) {
+                AppLogger.e("LockViewModel", "Device key temporarily unavailable", e)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = UserMessage.Resource(R.string.lock_device_key_unavailable)
                     )
                 }
             } catch (e: Exception) {

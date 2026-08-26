@@ -11,7 +11,7 @@ import com.passmanager.data.db.entity.VaultMetadataEntity
 
 @Database(
     entities = [VaultItemEntity::class, VaultMetadataEntity::class],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 abstract class VaultDatabase : RoomDatabase() {
@@ -119,6 +119,27 @@ abstract class VaultDatabase : RoomDatabase() {
                            OR TRIM(kdf_params_json) = ''
                            OR kdf_params_json NOT LIKE '%"iterations"%'""".trimIndent()
                 )
+            }
+        }
+
+        /**
+         * Adds the device-binding columns and nothing else.
+         *
+         * Every existing row stays byte-identical: `wrap_version` defaults to 1, which is what
+         * those rows already are, and `pepper_iv` stays NULL because no Keystore layer has been
+         * applied to them. Upgrading a vault is a deliberate, user-confirmed act that happens
+         * later through the app — never as a side effect of installing a new version, which would
+         * bind a vault to the device before its owner had a backup.
+         *
+         * The SQL DEFAULT must be mirrored by `@ColumnInfo(defaultValue = "1")` on the entity or
+         * Room's schema validation rejects the migrated table.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE vault_metadata ADD COLUMN wrap_version INTEGER NOT NULL DEFAULT 1"
+                )
+                db.execSQL("ALTER TABLE vault_metadata ADD COLUMN pepper_iv BLOB")
             }
         }
     }

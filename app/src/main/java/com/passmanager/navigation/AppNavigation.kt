@@ -19,6 +19,7 @@ import androidx.navigation.compose.rememberNavController
 import com.passmanager.domain.model.LockState
 import com.passmanager.ui.lock.LockScreen
 import com.passmanager.ui.onboarding.OnboardingScreen
+import com.passmanager.ui.recovery.VaultRecoveryScreen
 
 @Composable
 fun AppNavigation() {
@@ -89,6 +90,21 @@ fun AppNavigation() {
                 onUnlocked = {
                     navController.navigate(Screen.Main.route) {
                         popUpTo(Screen.Lock.route) { inclusive = true }
+                    }
+                },
+                onDeviceKeyLost = { navController.navigate(Screen.VaultRecovery.route) }
+            )
+        }
+
+        composable(Screen.VaultRecovery.route) {
+            VaultRecoveryScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onVaultReset = {
+                    // The whole stack is stale once the vault rows are gone — the lock screen has
+                    // nothing left to unlock. Clear it to the root so onboarding starts somewhere
+                    // the back button cannot walk out of.
+                    navController.navigate(Screen.Onboarding.route) {
+                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
                     }
                 }
             )

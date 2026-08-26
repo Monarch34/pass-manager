@@ -23,9 +23,21 @@ interface AppSettingsPort {
     /** When the vault was last exported to a `.pmvault` file, or `null` if it never was. */
     val lastExportAtMs: Flow<Long?>
 
+    /**
+     * True once the user has turned down the one-time device-binding prompt. It never asks
+     * again after that — the offer stays available in Settings, but nagging someone who has
+     * already said no is how a security prompt gets dismissed on reflex.
+     */
+    val deviceBindingPromptDeclined: Flow<Boolean>
+
+    /** When a backup reminder was last dismissed, so it stays quiet for a while afterwards. */
+    val backupReminderSnoozedAtMs: Flow<Long?>
+
     suspend fun setAutoLockTimeout(seconds: Int)
     suspend fun setUseGoogleFavicons(value: Boolean)
     suspend fun setVaultListSort(order: VaultSortOrder)
     suspend fun setVaultGroupFilter(category: ItemCategory?)
     suspend fun setLastExportAt(epochMillis: Long)
+    suspend fun setDeviceBindingPromptDeclined(declined: Boolean)
+    suspend fun setBackupReminderSnoozedAt(epochMillis: Long)
 }

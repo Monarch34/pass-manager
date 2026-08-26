@@ -33,7 +33,21 @@ data class VaultMetadataEntity(
     val biometricWrappedKey: ByteArray?,
 
     @ColumnInfo(name = "biometric_wrapper_iv")
-    val biometricWrapperIv: ByteArray?
+    val biometricWrapperIv: ByteArray?,
+
+    /**
+     * 1 = passphrase-only wrapping, 2 = device-bound (Keystore outer layer).
+     *
+     * `defaultValue` is not decoration: MIGRATION_8_9 adds this column with a SQL DEFAULT, and
+     * without the matching annotation Room's exported schema disagrees with the real table and
+     * `runMigrationsAndValidate` fails.
+     */
+    @ColumnInfo(name = "wrap_version", defaultValue = "1")
+    val wrapVersion: Int = 1,
+
+    /** IV of the Keystore outer layer; NULL on every passphrase-only row. */
+    @ColumnInfo(name = "pepper_iv", typeAffinity = ColumnInfo.BLOB)
+    val pepperIv: ByteArray? = null
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -46,7 +60,9 @@ data class VaultMetadataEntity(
             kdfParamsJson == other.kdfParamsJson &&
             biometricEnabled == other.biometricEnabled &&
             biometricWrappedKey.contentEqualsNullable(other.biometricWrappedKey) &&
-            biometricWrapperIv.contentEqualsNullable(other.biometricWrapperIv)
+            biometricWrapperIv.contentEqualsNullable(other.biometricWrapperIv) &&
+            wrapVersion == other.wrapVersion &&
+            pepperIv.contentEqualsNullable(other.pepperIv)
     }
 
     override fun hashCode(): Int {
@@ -59,6 +75,8 @@ data class VaultMetadataEntity(
         result = 31 * result + biometricEnabled
         result = 31 * result + (biometricWrappedKey?.contentHashCode() ?: 0)
         result = 31 * result + (biometricWrapperIv?.contentHashCode() ?: 0)
+        result = 31 * result + wrapVersion
+        result = 31 * result + (pepperIv?.contentHashCode() ?: 0)
         return result
     }
 }

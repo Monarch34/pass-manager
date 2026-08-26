@@ -26,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHostState
 import com.passmanager.ui.components.AppSnackbarHost
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,6 +57,7 @@ import com.passmanager.ui.components.shakeOnTrigger
 @Composable
 fun LockScreen(
     onUnlocked: () -> Unit,
+    onDeviceKeyLost: () -> Unit,
     viewModel: LockViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -134,6 +136,30 @@ fun LockScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                // A permanently lost device key is not something a snackbar can carry: the user
+                // needs a standing explanation and a way out, so it stays on screen with the one
+                // action that leads anywhere.
+                if (uiState.deviceKeyLost) {
+                    Spacer(Modifier.height(24.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = stringResource(R.string.lock_device_key_lost),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            TextButton(onClick = onDeviceKeyLost) {
+                                Text(stringResource(R.string.lock_device_key_lost_action))
+                            }
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(36.dp))
 
                 SecureTextField(

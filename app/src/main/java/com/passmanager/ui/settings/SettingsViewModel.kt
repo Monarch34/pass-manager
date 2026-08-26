@@ -12,6 +12,7 @@ import com.passmanager.domain.usecase.ExportVaultUseCase
 import com.passmanager.domain.usecase.ImportPlan
 import com.passmanager.domain.usecase.ImportVaultUseCase
 import com.passmanager.domain.usecase.SeedDemoVaultItemsUseCase
+import com.passmanager.domain.usecase.UpgradeVaultToDeviceBoundUseCase
 import com.passmanager.domain.exception.PmVaultAuthenticationException
 import com.passmanager.domain.exception.PmVaultException
 import com.passmanager.domain.exception.PmVaultInvalidParametersException
@@ -22,6 +23,7 @@ import com.passmanager.domain.model.LockState
 import com.passmanager.domain.port.LockStateProvider
 import com.passmanager.domain.port.BiometricLockPort
 import com.passmanager.domain.port.VaultFilePort
+import com.passmanager.domain.repository.MetadataRepository
 import com.passmanager.domain.validation.PasswordStrength
 import com.passmanager.domain.validation.PasswordStrengthEvaluator
 import com.passmanager.security.biometric.BiometricHelper
@@ -59,6 +61,19 @@ sealed interface VaultTransferDialog {
     ) : VaultTransferDialog
 }
 
+/** Steps of the v1 to v2 device-binding upgrade. */
+sealed interface DeviceBindingDialog {
+    /**
+     * The explanation and the gate. [backupDone] is what enables the confirm button, and only an
+     * export completed *in this flow* ever sets it — a backup from last month says nothing about
+     * the items added since, and this upgrade is not reversible.
+     */
+    data class Explain(val backupDone: Boolean) : DeviceBindingDialog
+
+    /** The separate, deliberately unpleasant confirmation for proceeding with no backup at all. */
+    data object ConfirmWithoutBackup : DeviceBindingDialog
+}
+
 /** One-shot error shown to the user in the Settings screen. */
 sealed interface SettingsError {
     val message: UserMessage
@@ -83,6 +98,10 @@ data class SettingsUiState(
     val isTransferBusy: Boolean = false,
     /** One-shot snackbar after an export or import finishes. */
     val transferMessage: UserMessage? = null,
+    /** True when the vault key on disk carries the Keystore outer layer. */
+    val isDeviceBound: Boolean = false,
+    val deviceBindingDialog: DeviceBindingDialog? = null,
+    val isDeviceBindingBusy: Boolean = false,
     /** Debug: loading state for demo seed button. */
     val isSeedingDemo: Boolean = false,
     /** Debug: one-shot snackbar after demo seed (success or failure). */
@@ -101,7 +120,9 @@ class SettingsViewModel @Inject constructor(
     private val exportVaultUseCase: ExportVaultUseCase,
     private val importVaultUseCase: ImportVaultUseCase,
     private val vaultFilePort: VaultFilePort,
-    private val transferRequests: VaultTransferRequests
+    private val transferRequests: VaultTransferRequests,
+    private val metadataRepository: MetadataRepository,
+    private val upgradeVaultToDeviceBoundUseCase: UpgradeVaultToDeviceBoundUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -112,6 +133,12 @@ class SettingsViewModel @Inject constructor(
      * every exit from the flow — dismissal included — so it never outlives the dialog.
      */
     private var pendingImportPlan: ImportPlan? = null
+
+    /**
+     * Set while the user is inside the upgrade flow and has gone off to export. It is what turns
+     * the next successful export into "the gate is satisfied" instead of an ordinary backup.
+     */
+    private var upgradeAwaitingExport: Boolean = false
 
     private val _pendingBiometricCipherEvent = MutableSharedFlow<Cipher>(extraBufferCapacity = 1)
     val pendingBiometricCipherEvent: SharedFlow<Cipher> = _pendingBiometricCipherEvent
@@ -135,6 +162,11 @@ class SettingsViewModel @Inject constructor(
             .launchIn(viewModelScope)
         appSettings.lastExportAtMs
             .onEach { at -> _uiState.update { it.copy(lastExportAtMs = at) } }
+            .launchIn(viewModelScope)
+        metadataRepository.observe()
+            .onEach { metadata ->
+                _uiState.update { it.copy(isDeviceBound = metadata?.isDeviceBound ?: false) }
+            }
             .launchIn(viewModelScope)
         // A document picked before an auto-lock lands here after the unlock, because locking
         // destroys this ViewModel along with the rest of the main graph.
@@ -342,11 +374,19 @@ class SettingsViewModel @Inject constructor(
                     bytes.fill(0)
                 }
                 appSettings.setLastExportAt(System.currentTimeMillis())
+                val resumedUpgrade = upgradeAwaitingExport
+                upgradeAwaitingExport = false
                 _uiState.update {
                     it.copy(
                         isTransferBusy = false,
                         transferDialog = null,
-                        transferMessage = UserMessage.Resource(R.string.settings_export_done)
+                        transferMessage = UserMessage.Resource(R.string.settings_export_done),
+                        // Only an export finished inside the upgrade flow opens that gate.
+                        deviceBindingDialog = if (resumedUpgrade) {
+                            DeviceBindingDialog.Explain(backupDone = true)
+                        } else {
+                            it.deviceBindingDialog
+                        }
                     )
                 }
             } catch (e: Exception) {
@@ -445,6 +485,68 @@ class SettingsViewModel @Inject constructor(
                 }
             } finally {
                 pendingImportPlan = null
+            }
+        }
+    }
+
+    // -- Device binding (v1 to v2) --------------------
+
+    fun openDeviceBindingDialog() {
+        _uiState.update {
+            it.copy(deviceBindingDialog = DeviceBindingDialog.Explain(backupDone = false))
+        }
+    }
+
+    fun dismissDeviceBindingDialog() {
+        upgradeAwaitingExport = false
+        _uiState.update { it.copy(deviceBindingDialog = null) }
+    }
+
+    /**
+     * The user chose to export from inside the upgrade dialog. The picker takes over from here, so
+     * the dialog steps aside; a successful export brings it back with the gate satisfied.
+     */
+    fun onUpgradeExportRequested() {
+        upgradeAwaitingExport = true
+        _uiState.update { it.copy(deviceBindingDialog = null) }
+    }
+
+    fun requestUpgradeWithoutBackup() {
+        _uiState.update { it.copy(deviceBindingDialog = DeviceBindingDialog.ConfirmWithoutBackup) }
+    }
+
+    /** Steps back to the explanation from the no-backup confirmation. */
+    fun cancelUpgradeWithoutBackup() {
+        _uiState.update {
+            it.copy(deviceBindingDialog = DeviceBindingDialog.Explain(backupDone = false))
+        }
+    }
+
+    fun confirmDeviceBinding() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isDeviceBindingBusy = true) }
+            try {
+                upgradeVaultToDeviceBoundUseCase()
+                _uiState.update {
+                    it.copy(
+                        isDeviceBindingBusy = false,
+                        deviceBindingDialog = null,
+                        transferMessage = UserMessage.Resource(R.string.device_binding_enabled)
+                    )
+                }
+            } catch (e: Exception) {
+                // The vault is untouched on any failure here - the upgrade writes metadata once,
+                // at the very end - so a retry is always safe, and that is what the message says.
+                AppLogger.e("SettingsViewModel", "Device binding upgrade failed", e)
+                _uiState.update {
+                    it.copy(
+                        isDeviceBindingBusy = false,
+                        deviceBindingDialog = null,
+                        transferMessage = UserMessage.Resource(R.string.device_binding_failed)
+                    )
+                }
+            } finally {
+                upgradeAwaitingExport = false
             }
         }
     }

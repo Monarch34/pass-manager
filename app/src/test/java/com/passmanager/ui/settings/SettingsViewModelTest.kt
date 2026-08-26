@@ -8,11 +8,17 @@ import com.passmanager.domain.usecase.ChangePassphraseUseCase
 import com.passmanager.domain.usecase.ExportVaultUseCase
 import com.passmanager.domain.usecase.ImportVaultUseCase
 import com.passmanager.domain.usecase.SeedDemoVaultItemsUseCase
+import com.passmanager.domain.usecase.UpgradeVaultToDeviceBoundUseCase
+import com.passmanager.crypto.model.EncryptedData
+import com.passmanager.crypto.model.KdfParams
+import com.passmanager.domain.exception.DeviceKeyUnavailableException
 import com.passmanager.domain.exception.PmVaultAuthenticationException
 import com.passmanager.domain.exception.WrongPassphraseException
 import com.passmanager.domain.model.LockState
+import com.passmanager.domain.model.VaultMetadata
 import com.passmanager.domain.port.BiometricLockPort
 import com.passmanager.domain.port.VaultFilePort
+import com.passmanager.domain.repository.MetadataRepository
 import com.passmanager.domain.usecase.ImportPlan
 import com.passmanager.security.biometric.BiometricHelper
 import com.passmanager.test.MainDispatcherRule
@@ -29,6 +35,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -53,7 +60,11 @@ class SettingsViewModelTest {
         importVault: ImportVaultUseCase = mockk(relaxed = true),
         vaultFilePort: VaultFilePort = mockk(relaxed = true),
         transferRequests: VaultTransferRequests = VaultTransferRequests(),
-        appSettings: AppSettingsPort = appSettingsMock()
+        appSettings: AppSettingsPort = appSettingsMock(),
+        metadataRepository: MetadataRepository = mockk<MetadataRepository>(relaxed = true).also {
+            every { it.observe() } returns flowOf(null)
+        },
+        upgradeVault: UpgradeVaultToDeviceBoundUseCase = mockk(relaxed = true)
     ): SettingsViewModel {
         val context = mockk<Context>(relaxed = true)
         val biometricLockPort = mockk<BiometricLockPort>()
@@ -72,7 +83,9 @@ class SettingsViewModelTest {
             exportVault,
             importVault,
             vaultFilePort,
-            transferRequests
+            transferRequests,
+            metadataRepository,
+            upgradeVault
         )
     }
 
@@ -295,5 +308,153 @@ class SettingsViewModelTest {
 
         assertNull(vm.uiState.value.transferDialog)
         coVerify(exactly = 0) { import.apply(any(), any()) }
+    }
+
+    // -- Device binding (v1 to v2) --------------------
+
+    private fun metadataRepositoryFor(deviceBound: Boolean): MetadataRepository =
+        mockk<MetadataRepository>(relaxed = true).also {
+            every { it.observe() } returns flowOf(
+                VaultMetadata(
+                    currentKeyVersion = 1,
+                    wrappedVaultKey = EncryptedData(ByteArray(32), ByteArray(12)),
+                    kdfSalt = ByteArray(16),
+                    kdfParams = KdfParams(),
+                    biometricEnabled = false,
+                    biometricWrappedKey = null,
+                    wrapVersion = if (deviceBound) 2 else 1,
+                    pepperIv = if (deviceBound) ByteArray(12) else null
+                )
+            )
+        }
+
+    @Test
+    fun `the settings row reflects whether the vault is device-bound`() = runTest {
+        val vm = buildViewModel(metadataRepository = metadataRepositoryFor(deviceBound = true))
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isDeviceBound)
+    }
+
+    @Test
+    fun `the upgrade is gated on an export completed in this flow`() = runTest {
+        val upgrade = mockk<UpgradeVaultToDeviceBoundUseCase>(relaxed = true)
+        val vm = buildViewModel(
+            lockState = lockProvider(LockState.Unlocked),
+            metadataRepository = metadataRepositoryFor(deviceBound = false),
+            upgradeVault = upgrade
+        )
+        advanceUntilIdle()
+
+        vm.openDeviceBindingDialog()
+
+        val dialog = vm.uiState.value.deviceBindingDialog
+        assertTrue(dialog is DeviceBindingDialog.Explain)
+        // The confirm button is bound to this flag; a stale backup must not open the gate.
+        assertFalse((dialog as DeviceBindingDialog.Explain).backupDone)
+        coVerify(exactly = 0) { upgrade() }
+    }
+
+    @Test
+    fun `an export inside the upgrade flow opens the gate`() = runTest {
+        val export = mockk<ExportVaultUseCase>()
+        coEvery { export(any(), any()) } returns ByteArray(64)
+        val vm = buildViewModel(
+            lockState = lockProvider(LockState.Unlocked),
+            exportVault = export,
+            metadataRepository = metadataRepositoryFor(deviceBound = false)
+        )
+        advanceUntilIdle()
+
+        vm.openDeviceBindingDialog()
+        vm.onUpgradeExportRequested()
+        vm.onExportFileChosen("content://doc/upgrade")
+        vm.exportVault("Str0ng-Passphrase!".toCharArray(), "Str0ng-Passphrase!".toCharArray())
+        advanceUntilIdle()
+
+        val dialog = vm.uiState.value.deviceBindingDialog
+        assertTrue(dialog is DeviceBindingDialog.Explain)
+        assertTrue((dialog as DeviceBindingDialog.Explain).backupDone)
+    }
+
+    @Test
+    fun `an ordinary export does not open the upgrade gate`() = runTest {
+        val export = mockk<ExportVaultUseCase>()
+        coEvery { export(any(), any()) } returns ByteArray(64)
+        val vm = buildViewModel(
+            lockState = lockProvider(LockState.Unlocked),
+            exportVault = export,
+            metadataRepository = metadataRepositoryFor(deviceBound = false)
+        )
+        advanceUntilIdle()
+
+        vm.onExportFileChosen("content://doc/plain")
+        vm.exportVault("Str0ng-Passphrase!".toCharArray(), "Str0ng-Passphrase!".toCharArray())
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.deviceBindingDialog)
+    }
+
+    @Test
+    fun `skipping the backup goes through a second confirmation`() = runTest {
+        val upgrade = mockk<UpgradeVaultToDeviceBoundUseCase>(relaxed = true)
+        val vm = buildViewModel(
+            lockState = lockProvider(LockState.Unlocked),
+            metadataRepository = metadataRepositoryFor(deviceBound = false),
+            upgradeVault = upgrade
+        )
+        advanceUntilIdle()
+
+        vm.openDeviceBindingDialog()
+        vm.requestUpgradeWithoutBackup()
+        advanceUntilIdle()
+
+        assertEquals(DeviceBindingDialog.ConfirmWithoutBackup, vm.uiState.value.deviceBindingDialog)
+        coVerify(exactly = 0) { upgrade() }
+
+        vm.confirmDeviceBinding()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { upgrade() }
+    }
+
+    @Test
+    fun `backing out of the no-backup confirmation returns to the explanation`() = runTest {
+        val vm = buildViewModel(
+            lockState = lockProvider(LockState.Unlocked),
+            metadataRepository = metadataRepositoryFor(deviceBound = false)
+        )
+        advanceUntilIdle()
+
+        vm.openDeviceBindingDialog()
+        vm.requestUpgradeWithoutBackup()
+        vm.cancelUpgradeWithoutBackup()
+
+        assertEquals(
+            DeviceBindingDialog.Explain(backupDone = false),
+            vm.uiState.value.deviceBindingDialog
+        )
+    }
+
+    @Test
+    fun `a failed upgrade closes the dialog with a retryable message`() = runTest {
+        val upgrade = mockk<UpgradeVaultToDeviceBoundUseCase>()
+        coEvery { upgrade() } throws DeviceKeyUnavailableException()
+        val vm = buildViewModel(
+            lockState = lockProvider(LockState.Unlocked),
+            metadataRepository = metadataRepositoryFor(deviceBound = false),
+            upgradeVault = upgrade
+        )
+        advanceUntilIdle()
+
+        vm.openDeviceBindingDialog()
+        vm.confirmDeviceBinding()
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.deviceBindingDialog)
+        assertEquals(
+            UserMessage.Resource(R.string.device_binding_failed),
+            vm.uiState.value.transferMessage
+        )
     }
 }

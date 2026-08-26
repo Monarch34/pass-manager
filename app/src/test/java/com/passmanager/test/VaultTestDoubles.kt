@@ -10,6 +10,8 @@ import com.passmanager.domain.model.PayloadJson
 import com.passmanager.domain.model.VaultItem
 import com.passmanager.domain.model.VaultItemHeader
 import com.passmanager.domain.model.VaultMetadata
+import com.passmanager.domain.exception.DeviceKeyLostException
+import com.passmanager.domain.port.PepperPort
 import com.passmanager.domain.port.VaultKeyProvider
 import com.passmanager.domain.repository.MetadataRepository
 import com.passmanager.domain.repository.VaultRepository
@@ -22,12 +24,53 @@ class FakeKeyProvider(private val key: ByteArray) : VaultKeyProvider {
     override fun unlock(vaultKey: ByteArray) = Unit
 }
 
+/**
+ * A [PepperPort] backed by real AES-GCM under a fixed in-memory "device key".
+ *
+ * Real crypto rather than a stub, so `open` fails a tag check exactly the way the Keystore would.
+ * That failure is the signal [com.passmanager.domain.usecase.VaultKeyWrapper] uses to tell a wrong
+ * passphrase from a lost device key, which makes it the one behaviour most worth reproducing.
+ */
+class FakePepperPort(
+    var keyPresent: Boolean = true,
+    /** When set, every operation throws it - how a transient Keystore fault is simulated. */
+    var failWith: Throwable? = null
+) : PepperPort {
+
+    private val cipher = AesGcmCipher()
+    private val deviceKey = ByteArray(32) { (it * 5 + 1).toByte() }
+
+    override fun isKeyPresent(): Boolean = keyPresent
+
+    override fun ensureKey() {
+        failWith?.let { throw it }
+        keyPresent = true
+    }
+
+    override fun deleteKey() {
+        keyPresent = false
+    }
+
+    override fun seal(plaintext: ByteArray): EncryptedData {
+        failWith?.let { throw it }
+        if (!keyPresent) throw DeviceKeyLostException()
+        return cipher.encrypt(plaintext, deviceKey)
+    }
+
+    override fun open(sealed: EncryptedData): ByteArray {
+        failWith?.let { throw it }
+        if (!keyPresent) throw DeviceKeyLostException()
+        return cipher.decrypt(sealed, deviceKey)
+    }
+}
+
 class FakeMetadataRepository(private val value: VaultMetadata = defaultMetadata()) : MetadataRepository {
     override fun observe(): Flow<VaultMetadata?> = flowOf(value)
     override suspend fun get(): VaultMetadata = value
     override suspend fun isVaultSetup(): Boolean = true
     override suspend fun save(metadata: VaultMetadata) = Unit
     override suspend fun update(metadata: VaultMetadata) = Unit
+    override suspend fun delete() = Unit
 
     companion object {
         fun defaultMetadata() = VaultMetadata(
@@ -99,7 +142,9 @@ class FakeVaultRepository : VaultRepository {
 
     override suspend fun deleteById(id: String) { rows.remove(id) }
     override suspend fun deleteByIds(ids: List<String>) { ids.forEach { rows.remove(it) } }
+    override suspend fun deleteAll() { rows.clear() }
     override suspend fun isVaultEmpty(): Boolean = rows.isEmpty()
+    override suspend fun count(): Int = rows.size
 
     private fun headers(): List<VaultItemHeader> = rows.values.map { row ->
         VaultItemHeader(

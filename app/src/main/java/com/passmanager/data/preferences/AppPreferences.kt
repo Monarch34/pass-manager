@@ -34,6 +34,8 @@ class AppPreferences @Inject constructor(
         private val VAULT_LIST_SORT = stringPreferencesKey("vault_list_sort")
         private val VAULT_GROUP_FILTER = stringPreferencesKey("vault_group_filter")
         private val LAST_EXPORT_AT_MS = longPreferencesKey("last_export_at_ms")
+        private val DEVICE_BINDING_PROMPT_DECLINED = booleanPreferencesKey("device_binding_prompt_declined")
+        private val BACKUP_REMINDER_SNOOZED_AT_MS = longPreferencesKey("backup_reminder_snoozed_at_ms")
         private const val ALL_CATEGORIES = "__all__"
     }
 
@@ -67,6 +69,16 @@ class AppPreferences @Inject constructor(
         preferences[LAST_EXPORT_AT_MS]
     }
 
+    override val deviceBindingPromptDeclined: Flow<Boolean> =
+        context.dataStore.data.recoverToEmpty().map { preferences ->
+            preferences[DEVICE_BINDING_PROMPT_DECLINED] ?: false
+        }
+
+    override val backupReminderSnoozedAtMs: Flow<Long?> =
+        context.dataStore.data.recoverToEmpty().map { preferences ->
+            preferences[BACKUP_REMINDER_SNOOZED_AT_MS]
+        }
+
     override suspend fun setAutoLockTimeout(seconds: Int) {
         context.dataStore.edit { preferences ->
             preferences[AUTO_LOCK_TIMEOUT_SECONDS] = seconds
@@ -94,6 +106,18 @@ class AppPreferences @Inject constructor(
     override suspend fun setLastExportAt(epochMillis: Long) {
         context.dataStore.edit { preferences ->
             preferences[LAST_EXPORT_AT_MS] = epochMillis
+        }
+    }
+
+    override suspend fun setDeviceBindingPromptDeclined(declined: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[DEVICE_BINDING_PROMPT_DECLINED] = declined
+        }
+    }
+
+    override suspend fun setBackupReminderSnoozedAt(epochMillis: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[BACKUP_REMINDER_SNOOZED_AT_MS] = epochMillis
         }
     }
 }

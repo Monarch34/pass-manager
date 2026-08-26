@@ -1,21 +1,18 @@
 package com.passmanager.domain.usecase
 
-import com.passmanager.crypto.cipher.AesGcmCipher
 import com.passmanager.crypto.kdf.KdfProvider
 import com.passmanager.crypto.model.KdfParams
 import com.passmanager.crypto.util.toUtf8Bytes
 import com.passmanager.domain.port.BiometricLockPort
 import com.passmanager.domain.repository.MetadataRepository
 import java.security.SecureRandom
-import javax.crypto.AEADBadTagException
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import com.passmanager.domain.exception.WrongPassphraseException
 
 class ChangePassphraseUseCase @Inject constructor(
     private val kdfProvider: KdfProvider,
-    private val cipher: AesGcmCipher,
+    private val keyWrapper: VaultKeyWrapper,
     private val metadataRepository: MetadataRepository,
     private val biometricLockPort: BiometricLockPort
 ) {
@@ -35,11 +32,7 @@ class ChangePassphraseUseCase @Inject constructor(
                 kdfProvider.deriveKey(currentBytes, metadata.kdfSalt, metadata.kdfParams)
             }
 
-            vaultKey = try {
-                cipher.decrypt(metadata.wrappedVaultKey, currentDerivedKey)
-            } catch (e: AEADBadTagException) {
-                throw WrongPassphraseException()
-            }
+            vaultKey = keyWrapper.unwrap(metadata, currentDerivedKey)
 
             val newSalt = ByteArray(16).also { secureRandom.nextBytes(it) }
             // The vault key is being re-wrapped against a fresh salt anyway, so this is the one
@@ -52,9 +45,22 @@ class ChangePassphraseUseCase @Inject constructor(
                 kdfProvider.deriveKey(newBytes, newSalt, newParams)
             }
 
-            val newWrapped = cipher.encrypt(vaultKey, newDerivedKey)
+            // A device-bound vault stays device-bound: the inner layer is rebuilt against the new
+            // KEK and the outer one is re-applied over it. Dropping the outer layer here would
+            // silently downgrade the vault's protection as a side effect of changing a passphrase.
+            val newWrapped = keyWrapper.wrap(
+                vaultKey = vaultKey,
+                kek = newDerivedKey,
+                deviceBound = metadata.isDeviceBound
+            )
             metadataRepository.update(
-                metadata.copy(kdfSalt = newSalt, wrappedVaultKey = newWrapped, kdfParams = newParams)
+                metadata.copy(
+                    kdfSalt = newSalt,
+                    wrappedVaultKey = newWrapped.onDisk,
+                    kdfParams = newParams,
+                    wrapVersion = newWrapped.wrapVersion,
+                    pepperIv = newWrapped.pepperIv
+                )
             )
 
             biometricLockPort.disableIfEnabled()
