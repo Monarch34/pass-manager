@@ -40,6 +40,30 @@ targets:
         product: PassVaultCore
       - package: PassVaultCore
         product: PassVaultStorage
+    # A real Info.plist rather than GENERATE_INFOPLIST_FILE, because the exported
+    # type declaration below has no INFOPLIST_KEY_ equivalent. XcodeGen writes
+    # this file during generation; it is not committed.
+    info:
+      path: Generated-Info.plist
+      properties:
+        CFBundleDisplayName: PassManager
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # Declares `.pmvault` as a type this app OWNS — it defines the format
+        # rather than merely consuming someone else's. Without this the system
+        # would not associate the extension with the app, and the Files picker
+        # would grey out every export the app itself produced.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.passmanager.pmvault
+            UTTypeDescription: PassManager encrypted vault
+            UTTypeConformsTo:
+              - public.data
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - pmvault
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.passmanager.ios
@@ -48,11 +72,6 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1"
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        INFOPLIST_KEY_CFBundleDisplayName: PassManager
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGN_IDENTITY: ""
 

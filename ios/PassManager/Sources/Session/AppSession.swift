@@ -36,6 +36,10 @@ final class AppSession: ObservableObject {
     /// re-enrolment instead of just reporting a failure.
     @Published var biometricNeedsReEnrolment: Bool = false
 
+    /// Where an export or import has got to. Survives a lock; see
+    /// ``TransferLockPolicy``.
+    @Published private(set) var transferStage: TransferStage = .idle
+
     private static let timeoutKey = "autoLockTimeoutSeconds"
 
     private var store: VaultStore?
@@ -90,6 +94,7 @@ final class AppSession: ObservableObject {
         }
         lockState = LockStateMachine.stateAtLaunch(hasVault: hasVault)
         refreshBiometricState()
+        loadLastExportDate()
     }
 
     /// Reads whether an enrolment exists WITHOUT prompting for a face.
@@ -164,6 +169,11 @@ final class AppSession: ObservableObject {
         }
         headerCache.clear()
         headers = []
+        // A lock that left a built export document or a decrypted import body in
+        // memory would be a lock in name only. The user's INTENT survives; the
+        // plaintext does not.
+        discardTransferPlaintext()
+        transferStage = TransferLockPolicy.stageAfterLock(transferStage)
         lockState = state
     }
 
@@ -301,6 +311,9 @@ final class AppSession: ObservableObject {
         biometricNeedsReEnrolment = false
         errorMessage = nil
         reload()
+        // Resume a transfer the lock interrupted: the picker's result is still
+        // here, so the user does not have to find the file again.
+        transferStage = TransferLockPolicy.stageAfterUnlock(transferStage)
     }
 
     /// The error split that matters: a changed enrolment throws the item away and
@@ -493,5 +506,203 @@ final class AppSession: ObservableObject {
 
     static func nowMillis() -> Int64 {
         return Int64(Date().timeIntervalSince1970 * 1000.0)
+    }
+
+    // MARK: - Export and import
+
+    /// Ciphertext read from the picker. Survives a lock deliberately: it is no
+    /// more sensitive than the file sitting in Files, and keeping it is what
+    /// spares the user hunting for it again after an auto-lock.
+    private var pendingImportFile: Data?
+    /// Decrypted import body. Vault plaintext — discarded on lock.
+    private var pendingImportBody: PmVaultBody?
+    /// A built `.pmvault`. A complete copy of the vault — discarded on lock.
+    @Published private(set) var pendingExportDocument: Data?
+    @Published private(set) var importPlan: ImportPlan?
+    @Published var importMode: ImportMode = .merge
+    @Published private(set) var lastExportAt: Int64?
+    /// Drives the Files picker for import. Owned by the session rather than a
+    /// view so Settings can dismiss itself and still have the picker appear.
+    @Published var isPickingImportFile: Bool = false
+
+    func requestImportPicker() {
+        errorMessage = nil
+        isPickingImportFile = true
+    }
+
+    var backupStatus: BackupReminder.Status {
+        return BackupReminder.status(
+            lastExportAt: lastExportAt,
+            now: Self.nowMillis(),
+            itemCount: itemCount
+        )
+    }
+
+    func loadLastExportDate() {
+        let stored = UserDefaults.standard.object(forKey: BackupReminder.defaultsKey) as? NSNumber
+        lastExportAt = stored?.int64Value
+    }
+
+    // MARK: Export
+
+    /// Begin an export. If the vault is locked, this only records the intent —
+    /// the passphrase is asked once the user is back in.
+    func beginExport() {
+        errorMessage = nil
+        transferStage = lockState.isUnlocked ? .awaitingExportPassphrase : .awaitingUnlockForExport
+    }
+
+    /// Encrypt every item under a fresh export passphrase.
+    func prepareExportDocument(passphrase: String) async -> Bool {
+        guard let body = buildExportBody() else {
+            errorMessage = "Could not read the vault to export it."
+            return false
+        }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            let document = try await Task.detached(priority: .userInitiated) {
+                try PmVaultFile.write(body: body, passphrase: passphrase)
+            }.value
+            pendingExportDocument = document
+            transferStage = .exporting
+            return true
+        } catch {
+            errorMessage = "Could not create the export."
+            return false
+        }
+    }
+
+    /// Called once the system picker has written the file.
+    func completeExport(success: Bool) {
+        if success {
+            let now = Self.nowMillis()
+            UserDefaults.standard.set(NSNumber(value: now), forKey: BackupReminder.defaultsKey)
+            lastExportAt = now
+        }
+        discardTransferPlaintext()
+        transferStage = .idle
+    }
+
+    private func buildExportBody() -> PmVaultBody? {
+        guard let store = store, let vaultKey = vaultKey else {
+            return nil
+        }
+        var items: [PmVaultItem] = []
+        for header in headers {
+            guard
+                let row = try? store.item(id: header.id),
+                let payload = try? ItemCrypto.decryptPayload(row: row, vaultKey: vaultKey)
+            else {
+                continue
+            }
+            // createdAt and updatedAt are carried through from the row, never
+            // stamped with "now" — an export is a copy, not a new record.
+            items.append(PmVaultItem(
+                id: row.id,
+                category: row.category,
+                createdAt: row.createdAt,
+                updatedAt: row.updatedAt,
+                payload: payload
+            ))
+        }
+        return PmVaultBody(version: 1, exportedAt: Self.nowMillis(), items: items)
+    }
+
+    // MARK: Import
+
+    /// Take the bytes the picker handed us. Reading the file needs no vault key,
+    /// so this works whether or not the vault happens to be locked.
+    func beginImport(fileData: Data) {
+        errorMessage = nil
+        pendingImportFile = fileData
+        transferStage = lockState.isUnlocked ? .awaitingImportPassphrase : .awaitingUnlockForImport
+    }
+
+    /// Decrypt the file and compute what applying it WOULD do. Writes nothing.
+    func planImport(passphrase: String) async -> Bool {
+        guard let fileData = pendingImportFile, let store = store else {
+            errorMessage = "No file to import."
+            return false
+        }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            let body = try await Task.detached(priority: .userInitiated) {
+                try PmVaultFile.read(fileData, passphrase: passphrase)
+            }.value
+            pendingImportBody = body
+            let existing = try store.updatedAtById()
+            importPlan = ImportMerge.plan(
+                fileItems: body.items,
+                existingUpdatedAt: existing,
+                titles: headerCache.titles,
+                now: Self.nowMillis(),
+                mode: importMode
+            )
+            transferStage = .reviewingImport
+            return true
+        } catch let error as PmVaultError {
+            errorMessage = error.kind == .wrongPassphraseOrCorrupt
+                ? "The passphrase is wrong or the file is corrupted."
+                : "This file could not be read: \(error)"
+            return false
+        } catch {
+            errorMessage = "This file could not be read."
+            return false
+        }
+    }
+
+    /// Re-plan when the user flips "add only". No decryption is repeated — the
+    /// body is already in hand, and planning is pure.
+    func replanImport() {
+        guard let body = pendingImportBody, let store = store else {
+            return
+        }
+        guard let existing = try? store.updatedAtById() else {
+            return
+        }
+        importPlan = ImportMerge.plan(
+            fileItems: body.items,
+            existingUpdatedAt: existing,
+            titles: headerCache.titles,
+            now: Self.nowMillis(),
+            mode: importMode
+        )
+    }
+
+    /// Apply a plan the user has seen and confirmed. Nothing is written before
+    /// this is called.
+    @discardableResult
+    func applyImport() -> ImportOutcome? {
+        guard let plan = importPlan, let store = store, let vaultKey = vaultKey else {
+            return nil
+        }
+        do {
+            let outcome = try store.applyImport(plan, vaultKey: vaultKey, keyVersion: 1)
+            reload()
+            cancelTransfer()
+            return outcome
+        } catch {
+            errorMessage = "Could not apply the import."
+            return nil
+        }
+    }
+
+    func cancelTransfer() {
+        pendingImportFile = nil
+        discardTransferPlaintext()
+        transferStage = .idle
+    }
+
+    /// Everything derived from the vault key. Called on lock and at the end of
+    /// every flow.
+    private func discardTransferPlaintext() {
+        if var document = pendingExportDocument {
+            pendingExportDocument = nil
+            SecureBytes.zero(&document)
+        }
+        pendingImportBody = nil
+        importPlan = nil
     }
 }

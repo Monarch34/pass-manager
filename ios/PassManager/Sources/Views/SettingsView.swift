@@ -56,14 +56,35 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Button("Export vault…") {}
-                        .disabled(true)
-                    Button("Import vault…") {}
-                        .disabled(true)
+                    if let reminder = session.backupStatus.message {
+                        Label {
+                            Text(reminder)
+                                .font(.caption)
+                                .foregroundStyle(AppColor.onSurfaceVariant)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundStyle(AppColor.strengthFair)
+                        }
+                    }
+
+                    // Both of these only set state on the session. The sheets and
+                    // the system pickers are hosted by RootView, because THIS
+                    // view is torn down if the vault auto-locks mid-transfer and
+                    // anything presented from here would go with it.
+                    Button("Export vault…") {
+                        session.beginExport()
+                        dismiss()
+                    }
+                    .disabled(session.itemCount == 0)
+
+                    Button("Import vault…") {
+                        session.requestImportPicker()
+                        dismiss()
+                    }
                 } header: {
                     Text("Transfer")
                 } footer: {
-                    Text("Encrypted .pmvault export and import are wired up in B5. The container and its merge rules are already implemented and tested.")
+                    Text("An export is one encrypted .pmvault file with its own passphrase. It is how this vault moves to another device, and the only way back if this one is lost.")
                 }
 
                 Section {

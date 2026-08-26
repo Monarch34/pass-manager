@@ -144,6 +144,47 @@ final class DeviceLayerIsolationTests: XCTestCase {
         }
     }
 
+    /// The same guarantee, now through the shape the export UI actually builds:
+    /// the document handed to `.fileExporter`. If the device layer could reach a
+    /// `.pmvault`, this is the path it would take.
+    func testTheExportDocumentCarriesNoDeviceMaterial() throws {
+        let metadata = try VaultCore.createVault(passphrase: masterPassphrase, params: cheapKdf)
+        let vaultKey = try VaultCore.unlock(passphrase: masterPassphrase, metadata: metadata)
+
+        let body = PmVaultBody(version: 1, exportedAt: 1_787_000_000_000, items: [
+            PmVaultItem(
+                payload: .bank(ItemPayload.Bank(
+                    id: "b", title: "Kadıköy Bankası", bankName: "Kadıköy",
+                    password: "Bank-2026!x", previousPasswords: ["Eski-2025!a"]
+                )),
+                createdAt: 10,
+                updatedAt: 20
+            )
+        ])
+        let document = PmVaultDocument(
+            data: try PmVaultFile.write(body: body, passphrase: exportPassphrase, params: cheapKdf)
+        )
+
+        let forbidden: [(String, Data)] = [
+            ("raw vault key", vaultKey),
+            ("wrapped vault key", metadata.wrappedVaultKey),
+            ("wrap nonce", metadata.wrapNonce),
+            ("master KDF salt", metadata.kdfSalt)
+        ]
+        for (label, needle) in forbidden {
+            XCTAssertFalse(
+                contains(document.data, needle),
+                "\(label) leaked into the export document"
+            )
+        }
+
+        // And the document still is what it claims to be, timestamps intact.
+        let readBack = try PmVaultFile.read(document.data, passphrase: exportPassphrase)
+        XCTAssertEqual(readBack.items.count, 1)
+        XCTAssertEqual(readBack.items[0].createdAt, 10)
+        XCTAssertEqual(readBack.items[0].updatedAt, 20)
+    }
+
     /// Two exports of the same items under the same passphrase must differ:
     /// fresh salt and IV every time, never reused.
     func testEachExportDrawsFreshSaltAndIv() throws {
