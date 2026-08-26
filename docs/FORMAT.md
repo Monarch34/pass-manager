@@ -39,7 +39,10 @@ check fails. Without this, a crafted header can demand a 1 GiB derivation and OO
 the app before any authenticity check runs.
 
 - `version == 1`
-- `memory  <= 262144` (KiB, i.e. 256 MiB ceiling)
+- `memory >= 8192` and `memory <= 262144` (KiB: 8 MiB floor, 256 MiB ceiling)
+- `memory >= 8 * parallelism` — Argon2's own structural minimum. A header can satisfy
+  every other bound and still be rejected inside the library (e.g. m=16, p=8); catching
+  it here keeps every reader failure inside this document's typed error set.
 - `iterations <= 16` and `>= 1`
 - `parallelism <= 8` and `>= 1`
 - `hashLength == 32`
@@ -117,6 +120,25 @@ Common to all types: `id` (string), `title` (string), `notes` (string).
   carrying a forged far-future timestamp cannot permanently shadow local edits.
 - Before applying, show the user a summary — how many inserts, how many overwrites
   (with the overwritten titles) — and offer an "add only" mode that skips overwrites.
+
+## Resolved reader decisions
+
+Cases the rules above leave open. Both platforms MUST decide them the same way or an
+export written by one becomes unreadable — or worse, silently different — on the other.
+
+- **Body `version`.** The body carries its own `version` field. Treat a value other
+  than 1 exactly like an unsupported header version: reject cleanly.
+- **Equal `updatedAt`.** "Newer wins" means strictly newer. On a tie the local row
+  stays, so re-importing your own export is a no-op.
+- **`createdAt` on overwrite.** An overwrite is an edit of an existing item: keep the
+  local `createdAt` and take only the payload and `updatedAt` from the file. On insert,
+  take the file's `createdAt` verbatim (only `updatedAt` is clamped).
+- **Summary titles.** The overwrite list shows the *incoming* file's title, which needs
+  no extra decryption and is normally identical to the local one anyway.
+- **Trailing bytes.** Anything after the ciphertext is part of the ciphertext, so it
+  fails the tag check. Readers do not trim or tolerate a tail.
+- **Unknown payload fields.** Readers ignore fields they do not know (forward
+  compatibility); writers never emit fields absent from the schema above.
 
 ## Writer requirements
 
