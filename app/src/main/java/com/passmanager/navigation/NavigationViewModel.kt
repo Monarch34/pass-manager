@@ -6,6 +6,8 @@ import com.passmanager.BuildConfig
 import com.passmanager.domain.model.LockState
 import com.passmanager.domain.port.LockStateProvider
 import com.passmanager.domain.usecase.CheckVaultSetupUseCase
+import com.passmanager.ui.settings.PendingVaultTransfer
+import com.passmanager.ui.settings.VaultTransferRequests
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,10 +23,17 @@ sealed interface NavReady {
 @HiltViewModel
 class NavigationViewModel @Inject constructor(
     private val lockStateProvider: LockStateProvider,
-    private val checkVaultSetupUseCase: CheckVaultSetupUseCase
+    private val checkVaultSetupUseCase: CheckVaultSetupUseCase,
+    transferRequests: VaultTransferRequests
 ) : ViewModel() {
 
     val lockState: StateFlow<LockState> = lockStateProvider.lockState
+
+    /**
+     * A document picked in the file picker that the auto-lock interrupted. Non-null means the main
+     * graph should open Settings on entry so the export/import flow can finish where it started.
+     */
+    val pendingVaultTransfer: StateFlow<PendingVaultTransfer?> = transferRequests.pending
 
     private val _navReady = MutableStateFlow<NavReady>(NavReady.Loading)
     val navReady: StateFlow<NavReady> = _navReady.asStateFlow()

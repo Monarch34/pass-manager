@@ -53,7 +53,7 @@ class SaveVaultItemUseCaseTest {
         val itemId = useCase(payload, existingId = null)
 
         assertEquals(36, itemId.length) // UUID length
-        coVerify(exactly = 1) { vaultRepository.insert(id = itemId, any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { vaultRepository.insert(itemId, any(), any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { vaultRepository.update(any(), any(), any(), any(), any(), any()) }
     }
 
@@ -65,8 +65,8 @@ class SaveVaultItemUseCaseTest {
         val returnedId = useCase(payload, existingId = existingId)
 
         assertEquals(existingId, returnedId)
-        coVerify(exactly = 1) { vaultRepository.update(id = existingId, any(), any(), any(), any(), any()) }
-        coVerify(exactly = 0) { vaultRepository.insert(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { vaultRepository.update(existingId, any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { vaultRepository.insert(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test

@@ -183,6 +183,41 @@
     <string name="settings_error_biometric_disable">Failed to disable biometric</string>
     <string name="settings_wrong_current_passphrase">Incorrect current passphrase</string>
     <string name="settings_passphrase_change_failed">Failed to change passphrase</string>
+
+    <!-- Encrypted vault export / import (.pmvault, docs/FORMAT.md) -->
+    <string name="settings_section_backup">BACKUP</string>
+    <string name="settings_export_title">Export vault</string>
+    <string name="settings_export_subtitle">Save every item to an encrypted .pmvault file</string>
+    <string name="settings_export_last">Last export: %1$s</string>
+    <string name="settings_export_never">Not exported yet</string>
+    <string name="settings_export_file_name">passmanager-vault.pmvault</string>
+    <string name="settings_export_dialog_title">Choose an export passphrase</string>
+    <string name="settings_export_dialog_message">This passphrase, and nothing else, protects the file. Do not reuse your master passphrase — anyone holding both the file and this passphrase holds your vault.</string>
+    <string name="settings_export_passphrase_hint">Export passphrase</string>
+    <string name="settings_export_confirm_hint">Confirm export passphrase</string>
+    <string name="settings_export_passphrase_weak">Use a longer passphrase with mixed case, a digit and a symbol.</string>
+    <string name="settings_export_action">Export</string>
+    <string name="settings_export_done">Vault exported</string>
+    <string name="settings_export_failed">Could not export the vault</string>
+    <string name="settings_import_title">Import vault</string>
+    <string name="settings_import_subtitle">Merge items from a .pmvault file. Nothing is ever deleted.</string>
+    <string name="settings_import_dialog_title">Unlock the backup file</string>
+    <string name="settings_import_dialog_message">Enter the export passphrase this file was saved with.</string>
+    <string name="settings_import_passphrase_hint">Export passphrase</string>
+    <string name="settings_import_action">Continue</string>
+    <string name="settings_import_summary_title">Review this import</string>
+    <string name="settings_import_summary_counts">%1$d new, %2$d will be overwritten</string>
+    <string name="settings_import_summary_overwritten">These entries will be replaced by the file\'s newer version:</string>
+    <string name="settings_import_summary_skipped">%1$d entries in the file are older than yours and will be left alone.</string>
+    <string name="settings_import_summary_empty">This file has nothing your vault is missing.</string>
+    <string name="settings_import_add_only">Add only</string>
+    <string name="settings_import_apply">Import</string>
+    <string name="settings_import_done">Added %1$d, updated %2$d</string>
+    <string name="settings_import_failed">Could not import the vault</string>
+    <string name="settings_import_wrong_passphrase">The passphrase is wrong or the file is corrupted</string>
+    <string name="settings_import_unsupported_version">This file was written by a newer version of PassManager</string>
+    <string name="settings_import_invalid_file">This is not a valid PassManager backup file</string>
+
     <!-- Debug-only: demo vault seeding (Settings) -->
     <string name="settings_debug_section">DEVELOPMENT</string>
     <string name="settings_debug_seed_demo_title">Load demo items</string>

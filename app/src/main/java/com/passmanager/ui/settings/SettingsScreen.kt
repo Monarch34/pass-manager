@@ -1,5 +1,7 @@
 package com.passmanager.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,9 +22,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -75,6 +79,9 @@ import com.passmanager.ui.components.ErrorSnackbarEffect
 import com.passmanager.ui.components.LoadingButton
 import com.passmanager.ui.components.PasswordStrengthBar
 import com.passmanager.ui.components.SecureTextField
+import com.passmanager.domain.model.PmVaultFile
+import java.text.DateFormat
+import java.util.Date
 
 /** Width of the auto-lock dropdown anchor. Fits "30 minutes" plus the chevron at labelLarge. */
 private val AutoLockAnchorWidth = 168.dp
@@ -99,6 +106,23 @@ fun SettingsScreen(
         onErrorShown = { viewModel.clearSeedDemoMessage() },
         snackbarHostState = snackbarHostState
     )
+
+    ErrorSnackbarEffect(
+        error = uiState.transferMessage,
+        onErrorShown = { viewModel.clearTransferMessage() },
+        snackbarHostState = snackbarHostState
+    )
+
+    // The picker backgrounds the app, so the vault may be locked by the time these fire. The
+    // ViewModel decides whether to ask for the passphrase now or after the next unlock — it is
+    // never asked before the picker opens.
+    val exportFileName = stringResource(R.string.settings_export_file_name)
+    val exportPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(PmVaultFile.MIME_TYPE)
+    ) { uri -> if (uri != null) viewModel.onExportFileChosen(uri.toString()) }
+    val importPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> if (uri != null) viewModel.onImportFileChosen(uri.toString()) }
 
     BiometricPromptEffect(
         cipherFlow = viewModel.pendingBiometricCipherEvent,
@@ -198,6 +222,76 @@ fun SettingsScreen(
                     )
                 },
                 modifier = Modifier.clickable { viewModel.openChangePassphraseSheet() }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            Text(
+                text = stringResource(R.string.settings_section_backup),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+            )
+
+            val lastExportLabel = uiState.lastExportAtMs?.let { millis ->
+                remember(millis) {
+                    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                        .format(Date(millis))
+                }
+            }
+            ListItem(
+                headlineContent = {
+                    Text(stringResource(R.string.settings_export_title), style = MaterialTheme.typography.titleSmall)
+                },
+                supportingContent = {
+                    Column {
+                        Text(
+                            stringResource(R.string.settings_export_subtitle),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = if (lastExportLabel == null) {
+                                stringResource(R.string.settings_export_never)
+                            } else {
+                                stringResource(R.string.settings_export_last, lastExportLabel)
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                leadingContent = {
+                    SettingIconBox(
+                        icon = Icons.Default.Upload,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        iconTint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                modifier = Modifier.clickable { exportPicker.launch(exportFileName) }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            ListItem(
+                headlineContent = {
+                    Text(stringResource(R.string.settings_import_title), style = MaterialTheme.typography.titleSmall)
+                },
+                supportingContent = {
+                    Text(
+                        stringResource(R.string.settings_import_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                leadingContent = {
+                    SettingIconBox(
+                        icon = Icons.Default.Download,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        iconTint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                // "*/*": .pmvault has no registered MIME type, so a narrower filter would grey the
+                // file out in the picker on most providers.
+                modifier = Modifier.clickable { importPicker.launch(arrayOf("*/*")) }
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
@@ -382,6 +476,28 @@ fun SettingsScreen(
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             }
         }
+    }
+
+    when (val dialog = uiState.transferDialog) {
+        is VaultTransferDialog.ExportPassphrase -> ExportPassphraseDialog(
+            error = dialog.error,
+            isBusy = uiState.isTransferBusy,
+            onDismiss = { viewModel.dismissTransferDialog() },
+            onConfirm = { passphrase, confirm -> viewModel.exportVault(passphrase, confirm) }
+        )
+        is VaultTransferDialog.ImportPassphrase -> ImportPassphraseDialog(
+            error = dialog.error,
+            isBusy = uiState.isTransferBusy,
+            onDismiss = { viewModel.dismissTransferDialog() },
+            onConfirm = { passphrase -> viewModel.prepareImport(passphrase) }
+        )
+        is VaultTransferDialog.ImportSummary -> ImportSummaryDialog(
+            summary = dialog,
+            isBusy = uiState.isTransferBusy,
+            onDismiss = { viewModel.dismissTransferDialog() },
+            onConfirm = { addOnly -> viewModel.applyImport(addOnly) }
+        )
+        null -> Unit
     }
 
     if (uiState.showChangePassphraseSheet) {

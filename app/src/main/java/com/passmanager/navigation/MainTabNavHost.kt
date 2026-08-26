@@ -32,13 +32,27 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainTabNavHost(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    openSettingsOnStart: Boolean = false
 ) {
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    // Read once: the Settings ViewModel clears the pending request as soon as it opens, and this
+    // must not re-trigger if that clear recomposes the caller first.
+    val resumeInSettings = remember { openSettingsOnStart }
+    LaunchedEffect(Unit) {
+        if (resumeInSettings) {
+            navController.navigate(Screen.DrawerSettings.route) {
+                popUpTo(Screen.VaultList.route) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,

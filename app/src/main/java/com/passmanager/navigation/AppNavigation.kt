@@ -26,6 +26,7 @@ fun AppNavigation() {
     val viewModel: NavigationViewModel = hiltViewModel()
     val lockState by viewModel.lockState.collectAsStateWithLifecycle()
     val navReady by viewModel.navReady.collectAsStateWithLifecycle()
+    val pendingVaultTransfer by viewModel.pendingVaultTransfer.collectAsStateWithLifecycle()
 
     val ready = navReady as? NavReady.Ready
     if (ready == null) {
@@ -95,7 +96,10 @@ fun AppNavigation() {
 
         composable(Screen.Main.route) {
             MainTabNavHost(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                // A file picked before an auto-lock left the export/import flow half-finished in
+                // Settings; land back there instead of dropping the user on the vault list.
+                openSettingsOnStart = pendingVaultTransfer != null
             )
         }
     }

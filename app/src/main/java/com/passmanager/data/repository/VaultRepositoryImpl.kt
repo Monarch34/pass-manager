@@ -29,13 +29,16 @@ class VaultRepositoryImpl @Inject constructor(
     override suspend fun getById(id: String): VaultItem? =
         dao.getById(id)?.toDomain()
 
+    override suspend fun getAll(): List<VaultItem> = dao.getAll().map { it.toDomain() }
+
     override suspend fun insert(
         id: String,
         encryptedData: EncryptedData,
         keyVersion: Int,
         createdAt: Long,
         category: ItemCategory,
-        headerEncryption: HeaderEncryption?
+        headerEncryption: HeaderEncryption?,
+        updatedAt: Long
     ) {
         dao.insert(
             VaultItemEntity(
@@ -44,7 +47,7 @@ class VaultRepositoryImpl @Inject constructor(
                 dataIv = encryptedData.iv,
                 keyVersion = keyVersion,
                 createdAt = createdAt,
-                updatedAt = createdAt,
+                updatedAt = updatedAt,
                 category = category.dbKey,
                 encryptedTitle = headerEncryption?.title?.ciphertext,
                 titleIv = headerEncryption?.title?.iv,
