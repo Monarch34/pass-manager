@@ -350,11 +350,19 @@ final class ScreenshotTests: XCTestCase {
         for entry in notes {
             lines.append("  \(entry)")
         }
-        let attachment = XCTAttachment(
-            string: lines.joined(separator: "\n")
-        )
+        let report = lines.joined(separator: "\n")
+
+        let attachment = XCTAttachment(string: report)
         attachment.name = "00-capture-report"
         attachment.lifetime = .keepAlways
         add(attachment)
+
+        // Also printed, with a greppable prefix. The attachment only exists
+        // inside the .xcresult; on a PASSING run nothing from it reaches the
+        // build log, so without this there is no way to tell which screens the
+        // tour actually got — only that it got at least the floor.
+        for line in lines {
+            print("SCREENSHOT-REPORT: \(line)")
+        }
     }
 }
