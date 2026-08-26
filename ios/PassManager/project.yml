@@ -6,13 +6,17 @@ options:
     iOS: "16.0"
   createIntermediateGroups: true
   groupSortPosition: top
-  # CI installs XcodeGen from Homebrew, which tracks latest and now defaults to
-  # pbxproj objectVersion 77 (Xcode 16). The runner is Xcode 15.4 and refuses to
-  # open that: "a future Xcode project file format (77)". 56 is the Xcode 14+
-  # format and supports everything used here, local SPM packages included.
-  # Pinned here rather than in the workflow because .github/ is frozen.
+  # CI installs XcodeGen from Homebrew, which tracks latest — 2.45.4 today — and
+  # writes pbxproj objectVersion 77 (Xcode 16). The runner is Xcode 15.4 and
+  # refuses to open that: "a future Xcode project file format (77)".
+  #
+  # `objectVersion` below is the documented knob but 2.45.4 ignores it, so the
+  # postGenCommand is what actually enforces the downgrade. 56 is the Xcode 14+
+  # format and covers everything here, local SPM packages included; the sed is a
+  # no-op if a future XcodeGen starts honouring the option. Both live here rather
+  # than in the workflow because .github/ is frozen.
   objectVersion: 56
-  xcodeVersion: "15.4"
+  postGenCommand: sed -i '' -e 's/objectVersion = [0-9][0-9]*;/objectVersion = 56;/' -e 's/compatibilityVersion = "[^"]*";/compatibilityVersion = "Xcode 14.0";/' PassManager.xcodeproj/project.pbxproj
 
 packages:
   PassVaultCore:
