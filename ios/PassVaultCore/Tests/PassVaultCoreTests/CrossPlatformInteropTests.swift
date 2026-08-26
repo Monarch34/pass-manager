@@ -321,7 +321,7 @@ final class CrossPlatformInteropTests: XCTestCase {
         let rebuiltHeader = try PmVaultFile.makeEncoder().encode(
             PmVaultHeader(version: 1, salt: header.salt, kdf: header.kdf)
         )
-        XCTAssertEqual(rebuiltHeader, storedHeader, "header bytes differ")
+        assertBytesEqual(rebuiltHeader, storedHeader, "header")
 
         // 2. The body plaintext is byte-for-byte what this writer would emit.
         let key = try Argon2id.deriveKey(
@@ -337,7 +337,7 @@ final class CrossPlatformInteropTests: XCTestCase {
         )
         let decoded = try JSONDecoder().decode(PmVaultBody.self, from: plaintext)
         let reencoded = try PmVaultFile.makeEncoder().encode(decoded)
-        XCTAssertEqual(reencoded, plaintext, "body bytes differ")
+        assertBytesEqual(reencoded, plaintext, "body")
 
         // 3. Sealing that plaintext with the same key, IV and AAD reproduces the
         //    stored ciphertext exactly, which pins the whole container.
@@ -377,7 +377,7 @@ final class CrossPlatformInteropTests: XCTestCase {
             ("android-export-v1", "expected.json",
              "ffe42ea583e5fb4907727e4c3912b4ca75c6a12bc4a5c1803af82b67ceb949f1"),
             ("ios-export-v1", "pmvault",
-             "2e16df2dc72e0e8e1cd93fc3d707385f6aab375434ab5d4c573c75184105b103")
+             "ad5aabb5f61c904685645563169624b69e4b672be56a4867a86a99eb223eb1a0")
         ]
         for (name, ext, digest) in cases {
             let data = try fixture(name, ext)
@@ -424,6 +424,42 @@ final class CrossPlatformInteropTests: XCTestCase {
             ciphertext: Data(bytes[(headerEnd + 12)..<bytes.count])
         )
         return try AesGcm.open(sealed, key: key, aad: Data(bytes[0..<headerEnd]))
+    }
+
+    /// `XCTAssertEqual` on two `Data` values prints only "1759 bytes is not equal
+    /// to 1759 bytes", which says nothing about WHERE they diverge. This reports
+    /// the offset and the surrounding text, which is what actually identifies a
+    /// JSON key-order or escaping difference.
+    private func assertBytesEqual(
+        _ actual: Data,
+        _ expected: Data,
+        _ label: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        if actual == expected {
+            return
+        }
+        let lhs = [UInt8](actual)
+        let rhs = [UInt8](expected)
+        var offset = 0
+        while offset < min(lhs.count, rhs.count) && lhs[offset] == rhs[offset] {
+            offset += 1
+        }
+        let start = max(0, offset - 40)
+        let end = min(min(lhs.count, rhs.count), offset + 40)
+        let actualWindow = String(decoding: lhs[start..<min(end, lhs.count)], as: UTF8.self)
+        let expectedWindow = String(decoding: rhs[start..<min(end, rhs.count)], as: UTF8.self)
+        XCTFail(
+            """
+            \(label) bytes differ at offset \(offset) \
+            (\(lhs.count) vs \(expected.count) bytes)
+              rebuilt : …\(actualWindow)…
+              stored  : …\(expectedWindow)…
+            """,
+            file: file,
+            line: line
+        )
     }
 
     private func sha256Hex(_ data: Data) -> String {

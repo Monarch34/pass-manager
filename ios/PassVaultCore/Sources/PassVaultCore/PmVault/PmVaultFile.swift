@@ -299,11 +299,18 @@ public enum PmVaultFile {
     /// required for interop — Foundation otherwise writes `https:\/\/github.com`,
     /// which Kotlin never produces.
     ///
-    /// A consequence worth knowing: sorted keys put `"type"` in the middle of a
-    /// payload object rather than first. `docs/FORMAT.md` does not require any
-    /// particular key order, and kotlinx.serialization locates the discriminator
-    /// wherever it sits, but this is the property the cross-platform fixtures
-    /// exist to prove rather than assume.
+    /// Two consequences worth knowing:
+    ///
+    /// 1. Sorted keys put `"type"` in the middle of a payload object rather than
+    ///    first. `docs/FORMAT.md` fixes no key order and kotlinx.serialization
+    ///    locates the discriminator wherever it sits, but this is a property the
+    ///    cross-platform fixtures prove rather than assume.
+    /// 2. `.sortedKeys` sorts CASE-INSENSITIVELY, not by byte value — Foundation
+    ///    compares with `kCFCompareCaseInsensitive`. So a card payload comes out
+    ///    `cardCvc, cardExpiry, cardholderName, cardNumber`, where a byte-order
+    ///    sort would put `cardNumber` before `cardholderName`. Anything
+    ///    regenerating a fixture outside Swift has to reproduce that, and the
+    ///    interop suite is what catches it if it does not.
     public static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
