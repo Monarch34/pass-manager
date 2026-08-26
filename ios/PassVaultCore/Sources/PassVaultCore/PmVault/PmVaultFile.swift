@@ -258,11 +258,22 @@ public enum PmVaultFile {
             SecureBytes.zero(&plaintext)
         }
 
-        derivedKeyBytes = try Argon2id.deriveKey(
-            passphrase: passphraseBytes,
-            salt: [UInt8](saltData),
-            params: header.kdf
-        )
+        // The gate above implements exactly the list in docs/FORMAT.md, which
+        // enumerates DoS ceilings and says nothing about Argon2's own internal
+        // constraints — most notably `memory >= 8 * parallelism`. A header with
+        // m=16 and p=8 therefore clears the gate and is then rejected by the C
+        // library. Mapping that back onto the reader's own error type keeps the
+        // promise that `read` throws nothing but `PmVaultError`, so callers can
+        // exhaustively handle the four outcomes.
+        do {
+            derivedKeyBytes = try Argon2id.deriveKey(
+                passphrase: passphraseBytes,
+                salt: [UInt8](saltData),
+                params: header.kdf
+            )
+        } catch let error as Argon2Error {
+            throw PmVaultError.invalidHeaderParameters("Argon2 rejected the header: \(error.message)")
+        }
         derivedKeyData = Data(derivedKeyBytes)
 
         let sealed = AesGcm.Sealed(nonce: iv, ciphertext: bodyCiphertext)

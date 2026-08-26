@@ -259,6 +259,43 @@ final class PmVaultFileTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(start), 5.0, "the KDF appears to have run before validation")
     }
 
+    /// `m=16, p=8` clears every check FORMAT.md lists, but Argon2 itself requires
+    /// `memory >= 8 * parallelism`. The reader must still surface that as one of
+    /// its own four errors rather than leaking an `Argon2Error` to the caller.
+    func testParametersArgon2RejectsSurfaceAsInvalidHeader() {
+        let json = headerJSON(saltBase64: Self.salt16Base64, memory: 16, parallelism: 8)
+        expect(.invalidHeaderParameters) {
+            _ = try PmVaultFile.read(self.assemble(headerJSON: json), passphrase: "x")
+        }
+    }
+
+    /// The whole point of the typed errors: every failure mode is a `PmVaultError`.
+    func testReadOnlyEverThrowsPmVaultError() throws {
+        let validFile = try PmVaultFile.write(
+            body: TestSupport.sampleBody(),
+            passphrase: passphrase,
+            params: TestSupport.cheapKdf
+        )
+        var corrupted = [UInt8](validFile)
+        corrupted[corrupted.count - 1] = corrupted[corrupted.count - 1] ^ 0xFF
+
+        let cases: [Data] = [
+            Data(),
+            Data([0x50, 0x4D, 0x56, 0x54]),
+            assemble(headerJSON: "not json at all"),
+            assemble(headerJSON: headerJSON(version: 99, saltBase64: Self.salt16Base64)),
+            assemble(headerJSON: headerJSON(saltBase64: Self.salt16Base64, memory: 16, parallelism: 8)),
+            assemble(headerJSON: headerJSON(saltBase64: "zzz")),
+            Data(corrupted)
+        ]
+
+        for candidate in cases {
+            XCTAssertThrowsError(try PmVaultFile.read(candidate, passphrase: "x")) { error in
+                XCTAssertTrue(error is PmVaultError, "leaked a non-PmVaultError: \(error)")
+            }
+        }
+    }
+
     // MARK: - AAD
 
     /// Rewrites the stored header with a byte-for-byte DIFFERENT but semantically
