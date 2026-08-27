@@ -100,6 +100,7 @@ final class ScreenshotTests: XCTestCase {
         captureSettings()
         captureExport()
         captureImportReview()
+        captureSiteIcons()
         captureLock()
 
         app.terminate()
@@ -286,6 +287,92 @@ final class ScreenshotTests: XCTestCase {
         }
         capture("09-import-review")
         _ = tap(button(exactly: "Cancel"))
+    }
+
+    /// The one capture that depends on the outside world, and the only one
+    /// allowed to.
+    ///
+    /// Every other screen in this tour is deterministic — seeded data, no
+    /// network, identical bytes on every run. Site icons are not: they need a
+    /// route from the runner's simulator to `t0.gstatic.com`, and whether that
+    /// exists is not this app's business. So the step is written to be
+    /// UNFALSIFIABLE-PROOF rather than optimistic: it turns the setting on,
+    /// waits a bounded time for a real icon to appear, RECORDS WHETHER ONE DID,
+    /// captures either way, and never fails the run. A missing icon is evidence
+    /// about the runner; a failed job would be evidence about nothing.
+    ///
+    /// The setting is put back afterwards so that every capture after this one —
+    /// and the whole second appearance pass — sees the same vault list the first
+    /// nine captures did.
+    private func captureSiteIcons() {
+        guard openSettings() else {
+            skip("10-site-icons", "settings was not reachable")
+            return
+        }
+        let toggle = app.switches["Site icons"]
+        guard toggle.waitForExistence(timeout: 10) else {
+            skip("10-site-icons", "the site icons toggle was not found in Settings")
+            return
+        }
+        if !setToggle(toggle, on: true) {
+            skip("10-site-icons", "the site icons toggle would not turn on")
+            return
+        }
+
+        guard tap(tab("Vault")), app.navigationBars["Vault"].waitForExistence(timeout: 10) else {
+            skip("10-site-icons", "the vault list was not reachable with icons on")
+            _ = setToggleInSettings(on: false)
+            return
+        }
+        _ = app.staticTexts["GitHub"].waitForExistence(timeout: 20)
+
+        // The accessibility label IS the hook, exactly as "GitHub" is the hook the
+        // rest of the tour waits on. No test-only identifier: if this string is
+        // wrong, VoiceOver is wrong too, and both are worth knowing.
+        let icon = app.images["Icon for github.com"]
+        if icon.waitForExistence(timeout: 25) {
+            note("site icon resolved for github.com")
+        } else {
+            note("NO site icon resolved for github.com within 25s — the runner may have "
+                 + "no route to t0.gstatic.com; 10-site-icons shows the category fallback")
+        }
+        capture("10-site-icons")
+
+        _ = setToggleInSettings(on: false)
+    }
+
+    private func setToggleInSettings(on: Bool) -> Bool {
+        guard openSettings() else {
+            return false
+        }
+        let toggle = app.switches["Site icons"]
+        guard toggle.waitForExistence(timeout: 10) else {
+            return false
+        }
+        return setToggle(toggle, on: on)
+    }
+
+    /// A SwiftUI `Toggle` reports "1"/"0" through `value`, so the state is read
+    /// rather than assumed — tapping blind would silently invert the setting if
+    /// it were ever already on.
+    private func setToggle(_ toggle: XCUIElement, on: Bool) -> Bool {
+        let wanted = on ? "1" : "0"
+        if (toggle.value as? String) == wanted {
+            return true
+        }
+        guard toggle.isHittable else {
+            return false
+        }
+        toggle.tap()
+        // The switch animates; give the value a moment to settle before reading
+        // it. Built directly rather than through `XCTestCase.expectation(for:)`,
+        // which registers with the test case and expects to be waited on by
+        // `waitForExpectations`.
+        let settled = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", wanted),
+            object: toggle
+        )
+        return XCTWaiter().wait(for: [settled], timeout: 5) == .completed
     }
 
     private func captureLock() {

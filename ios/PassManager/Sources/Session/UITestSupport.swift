@@ -104,6 +104,10 @@ enum UITestMode {
         }
         KeychainVaultStore.removeAll()
         UserDefaults.standard.removeObject(forKey: BackupReminder.defaultsKey)
+        // The tour turns site icons on for one capture and off again, but a crash
+        // or an early exit between the two would leave the flag set and the NEXT
+        // pass would photograph a different vault list. Reset means reset.
+        UserDefaults.standard.removeObject(forKey: AppSession.siteIconsKey)
         #endif
     }
 
