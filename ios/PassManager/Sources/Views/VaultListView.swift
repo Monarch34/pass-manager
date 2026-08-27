@@ -68,13 +68,18 @@ struct VaultListView: View {
     /// and on any screen, because on a narrow phone or at accessibility sizes the
     /// row simply cannot fit and something must be off-screen.
     ///
-    /// The padding numbers then make the DEFAULT case need no fade at all. An
-    /// inset-grouped section already indents this row 20pt per side, leaving a
-    /// 353pt viewport on a 393pt phone; the five chips wanted 392pt, so "Identity"
-    /// lost 39pt off its end. Trimming each chip's horizontal padding 14 → 10 and
-    /// the strip's own inset 20 → 16 brings the row to about 344pt, which fits
-    /// with room to spare — and, as a bonus, starts the strip 4pt closer to the
-    /// leading edge of the list cards below it.
+    /// The padding numbers then buy back a chip. There are SIX — "All" plus the
+    /// five categories — and an inset-grouped section already indents this row
+    /// 20pt per side, leaving a 353pt viewport on a 393pt phone against about
+    /// 405pt of chips. Something is off the end here no matter what; the only
+    /// question is how much. Trimming each chip's horizontal padding 14 → 10 and
+    /// the strip's own inset 20 → 16 recovers 52pt, which is precisely enough to
+    /// pull "Identity" fully inside — it ends at 346pt now, against a 373pt
+    /// edge — and leave "Bank" as the one under the fade. Those figures are
+    /// measured off the CI screenshot tour rather than estimated.
+    ///
+    /// The smaller inset also starts the strip 4pt nearer the leading edge of the
+    /// cards below it, which it should have been aligned with all along.
     private var categoryChips: some View {
         EdgeFadedScrollView {
             HStack(spacing: 8) {
@@ -118,11 +123,11 @@ struct VaultListView: View {
                 .overlay(
                     Capsule().stroke(isSelected ? tint.opacity(0.5) : Color.clear, lineWidth: 1)
                 )
-                // The capsule is ~32pt tall and the target must not be. Narrowing
-                // the padding above shrank the chip in one axis, so the other one
-                // is stated rather than inherited: 44pt of tappable height around
-                // an unchanged capsule, which is the HIG floor and was already
-                // being missed before this change.
+                // The capsule measures about 30pt tall and the TARGET must not.
+                // Narrowing the padding above shrank the chip in one axis, so the
+                // other one is stated rather than inherited: 44pt of tappable
+                // height around an unchanged capsule. That is the HIG floor, and
+                // it was already being missed before this change.
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }
