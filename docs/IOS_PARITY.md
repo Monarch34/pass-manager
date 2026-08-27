@@ -88,7 +88,7 @@ exact and both platforms make the same promise:
 - **Default off.** `AppSettingsDefaults.USE_GOOGLE_FAVICONS = false`; the user opts
   in from Settings, and the copy says what turning it on means.
 - **One host, ever:** `t0.gstatic.com`, requested as
-  `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=<percent-encoded https://domain>&size=128`.
+  `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=<percent-encoded https://domain>&size=256`.
   Deliberately the CDN and not `www.google.com/s2/favicons`, which answers 301 and
   redirects here — so "no other host is contacted" is true of the request that
   actually runs, not merely of the one that was made. **Redirects are refused by
