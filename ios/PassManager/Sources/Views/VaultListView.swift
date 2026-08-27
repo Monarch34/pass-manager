@@ -177,7 +177,8 @@ struct VaultListView: View {
                 // The title comes from the decrypted header cache. Before that
                 // pass completes it is empty, and the row says so rather than
                 // showing a placeholder that looks like real data.
-                Text(displayTitle(for: header))
+                let title = displayTitle(for: header)
+                Text(title)
                     .font(AppFont.rowTitle)
                     .foregroundStyle(AppColor.onSurface)
                     .lineLimit(1)
@@ -192,10 +193,12 @@ struct VaultListView: View {
                 // alongside the title. Rendering a row never touches the
                 // payload.
                 //
-                // An item whose envelope is genuinely empty gets a single-line
-                // row. That is correct, not a missing subtitle.
-                let subtitle = session.subtitle(for: header.id)
-                if !subtitle.isEmpty {
+                // An item whose envelope is empty — or which merely repeats the
+                // title, as a bank record named after its own bank does — gets a
+                // single-line row. That is correct, not a missing subtitle: the
+                // point of the line is to add identifying information, and a
+                // second copy of the title adds none.
+                if let subtitle = subtitle(for: header, title: title) {
                     Text(subtitle)
                         .font(AppFont.rowSubtitle)
                         .foregroundStyle(AppColor.onSurfaceVariant)
@@ -211,6 +214,19 @@ struct VaultListView: View {
     private func displayTitle(for header: VaultItemHeaderRow) -> String {
         let title = session.title(for: header.id)
         return title.isEmpty ? "Decrypting…" : title
+    }
+
+    /// `nil` when there is nothing worth putting on a second line.
+    private func subtitle(for header: VaultItemHeaderRow, title: String) -> String? {
+        let subtitle = session.subtitle(for: header.id)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !subtitle.isEmpty else {
+            return nil
+        }
+        guard subtitle.caseInsensitiveCompare(title) != .orderedSame else {
+            return nil
+        }
+        return subtitle
     }
 
     private func copyPassword(for id: String) {

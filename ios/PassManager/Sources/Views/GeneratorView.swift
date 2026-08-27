@@ -188,9 +188,16 @@ struct GeneratorForm: View {
                 }
             }
 
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Button(action: regenerate) {
                     Label("Regenerate", systemImage: "arrow.clockwise")
+                        .lineLimit(1)
+                        // "Regenerate" plus its glyph is a hair wider than half
+                        // the screen leaves once `.controlSize(.large)` takes its
+                        // padding, and it was breaking as "Regen-/erate". It
+                        // shrinks only when it has to, so Dynamic Type still
+                        // grows it everywhere there is room.
+                        .minimumScaleFactor(0.75)
                         .frame(maxWidth: .infinity, minHeight: 30)
                 }
                 .buttonStyle(.bordered)
@@ -200,6 +207,8 @@ struct GeneratorForm: View {
                         copied ? "Copied" : "Copy",
                         systemImage: copied ? "checkmark" : "doc.on.doc"
                     )
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity, minHeight: 30)
                 }
                 .buttonStyle(.borderedProminent)
