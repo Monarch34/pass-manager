@@ -143,6 +143,15 @@ enum SiteIcon {
     ///
     /// Takes a ``Domain`` rather than a `String`, so the only URL this app can
     /// build is one for a host that came off a login.
+    ///
+    /// `size=256` because the CDN returns what the site PUBLISHES, capped by the
+    /// request — it does not synthesise resolution. Measured 2026-08-27 and
+    /// written into `docs/IOS_PARITY.md`: `stackoverflow.com` and
+    /// `garantibbva.com.tr` hand back 180×180 at 256 where 128 gets exactly
+    /// 128×128, while `github.com` (32×32) and `netflix.com` (64×64) return
+    /// BYTE-IDENTICAL responses at every size. So the larger request gains real
+    /// resolution where there is any to gain and costs nothing where there is
+    /// not. Re-measure before changing it; this is not a number to reason about.
     static func iconURL(for domain: Domain) -> URL? {
         guard let encoded = ("https://" + domain.value)
             .addingPercentEncoding(withAllowedCharacters: formUnreserved)
@@ -152,7 +161,7 @@ enum SiteIcon {
         return URL(string:
             "https://\(host)/faviconV2"
                 + "?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL"
-                + "&url=\(encoded)&size=128"
+                + "&url=\(encoded)&size=256"
         )
     }
 

@@ -157,8 +157,18 @@ final class SiteIconTests: XCTestCase {
             SiteIcon.iconURL(for: domain)?.absoluteString,
             "https://t0.gstatic.com/faviconV2"
                 + "?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL"
-                + "&url=https%3A%2F%2Fgithub.com&size=128"
+                + "&url=https%3A%2F%2Fgithub.com&size=256"
         )
+    }
+
+    /// `size` is asked for explicitly because the CDN caps at what the SITE
+    /// publishes: 256 gains 180×180 from the domains that have it and returns
+    /// byte-identical bytes from the ones that do not. Pinned so a well-meaning
+    /// tidy-up cannot quietly halve the resolution again.
+    func testIconURLAsksForTheLargestUsefulSize() throws {
+        let domain = try XCTUnwrap(SiteIcon.domain(for: .login, address: "example.com"))
+        let absolute = SiteIcon.iconURL(for: domain)?.absoluteString ?? ""
+        XCTAssertTrue(absolute.hasSuffix("&size=256"), absolute)
     }
 
     func testIconURLTargetsOnlyTheOneHost() throws {

@@ -7,7 +7,7 @@ import UIKit
 /// NO THIRD-PARTY IMAGE LIBRARY. Kingfisher or SDWebImage would each be a
 /// dependency added to a password manager — new supply-chain surface, and a
 /// `project.yml` change — to do what `URLSession` and `UIImage` already do for a
-/// 128px square. The parts a library would give us that actually matter here are
+/// favicon. The parts a library would give us that actually matter here are
 /// forty lines: a memory cache, request coalescing, and a decode off the main
 /// thread. The part it would take away is control of the redirect policy, which
 /// is the whole privacy contract.

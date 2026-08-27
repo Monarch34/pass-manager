@@ -20,6 +20,14 @@ import PassVaultCore
 /// plate is the same decision ``ShieldMark`` records for the shield — art that is
 /// fixed light-scheme colour needs a fixed light-scheme ground — and it is what
 /// makes the row read the same way in both appearances.
+///
+/// THE PLATE IS A CONTAINER AND THE ICON IS CONTENT INSIDE IT, which is how the
+/// system's own list rows treat an app icon, and it is also what keeps a small
+/// source honest: filling the plate edge to edge means smooth-scaling GitHub's
+/// 32×32 by 3.75 on a 3x screen, and that fractional upscale is precisely what
+/// reads as cheap. So the icon is inset to ``contentFraction`` of the plate and
+/// then, if the source is still smaller than that box, drawn at the largest
+/// INTEGER multiple of itself that fits. See ``drawing(for:)``.
 struct SiteIconTile: View {
 
     /// Decides whether the address envelope is even looked at: only a login's
@@ -75,13 +83,92 @@ struct SiteIconTile: View {
         return RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
     }
 
+    // MARK: - How big the icon is drawn
+
+    /// How much of the plate the icon may occupy before the integer clamp.
+    ///
+    /// Two thirds, which is roughly where the system puts an app icon inside a
+    /// list row's rounded square, and on a 3x screen it also happens to land
+    /// GitHub's 32×32 on a clean whole multiple: a 40pt plate gives an 80px box,
+    /// and the largest whole multiple of 32 that fits is 64px.
+    ///
+    /// That 64px is the number to protect if this fraction ever moves. Measured on
+    /// the 3x tour screenshot, the seeded rows' category glyphs draw 57–62px of
+    /// ink inside their 120px tiles — so the icon and the tiles it sits above read
+    /// as one size family rather than one being conspicuously smaller.
+    static let contentFraction: CGFloat = 2.0 / 3.0
+
+    /// Points and pixels are different questions here, so the scale is read from
+    /// the environment rather than from `UIScreen.main` — which is deprecated for
+    /// exactly this and is the wrong screen in a second scene anyway.
+    @Environment(\.displayScale) private var displayScale
+
+    /// The edge to draw the icon at, and whether getting there is a whole-number
+    /// enlargement.
+    ///
+    /// Carries a `Bool` rather than an `Image.Interpolation` so the arithmetic
+    /// below is arithmetic and nothing else — the tests can hold it without
+    /// reaching into SwiftUI, and the view turns it into a resampling mode at the
+    /// one place that draws.
+    struct Drawing: Equatable {
+        let edge: CGFloat
+        let isWholeMultipleUpscale: Bool
+    }
+
+    /// NEVER UPSCALE A RASTER ICON BY A FRACTIONAL FACTOR. That is the whole rule,
+    /// and `docs/IOS_PARITY.md` states it for both platforms.
+    ///
+    /// Google's CDN serves what the site publishes and no more, so `size=256` does
+    /// not save a domain that only ever drew a 32×32 — GitHub is exactly that
+    /// domain, and it is the one in this app's screenshot tour. Stretched to fill
+    /// a 40pt tile on a 3x screen it was being smooth-scaled by 3.75, which is the
+    /// blur the icons were rightly called out for.
+    ///
+    /// So: a source SMALLER than its box is drawn at the largest whole multiple of
+    /// itself that fits, centred, with interpolation off — at an exact 2x or 3x
+    /// there is nothing to interpolate and asking for it only reintroduces the
+    /// softness. A source LARGER than its box is scaled down normally, at high
+    /// quality; downscaling is always the better direction and a 180×180 has
+    /// detail to spare.
+    ///
+    /// Static and pure so the clamp can be tested at every scale the app runs at,
+    /// which a `@ViewBuilder` cannot be. Everything is in PIXELS except `box` and
+    /// the returned `edge`, which are points, because that is the boundary the
+    /// mistake lives on.
+    static func drawing(sourcePixels: CGFloat, box: CGFloat, scale: CGFloat) -> Drawing {
+        let boxPixels = box * scale
+        guard sourcePixels > 0, scale > 0, sourcePixels < boxPixels else {
+            // Nothing to enlarge, or a source big enough to come DOWN to the box.
+            return Drawing(edge: box, isWholeMultipleUpscale: false)
+        }
+        let multiple = max(1, (boxPixels / sourcePixels).rounded(.down))
+        return Drawing(edge: sourcePixels * multiple / scale, isWholeMultipleUpscale: true)
+    }
+
+    private func drawing(for image: UIImage) -> Drawing {
+        return Self.drawing(
+            // `image.size` is in points; a favicon decoded from `Data` has scale 1,
+            // so this is its pixel edge either way rather than only usually.
+            sourcePixels: max(image.size.width, image.size.height) * image.scale,
+            box: size * Self.contentFraction,
+            scale: max(displayScale, 1)
+        )
+    }
+
     var body: some View {
         Group {
             if let domain = domain, let loaded = loaded, loaded.domain == domain {
+                let plan = drawing(for: loaded.image)
                 Image(uiImage: loaded.image)
                     .resizable()
+                    .interpolation(plan.isWholeMultipleUpscale ? Image.Interpolation.none : .high)
                     .scaledToFit()
-                    .padding(size * 0.14)
+                    // Two frames, not one: the inner one is the icon's own size,
+                    // the outer one is the plate, and the default centre alignment
+                    // is what puts the icon in the middle of it. `.padding` cannot
+                    // express this — it would give the image the whole remaining
+                    // box and let it stretch to fill.
+                    .frame(width: plan.edge, height: plan.edge)
                     .frame(width: size, height: size)
                     .background(AppColor.siteIconPlate)
                     .clipShape(shape)
