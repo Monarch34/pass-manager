@@ -55,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -312,6 +313,10 @@ fun ViewItemScreen(
                                 address = faviconAddress,
                                 useGoogleFavicons = uiState.useGoogleFavicons,
                                 size = 60.dp,
+                                // The surrounding Box already paints the tinted plate at this
+                                // size and shape; a second one on top of it would only darken it.
+                                plateColor = Color.Transparent,
+                                plateShape = MaterialTheme.shapes.large,
                                 fallback = {
                                     Icon(category.icon, contentDescription = null, tint = category.tint, modifier = Modifier.size(30.dp))
                                 }

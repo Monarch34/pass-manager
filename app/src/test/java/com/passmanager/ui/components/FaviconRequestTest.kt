@@ -100,11 +100,11 @@ class FaviconRequestTest {
     // ── The request URL ─────────────────────────────────────────────────────────────────────
 
     @Test
-    fun `request goes to the icon CDN`() {
+    fun `request goes to the icon CDN and asks for 256`() {
         val url = faviconTargetFor(ItemCategory.LOGIN, "github.com")!!.url
         assertTrue(url, url.startsWith("https://t0.gstatic.com/faviconV2?"))
         assertTrue(url, url.contains("&url=https%3A%2F%2Fgithub.com"))
-        assertTrue(url, url.endsWith("&size=128"))
+        assertTrue(url, url.endsWith("&size=256"))
     }
 
     @Test
@@ -117,5 +117,33 @@ class FaviconRequestTest {
         assertTrue(target.url, !target.url.contains("secret"))
         assertTrue(target.url, !target.url.contains("token"))
         assertTrue(target.url, !target.url.contains("login"))
+    }
+
+    // ── Integer-multiple sizing ─────────────────────────────────────────────────────────────
+
+    @Test
+    fun `a smaller source is drawn at the largest integer multiple that fits`() {
+        // github's 32x32 in a 40dp tile: 105px box at 2.625x, 70px icon box.
+        assertEquals(64, integerFitPx(sourcePx = 32, boxPx = 70))
+        // ...and in the 60dp detail plate, 104px icon box.
+        assertEquals(96, integerFitPx(sourcePx = 32, boxPx = 104))
+        // netflix's 64x64 has no room to double, so it stays 1:1 rather than stretching to 70.
+        assertEquals(64, integerFitPx(sourcePx = 64, boxPx = 70))
+        // An exact multiple fills the box exactly.
+        assertEquals(96, integerFitPx(sourcePx = 32, boxPx = 96))
+    }
+
+    @Test
+    fun `a larger source is downscaled to the box`() {
+        assertEquals(70, integerFitPx(sourcePx = 180, boxPx = 70))
+        assertEquals(70, integerFitPx(sourcePx = 71, boxPx = 70))
+        assertEquals(70, integerFitPx(sourcePx = 70, boxPx = 70))
+    }
+
+    @Test
+    fun `degenerate sizes fall back to the box`() {
+        assertEquals(70, integerFitPx(sourcePx = 0, boxPx = 70))
+        assertEquals(70, integerFitPx(sourcePx = -1, boxPx = 70))
+        assertEquals(0, integerFitPx(sourcePx = 32, boxPx = 0))
     }
 }

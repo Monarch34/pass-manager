@@ -17,6 +17,19 @@ import java.nio.charset.StandardCharsets
 /** The only host this app contacts for icons. Kept next to the code that builds the URL. */
 internal const val FAVICON_HOST = "t0.gstatic.com"
 
+/**
+ * Requested icon size.
+ *
+ * The CDN serves whatever the site actually publishes, capped by this number — it does not
+ * synthesise resolution. Measured 2026-08-27: `github.com` answers 32x32 and `netflix.com` 64x64 at
+ * `size=64`, `128` and `256` alike (byte-identical responses), while `stackoverflow.com` and
+ * `garantibbva.com.tr` answer 128x128 at `size=128` but 180x180 at `size=256`, and
+ * `migros.com.tr` 144x144. Asking for 256 therefore costs nothing on the sites that cap below it
+ * and gains real pixels on the ones that do not. Re-measure before changing this rather than
+ * reasoning about it.
+ */
+private const val FAVICON_REQUESTED_SIZE = 256
+
 /** A resolved lookup: the domain that will be disclosed, and the exact URL that will be fetched. */
 internal data class FaviconTarget(val domain: String, val url: String)
 
@@ -68,5 +81,22 @@ private fun faviconRequestUrl(domain: String): String {
     // If Google ever retires this shape the response stops being a 200 and every entry quietly
     // falls back to its category icon, which is the safe direction for a vault.
     return "https://$FAVICON_HOST/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL" +
-        "&url=$encoded&size=128"
+        "&url=$encoded&size=$FAVICON_REQUESTED_SIZE"
+}
+
+/**
+ * The width to draw a [sourcePx]-wide icon at inside a [boxPx] box, in pixels.
+ *
+ * Upscaling a raster icon by a fractional factor is what makes it look cheap: a 40dp tile is 105px
+ * on this emulator and 120px on a 3x screen, and github publishes 32x32, so filling the tile means
+ * a smooth 3.75x stretch. No request parameter fixes that — the site simply has no more pixels. So
+ * when the source is smaller than the box it is drawn at the largest **integer** multiple that
+ * fits (with nearest-neighbour sampling, see [FaviconImage]) and centred, which keeps every source
+ * pixel a crisp square block. When the source is larger the box wins and the image is downscaled,
+ * which always looks better than the alternative.
+ */
+internal fun integerFitPx(sourcePx: Int, boxPx: Int): Int = when {
+    sourcePx <= 0 || boxPx <= 0 -> boxPx
+    sourcePx >= boxPx -> boxPx
+    else -> sourcePx * (boxPx / sourcePx)
 }
