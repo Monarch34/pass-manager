@@ -52,7 +52,7 @@ jobs:
           path: ios/PassVaultCore/core-test.log
 
   app-build:
-    name: App build (simulator, unsigned)
+    name: App build (simulator, ad-hoc signed)
     runs-on: macos-14
     needs: core-test
     steps:
@@ -104,6 +104,14 @@ jobs:
           echo "Using simulator $UDID"
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
+      # LOAD-BEARING ABSENCE: do NOT add `CODE_SIGNING_ALLOWED=NO` back to either
+      # xcodebuild line. `project.yml` ad-hoc signs the app so it carries an
+      # `application-identifier` entitlement, which is the only reason the
+      # simulator's Keychain accepts `SecItemAdd` at all. A command-line override
+      # beats the project setting, silently un-signs the build, and the failure
+      # surfaces far downstream: vault creation fails and the screenshot tour
+      # stops on its first screen. This has already been re-introduced once by a
+      # careless file-level revert of this workflow.
       - name: Build for simulator
         if: steps.probe.outputs.present == 'true'
         working-directory: ios/PassManager
@@ -113,7 +121,6 @@ jobs:
             -project PassManager.xcodeproj \
             -scheme PassManager \
             -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee xcodebuild.log | tail -80
       # A screen recording of the tour is the only way to actually WATCH this app
       # without a Mac: the iOS simulator is not an emulator that can be ported, it
@@ -144,7 +151,6 @@ jobs:
             -scheme PassManager \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -resultBundlePath TestResults.xcresult \
-            CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee xcodetest.log | tail -80
 
       # `simctl` finalises the MP4 container when it receives SIGINT and only then;
@@ -202,12 +208,47 @@ jobs:
           path: screenshots/
           if-no-files-found: warn
 
+      # `always()`, not `success()`: the build produced a .app long before the test
+      # step ran, so a failing test is exactly when you most want the bundle in
+      # hand to poke at. Gating this on success() cost a whole run once already.
       - name: Export simulator .app artifact
-        if: success() && steps.probe.outputs.present == 'true'
+        if: always() && steps.probe.outputs.present == 'true'
+        continue-on-error: true
         run: |
           APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -type d -name "PassManager.app" -path "*iphonesimulator*" | head -1)
           echo "Found: $APP_PATH"
           mkdir -p out && cp -R "$APP_PATH" out/
+
+      # A .app a browser-streaming service (Appetize and friends) can install into
+      # a simulator — the only way to hand this app to someone who has no Mac and
+      # let them actually touch it.
+      #
+      # `ditto`, not `zip` and not upload-artifact's own zipping: neither preserves
+      # the executable bit or the symlinks inside a bundle, and a .app whose binary
+      # is not +x will not install. Nesting a correct zip inside the artifact's zip
+      # is what carries the permissions across.
+      #
+      # PlugIns holds the XCTest runner injected during the test run: dead weight
+      # for a demo build, and it confuses installers that scan for extensions.
+      - name: Package the simulator app for browser streaming
+        if: always() && steps.probe.outputs.present == 'true'
+        continue-on-error: true
+        run: |
+          set -x
+          rm -rf out/PassManager.app/PlugIns
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent out/PassManager.app dist/PassManager-simulator.zip
+          ls -la dist
+
+      - name: Upload streamable app bundle
+        if: always() && steps.probe.outputs.present == 'true'
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-app
+          path: dist/PassManager-simulator.zip
+          if-no-files-found: warn
+
       - name: Upload logs and artifact
         if: always() && steps.probe.outputs.present == 'true'
         uses: actions/upload-artifact@v4
