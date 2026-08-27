@@ -402,17 +402,11 @@ final class AppSession: ObservableObject {
         return nil
     }
 
-    /// Write the wrapped key to secure storage.
-    ///
-    /// The fallback returns `false` in every shipping build, so a Keychain
-    /// failure surfaces as an error exactly as before; it only absorbs the write
-    /// in a DEBUG build launched with the relaxed flag. See
-    /// `UITestMode.storeWrappedKeyFallback`.
+    /// Write the wrapped key to secure storage. The Keychain is the only place it
+    /// is ever written, in every configuration this app is built in — a failure
+    /// here is reported, never absorbed by a second store.
     private func saveWrappedKeyBlob(_ blob: Data) -> DeviceKeyError? {
         if case .failure(let error) = KeychainVaultStore.saveWrappedKey(blob) {
-            if UITestMode.storeWrappedKeyFallback(blob) {
-                return nil
-            }
             return error
         }
         return nil
@@ -422,7 +416,7 @@ final class AppSession: ObservableObject {
         if case .success(let blob) = KeychainVaultStore.loadWrappedKey() {
             return blob
         }
-        return UITestMode.loadWrappedKeyFallback()
+        return nil
     }
 
     /// Recombine the two halves into the metadata the pure core expects.

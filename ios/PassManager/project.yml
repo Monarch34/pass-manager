@@ -73,8 +73,26 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1"
-        CODE_SIGNING_ALLOWED: NO
-        CODE_SIGN_IDENTITY: ""
+        # AD-HOC SIGNED, DELIBERATELY — this is what gives the app a Keychain.
+        #
+        # `CODE_SIGNING_ALLOWED: NO` also skips ProcessProductPackaging, so the
+        # entitlements never reach the binary and the app runs with no
+        # `application-identifier`, hence no keychain access group, hence a
+        # `SecItemAdd` that cannot succeed whatever protection class it asks for.
+        # An app that cannot write to the Keychain cannot create a vault, so this
+        # setting decided how much of the app CI could exercise.
+        #
+        # `-` is the ad-hoc identity: no certificate, no team, no provisioning
+        # profile, and the simulator does not check any of the three. Signing is
+        # not REQUIRED, so a machine without a keychain-unlocked identity still
+        # builds; it is merely ALLOWED, which is all it takes for the entitlements
+        # to be embedded. A device build needs real settings here.
+        CODE_SIGNING_ALLOWED: YES
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGN_ENTITLEMENTS: PassManager.entitlements
 
   PassManagerTests:
     type: bundle.unit-test
@@ -91,6 +109,12 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.passmanager.ios.tests
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGN_IDENTITY: ""
+        # Stated rather than inferred: the Keychain suite is only a test of the
+        # SHIPPING entitlement if it runs inside the app's process. Hosted by the
+        # xctest runner instead, it would be exercising the runner's Keychain
+        # access and would pass whatever the app itself can or cannot do.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/PassManager.app/PassManager"
+        BUNDLE_LOADER: "$(TEST_HOST)"
 
   # Drives the app on a simulator to capture the screenshot tour. Kept separate
   # from PassManagerTests because it needs a running app rather than a test host,

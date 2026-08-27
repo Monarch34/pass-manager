@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  The team prefix is SYNTHETIC on purpose.
+
+	  securityd derives an app's default keychain access group from
+	  `application-identifier`. A binary built with no entitlement at all has no
+	  access group, so `SecItemAdd` has nowhere to put the item — which is what
+	  made an unsigned CI build unable to create a vault at all.
+
+	  Nothing on a simulator verifies that the prefix belongs to a real team, so
+	  `PMDEV.` is enough to give the app a keychain of its own there. A device
+	  build signed with a real profile MUST replace both strings with
+	  `$(AppIdentifierPrefix)com.passmanager.ios`; the profile's own entitlements
+	  win at install time, and a mismatched literal would be rejected outright
+	  rather than silently ignored.
+	-->
+	<key>application-identifier</key>
+	<string>PMDEV.com.passmanager.ios</string>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>PMDEV.com.passmanager.ios</string>
+	</array>
+</dict>
+</plist>

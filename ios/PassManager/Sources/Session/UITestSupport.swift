@@ -7,18 +7,24 @@ import PassVaultStorage
 ///
 /// SECURITY SHAPE, and why it is written this way: every function below has its
 /// entire body inside `#if DEBUG`. In a release build they compile to empty
-/// no-ops — the code that wipes a vault, or that weakens a Keychain protection
-/// class, is not merely unreachable, it is not in the binary at all. That matters
-/// more here than in most apps: a shipped password manager containing a
-/// "delete everything and lower the protection class" path guarded by a string
-/// comparison would be an unacceptable liability, however carefully guarded.
+/// no-ops — the code that wipes a vault, or that fabricates a fixture, is not
+/// merely unreachable, it is not in the binary at all. That matters more here
+/// than in most apps: a shipped password manager containing a "delete everything"
+/// path guarded by a string comparison would be an unacceptable liability,
+/// however carefully guarded.
 ///
 /// Call sites are therefore free of `#if`, which is the other half of the point:
 /// no reviewer has to spot a missing guard.
+///
+/// NOTHING here touches key storage. There was once a `-uiTestRelaxedKeychain`
+/// flag that lowered the protection class and, when even that failed, parked the
+/// wrapped key in UserDefaults; it existed only because an unsigned CI build had
+/// no `application-identifier` and therefore no Keychain. Ad-hoc signing the
+/// simulator build gave it one, so the seam is gone rather than merely fenced
+/// off — see `PassManager.entitlements`.
 enum UITestMode {
 
     static let resetFlag = "-uiTestReset"
-    static let relaxedKeychainFlag = "-uiTestRelaxedKeychain"
     static let seedFlag = "-uiTestSeed"
     static let importFixtureFlag = "-uiTestImportFixture"
 
@@ -31,15 +37,6 @@ enum UITestMode {
         return ProcessInfo.processInfo.arguments.contains(flag)
     }
     #endif
-
-    /// True only in a DEBUG build launched with the relaxed-Keychain flag.
-    static var wantsRelaxedKeychain: Bool {
-        #if DEBUG
-        return isPresent(relaxedKeychainFlag)
-        #else
-        return false
-        #endif
-    }
 
     static var wantsSeed: Bool {
         #if DEBUG
@@ -57,55 +54,12 @@ enum UITestMode {
         #endif
     }
 
-    /// A stand-in for the Keychain when the Keychain simply is not available.
-    ///
-    /// An app built with `CODE_SIGNING_ALLOWED=NO` — which is how CI builds it,
-    /// and how it must be built without a signing identity — carries no
-    /// `application-identifier` entitlement, so `SecItemAdd` can fail outright
-    /// with `errSecMissingEntitlement`. No accessibility class fixes that; the
-    /// item cannot be written at all, so the vault cannot be created and the
-    /// screenshot tour stops on the first screen.
-    ///
-    /// Under the relaxed flag ONLY, the wrapped key falls back to UserDefaults.
-    /// That is obviously not secure storage — it is a plaintext-at-rest blob in a
-    /// plist — which is exactly why the whole thing is inside `#if DEBUG` and
-    /// gated on a launch argument no shipping build can receive. The blob is
-    /// still the AES-GCM-wrapped vault key, so even here the passphrase is what
-    /// protects it; what is lost is the device binding, on a throwaway simulator.
-    static func storeWrappedKeyFallback(_ blob: Data) -> Bool {
-        #if DEBUG
-        guard isPresent(relaxedKeychainFlag) else {
-            return false
-        }
-        UserDefaults.standard.set(blob, forKey: fallbackWrappedKeyKey)
-        return true
-        #else
-        return false
-        #endif
-    }
-
-    static func loadWrappedKeyFallback() -> Data? {
-        #if DEBUG
-        guard isPresent(relaxedKeychainFlag) else {
-            return nil
-        }
-        return UserDefaults.standard.data(forKey: fallbackWrappedKeyKey)
-        #else
-        return nil
-        #endif
-    }
-
-    #if DEBUG
-    private static let fallbackWrappedKeyKey = "uiTestFallbackWrappedVaultKey"
-    #endif
-
     /// Wipe the vault so onboarding can be walked from the top on every run.
     static func resetIfRequested(databasePath: String) {
         #if DEBUG
         guard isPresent(resetFlag) else {
             return
         }
-        UserDefaults.standard.removeObject(forKey: fallbackWrappedKeyKey)
         let manager = FileManager.default
         // SQLite keeps a write-ahead log and a shared-memory file beside the
         // database; deleting only the main file would leave a half-vault behind.

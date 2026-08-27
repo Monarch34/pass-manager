@@ -134,23 +134,11 @@ public enum KeychainVaultStore {
 
     /// The protection class every item is written with.
     ///
-    /// Normally `kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly`, which is what
-    /// the contract asks for — and which a simulator with NO device passcode
-    /// cannot satisfy, so `SecItemAdd` fails with `errSecNotAvailable` and no
-    /// vault can be created at all. That is correct on a real device and a hard
-    /// stop for an automated screenshot run.
-    ///
-    /// In a DEBUG build launched with the relaxed flag it drops to
-    /// `AfterFirstUnlockThisDeviceOnly`: still device-only, still excluded from
-    /// backups, but not requiring a passcode. This changes ONLY which constant is
-    /// passed — every surrounding code path is the shipping one — and in release
-    /// the branch does not exist in the binary.
+    /// One constant, no build- or launch-time variation: whatever CI proves works
+    /// is exactly what a user's device does. `KeychainVaultStoreTests` round-trips
+    /// a value through this type and reads the class back off the stored item, so
+    /// a downgrade cannot land quietly.
     static var accessibility: CFString {
-        #if DEBUG
-        if UITestMode.wantsRelaxedKeychain {
-            return kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        }
-        #endif
         return kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly
     }
 
