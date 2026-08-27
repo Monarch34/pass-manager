@@ -169,7 +169,7 @@
     <string name="settings_auto_lock_15min">15 minutes</string>
     <string name="settings_auto_lock_30min">30 minutes</string>
     <string name="settings_site_icons_title">Site icons</string>
-    <string name="settings_site_icons_subtitle_on">On: the site address is sent to Google’s icon service (t0.gstatic.com), which returns the icon. No other host is contacted, and redirects away from it are refused.</string>
+    <string name="settings_site_icons_subtitle_on">On: the domain of each login — and only of logins — is sent to Google’s icon service (t0.gstatic.com), which returns the icon. Cards, notes, identities and bank entries are never looked up. No other host is contacted, and redirects away from it are refused.</string>
     <string name="settings_site_icons_subtitle_off">Off: no icon is downloaded and no network request is made. Entries show their category icon.</string>
     <string name="settings_change_passphrase_title">Change Master Passphrase</string>
     <string name="settings_change_passphrase_subtitle">Re-encrypt your vault key with a new passphrase</string>

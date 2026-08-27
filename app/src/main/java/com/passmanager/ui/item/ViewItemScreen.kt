@@ -55,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -289,11 +290,10 @@ fun ViewItemScreen(
                         .padding(padding)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    // Item header
-                    val faviconUrl = when (payload) {
-                        is ItemPayload.Login -> payload.address
-                        else -> ""
-                    }
+                    // Item header. The address envelope is handed over raw: FaviconImage gates the
+                    // lookup on the category itself, so this screen does not get to decide (and
+                    // cannot get it wrong) which categories are looked up.
+                    val faviconAddress = (payload as? ItemPayload.Login)?.address.orEmpty()
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -308,18 +308,19 @@ fun ViewItemScreen(
                                 .background(category.tint.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (faviconUrl.isNotBlank()) {
-                                FaviconImage(
-                                    url = faviconUrl,
-                                    useGoogleFavicons = uiState.useGoogleFavicons,
-                                    size = 60.dp,
-                                    fallback = {
-                                        Icon(category.icon, contentDescription = null, tint = category.tint, modifier = Modifier.size(30.dp))
-                                    }
-                                )
-                            } else {
-                                Icon(category.icon, contentDescription = null, tint = category.tint, modifier = Modifier.size(30.dp))
-                            }
+                            FaviconImage(
+                                category = category,
+                                address = faviconAddress,
+                                useGoogleFavicons = uiState.useGoogleFavicons,
+                                size = 60.dp,
+                                // The surrounding Box already paints the tinted plate at this
+                                // size and shape; a second one on top of it would only darken it.
+                                plateColor = Color.Transparent,
+                                plateShape = MaterialTheme.shapes.large,
+                                fallback = {
+                                    Icon(category.icon, contentDescription = null, tint = category.tint, modifier = Modifier.size(30.dp))
+                                }
+                            )
                         }
 
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

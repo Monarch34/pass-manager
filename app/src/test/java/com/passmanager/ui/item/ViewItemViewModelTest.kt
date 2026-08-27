@@ -69,6 +69,26 @@ class ViewItemViewModelTest {
     }
 
     @Test
+    fun `loadForItem keeps the site-icons preference`() = runTest {
+        val observe = mockk<ObserveVaultItemByIdUseCase>()
+        every { observe(any()) } returns flowOf(null)
+        val appSettings = mockk<AppSettingsPort>()
+        every { appSettings.useGoogleFavicons } returns MutableStateFlow(true)
+
+        val vm = ViewItemViewModel(SavedStateHandle(), mockk(), observe, mockk(), appSettings)
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.useGoogleFavicons)
+
+        // The preference is not part of the item, so loading one must not reset it back to the
+        // default. It only ever arrives once, from the collector started in init, so a reset here
+        // is permanent for the screen — which is what kept the detail header on the category glyph.
+        vm.loadForItem("id")
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.useGoogleFavicons)
+    }
+
+    @Test
     fun `togglePasswordVisible flips flag`() = runTest {
         val observe = mockk<ObserveVaultItemByIdUseCase>()
         every { observe(any()) } returns flowOf(null)

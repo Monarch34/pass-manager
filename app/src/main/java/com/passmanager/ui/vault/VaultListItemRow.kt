@@ -121,10 +121,17 @@ internal fun VaultListItemRow(
                     )
                 }
             } else {
+                // The plate is the same tinted tile the fallback draws, so a list where only some
+                // rows resolved an icon still reads as one column of tiles rather than two kinds
+                // of thing. Only what sits inside it changes: the site's icon, or the category
+                // glyph.
                 FaviconImage(
-                    url = address,
+                    category = category,
+                    address = address,
                     useGoogleFavicons = useGoogleFavicons,
                     size = 40.dp,
+                    plateColor = category.tint.copy(alpha = 0.14f),
+                    plateShape = RoundedCornerShape(12.dp),
                     fallback = {
                         Box(
                             modifier = Modifier

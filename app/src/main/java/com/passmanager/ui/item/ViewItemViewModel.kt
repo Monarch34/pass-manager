@@ -73,7 +73,16 @@ class ViewItemViewModel @Inject constructor(
         if (itemId == currentItemId && observeJob?.isActive == true) return
         currentItemId = itemId
         observeJob?.cancel()
-        _uiState.value = ViewItemUiState(isLoading = true, passwordVisible = false)
+        // Everything about the *item* resets; the site-icons preference is not about the item and
+        // must survive. It arrives once, from the DataStore collector started in init, and this
+        // screen is normally constructed and then handed its id — so overwriting the flag with its
+        // default here left the detail header permanently on the category glyph even with the
+        // setting on, while the list rows (whose view model never resets) showed icons.
+        _uiState.value = ViewItemUiState(
+            isLoading = true,
+            passwordVisible = false,
+            useGoogleFavicons = _uiState.value.useGoogleFavicons
+        )
         observeJob = viewModelScope.launch {
             observeVaultItemByIdUseCase(itemId).collect { vaultItem ->
                 if (vaultItem == null) {
