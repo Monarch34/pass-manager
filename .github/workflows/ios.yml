@@ -2,7 +2,11 @@ name: iOS
 
 on:
   push:
-    branches: [ios-app]
+    # `ios-ui` is a second working branch so the design pass and the signing/
+    # Keychain work can each get their own CI feedback loop without queueing
+    # behind one another. `concurrency` is keyed on the ref, so the two never
+    # cancel each other's runs.
+    branches: [ios-app, ios-ui]
     paths: ["ios/**", ".github/workflows/ios.yml"]
   workflow_dispatch:
 
