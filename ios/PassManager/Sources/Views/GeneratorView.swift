@@ -188,28 +188,29 @@ struct GeneratorForm: View {
                 }
             }
 
+            // Text only, no glyphs.
+            //
+            // "Regenerate" plus an icon does not fit in half the screen once
+            // `.controlSize(.large)` has taken its padding: with a wrapping
+            // label it broke as "Regen-/erate", and with `.lineLimit(1)` it
+            // truncated to "Regenera…" — `minimumScaleFactor` does not reach
+            // the text inside a `Label`. Dropping the glyphs gives the words the
+            // whole button, and costs nothing: the copy confirmation below
+            // already carries a tick.
             HStack(spacing: 10) {
                 Button(action: regenerate) {
-                    Label("Regenerate", systemImage: "arrow.clockwise")
+                    Text("Regenerate")
                         .lineLimit(1)
-                        // "Regenerate" plus its glyph is a hair wider than half
-                        // the screen leaves once `.controlSize(.large)` takes its
-                        // padding, and it was breaking as "Regen-/erate". It
-                        // shrinks only when it has to, so Dynamic Type still
-                        // grows it everywhere there is room.
-                        .minimumScaleFactor(0.75)
+                        .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity, minHeight: 30)
                 }
                 .buttonStyle(.bordered)
 
                 Button(action: copyPassword) {
-                    Label(
-                        copied ? "Copied" : "Copy",
-                        systemImage: copied ? "checkmark" : "doc.on.doc"
-                    )
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .frame(maxWidth: .infinity, minHeight: 30)
+                    Text(copied ? "Copied" : "Copy")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, minHeight: 30)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(password.isEmpty)

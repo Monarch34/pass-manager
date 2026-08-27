@@ -48,7 +48,7 @@ struct OnboardingView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         SecureField("Master passphrase", text: $passphrase)
                             .textContentType(.newPassword)
-                            .textFieldStyle(.roundedBorder)
+                            .passphraseFieldChrome()
                         if !passphrase.isEmpty {
                             StrengthBar(strength: strength)
                         }
@@ -62,7 +62,7 @@ struct OnboardingView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         SecureField("Confirm passphrase", text: $confirmation)
                             .textContentType(.newPassword)
-                            .textFieldStyle(.roundedBorder)
+                            .passphraseFieldChrome()
                             // Return creates the vault, so the flow completes
                             // without reaching for a button the keyboard may be
                             // covering.

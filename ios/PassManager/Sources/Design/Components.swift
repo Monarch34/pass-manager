@@ -93,6 +93,38 @@ struct PrimaryActionButton: View {
     }
 }
 
+// MARK: - Field chrome
+
+/// The fill and border for a standalone text field on onboarding and lock.
+///
+/// Replaces `.textFieldStyle(.roundedBorder)`, which the dark screenshots
+/// caught rendering a near-black box on a near-black background — the field was
+/// effectively invisible until focused. `.roundedBorder` draws a system fill
+/// that assumes it sits on a grouped-list backdrop; these two screens are bare
+/// canvas, so the fill has to come from the palette instead.
+///
+/// `surfaceContainerHigh` separates from `background` in BOTH schemes, and the
+/// outline keeps the edge defined where the fill alone is subtle.
+private struct FieldChrome: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(AppColor.surfaceContainerHigh)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(AppColor.outlineVariant, lineWidth: 1)
+            )
+    }
+}
+
+extension View {
+    func passphraseFieldChrome() -> some View {
+        return modifier(FieldChrome())
+    }
+}
+
 // MARK: - Colourised secret
 
 /// Renders a password with its character classes distinguished by colour.

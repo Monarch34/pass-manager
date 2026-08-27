@@ -32,7 +32,7 @@ struct LockView: View {
             VStack(spacing: 14) {
                 SecureField("Master passphrase", text: $passphrase)
                     .textContentType(.password)
-                    .textFieldStyle(.roundedBorder)
+                    .passphraseFieldChrome()
                     // Return unlocks, so the flow completes without reaching for
                     // a button the keyboard may be covering.
                     .submitLabel(.go)
