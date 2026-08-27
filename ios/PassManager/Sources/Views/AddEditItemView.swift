@@ -32,7 +32,7 @@ struct AddEditItemView: View {
         NavigationStack {
             Form {
                 if !isEditing {
-                    Section("Category") {
+                    Section {
                         Picker("Category", selection: $form.category) {
                             ForEach(ItemCategory.allCases, id: \.self) { category in
                                 Label(category.label, systemImage: category.symbolName)
@@ -40,26 +40,39 @@ struct AddEditItemView: View {
                             }
                         }
                         .pickerStyle(.menu)
+                    } header: {
+                        SectionHeader("Category")
                     }
                 }
 
-                Section("Details") {
+                Section {
                     TextField("Title", text: $form.title)
                         .textInputAutocapitalization(.words)
+                } header: {
+                    SectionHeader("Details")
                 }
 
                 categoryFields
 
-                Section("Notes") {
+                Section {
                     TextField("Notes", text: $form.notes, axis: .vertical)
                         .lineLimit(3...8)
+                } header: {
+                    SectionHeader("Notes")
                 }
 
                 if let failure = failure {
                     Section {
-                        Text(failure.message)
-                            .font(.footnote)
-                            .foregroundStyle(AppColor.error)
+                        Label {
+                            Text(failure.message)
+                                .font(AppFont.footnote)
+                                .foregroundStyle(AppColor.error)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } icon: {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .foregroundStyle(AppColor.error)
+                        }
+                        .accessibilityElement(children: .combine)
                     }
                 }
             }
@@ -96,7 +109,7 @@ struct AddEditItemView: View {
     private var categoryFields: some View {
         switch form.category {
         case .login:
-            Section("Login") {
+            Section {
                 TextField("Username", text: $form.username)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -105,9 +118,11 @@ struct AddEditItemView: View {
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
                 passwordField(text: $form.password, label: "Password")
+            } header: {
+                SectionHeader("Login")
             }
         case .card:
-            Section("Card") {
+            Section {
                 TextField("Cardholder name", text: $form.cardholderName)
                     .textInputAutocapitalization(.words)
                 TextField("Card number", text: $form.cardNumber)
@@ -129,33 +144,39 @@ struct AddEditItemView: View {
                 if CardRules.isCvcWeak(form.cardCvc) {
                     // A warning, not a save gate — Android does not block on it.
                     Text("A CVC is usually 3 or 4 digits.")
-                        .font(.caption)
+                        .font(AppFont.footnote)
                         .foregroundStyle(AppColor.strengthFair)
                 }
+            } header: {
+                SectionHeader("Card")
             }
         case .bank:
-            Section("Bank") {
+            Section {
                 TextField("Account number", text: $form.accountNumber)
                     .textInputAutocapitalization(.never)
                 TextField("Bank name", text: $form.bankName)
                     .textInputAutocapitalization(.words)
                 passwordField(text: $form.bankPassword, label: "Bank password")
+            } header: {
+                SectionHeader("Bank")
             }
-            Section("Password rules") {
+            Section {
                 ForEach(BankPasswordRules.Violation.allCases, id: \.self) { rule in
                     let broken = bankViolations.contains(rule)
                     Label {
                         Text(rule.message)
-                            .font(.caption)
+                            .font(AppFont.footnote)
                             .foregroundStyle(broken ? AppColor.error : AppColor.onSurfaceVariant)
                     } icon: {
                         Image(systemName: broken ? "xmark.circle.fill" : "checkmark.circle.fill")
                             .foregroundStyle(broken ? AppColor.error : AppColor.primary)
                     }
                 }
+            } header: {
+                SectionHeader("Password rules")
             }
         case .identity:
-            Section("Identity") {
+            Section {
                 TextField("First name", text: $form.firstName)
                 TextField("Last name", text: $form.lastName)
                 TextField("Email", text: $form.email)
@@ -166,6 +187,8 @@ struct AddEditItemView: View {
                     .keyboardType(.phonePad)
                 TextField("Address", text: $form.identityAddress)
                 TextField("Company", text: $form.company)
+            } header: {
+                SectionHeader("Identity")
             }
         case .note:
             EmptyView()
@@ -180,7 +203,7 @@ struct AddEditItemView: View {
                 Button {
                     showingGenerator = true
                 } label: {
-                    Image(systemName: "dice")
+                    Image(systemName: "wand.and.rays")
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(AppColor.primary)
