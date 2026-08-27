@@ -67,6 +67,12 @@ enum AppColor {
     // LogoPalette.kt explains why: the shield art is fixed light-scheme colour,
     // and on the dark scheme's container it measured 1.22:1 and vanished.
     static let logoPlate = fixed(0xCCFBF1)
+
+    /// The ground a site icon is drawn on. The LIGHT scheme's `surface`, pinned
+    /// across both — no new colour, the same pinning `logoPlate` does and for the
+    /// same reason: favicons are artwork drawn for a white browser tab, and a
+    /// dark glyph on transparency is invisible on the dark scheme's canvas.
+    static let siteIconPlate = fixed(0xFFFFFF)
     static let logoTealDark = fixed(0x1A6D68)
     static let logoTealLight = fixed(0x21837D)
 

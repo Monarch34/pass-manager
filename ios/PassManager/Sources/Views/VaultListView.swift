@@ -202,7 +202,22 @@ struct VaultListView: View {
 
     private func row(for header: VaultItemHeaderRow) -> some View {
         HStack(spacing: 12) {
-            CategoryTile(category: header.category, announcesCategory: true)
+            // The tile becomes the SITE'S icon when the user has turned site
+            // icons on and one can be had; otherwise it is the category tile it
+            // has always been, with the same footprint and the same corner
+            // radius, so the row does not move either way.
+            //
+            // The address envelope is what the tile is handed, and a domain is
+            // all that is ever taken out of it — see `SiteIcon`.
+            SiteIconTile(
+                category: header.category,
+                address: session.subtitle(for: header.id),
+                useSiteIcons: session.useSiteIcons,
+                // Exactly one element in this row speaks the category: the tile
+                // when it is showing one, the glyph on the subtitle line when the
+                // tile has been given over to the site.
+                announcesCategory: !session.useSiteIcons
+            )
             VStack(alignment: .leading, spacing: 2) {
                 // The title comes from the decrypted header cache. Before that
                 // pass completes it is empty, and the row says so rather than
@@ -222,23 +237,49 @@ struct VaultListView: View {
                 // This is the third envelope, decrypted by the header cache
                 // alongside the title. Rendering a row never touches the
                 // payload.
-                //
-                // An item whose envelope is empty — or which merely repeats the
-                // title, as a bank record named after its own bank does — gets a
-                // single-line row. That is correct, not a missing subtitle: the
-                // point of the line is to add identifying information, and a
-                // second copy of the title adds none.
-                if let subtitle = subtitle(for: header, title: title) {
-                    Text(subtitle)
-                        .font(AppFont.rowSubtitle)
-                        .foregroundStyle(AppColor.onSurfaceVariant)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
+                subtitleLine(for: header, title: title)
             }
             Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
+    }
+
+    /// The second line of a row, which changes shape with the site-icon setting.
+    ///
+    /// WITH ICONS OFF this is what it has always been: the identifying value, or
+    /// nothing at all when there is none worth showing. The tile beside it is
+    /// still saying the category, and repeating that here is the exact mistake
+    /// this row was cured of.
+    ///
+    /// WITH ICONS ON the tile has been given over to the site, so the category
+    /// moves here as a small tinted glyph in front of the same value. It is drawn
+    /// for every row in that mode rather than only for rows whose icon actually
+    /// resolved — one rule for the whole list, no glyph appearing a beat late
+    /// when an image lands, and no ragged edge down the column where some rows
+    /// start with a glyph and others do not.
+    ///
+    /// A row with no identifying value falls back to the category's own name, so
+    /// the category never disappears entirely just because the tile stopped
+    /// carrying it.
+    @ViewBuilder
+    private func subtitleLine(for header: VaultItemHeaderRow, title: String) -> some View {
+        let value = subtitle(for: header, title: title)
+        if session.useSiteIcons {
+            HStack(spacing: 5) {
+                CategoryGlyph(category: header.category)
+                subtitleText(value ?? header.category.label)
+            }
+        } else if let value = value {
+            subtitleText(value)
+        }
+    }
+
+    private func subtitleText(_ value: String) -> some View {
+        return Text(value)
+            .font(AppFont.rowSubtitle)
+            .foregroundStyle(AppColor.onSurfaceVariant)
+            .lineLimit(1)
+            .truncationMode(.middle)
     }
 
     private func displayTitle(for header: VaultItemHeaderRow) -> String {
@@ -247,6 +288,11 @@ struct VaultListView: View {
     }
 
     /// `nil` when there is nothing worth putting on a second line.
+    ///
+    /// An item whose envelope is empty — or which merely repeats the title, as a
+    /// bank record named after its own bank does — gets a single-line row. That
+    /// is correct, not a missing subtitle: the point of the line is to add
+    /// identifying information, and a second copy of the title adds none.
     private func subtitle(for header: VaultItemHeaderRow, title: String) -> String? {
         let subtitle = session.subtitle(for: header.id)
             .trimmingCharacters(in: .whitespacesAndNewlines)

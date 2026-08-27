@@ -120,9 +120,19 @@ struct ItemDetailView: View {
     /// A real header rather than another list row: the tile is large enough to
     /// read as an identity mark, and the category is stated once here in its own
     /// tint instead of being repeated down the screen.
+    ///
+    /// The tile takes the site's icon when the setting is on, exactly as the list
+    /// row does. Nothing else in the header has to move for it: the category is
+    /// already written out under the title here, so unlike the list this screen
+    /// loses nothing when the tile stops carrying it.
     private func hero(for payload: ItemPayload) -> some View {
         HStack(spacing: 14) {
-            CategoryTile(category: payload.category, size: 56)
+            SiteIconTile(
+                category: payload.category,
+                address: payload.listSubtitle,
+                useSiteIcons: session.useSiteIcons,
+                size: 56
+            )
             VStack(alignment: .leading, spacing: 3) {
                 Text(payload.title)
                     .font(AppFont.heroTitle)
