@@ -59,8 +59,24 @@ struct VaultListView: View {
     /// As a list row the strip scrolls away with the content, and the horizontal
     /// padding moves INSIDE the scroll view so the trailing chip can scroll fully
     /// into view instead of being cut off at the edge.
+    ///
+    /// TWO THINGS FIX THE TRAILING EDGE, and they are not alternatives.
+    ///
+    /// ``EdgeFadedScrollView`` removes the hard cut: whatever the width, an edge
+    /// with more content past it now ramps to transparent instead of guillotining
+    /// a chip mid-word. That is the part that has to hold at any Dynamic Type size
+    /// and on any screen, because on a narrow phone or at accessibility sizes the
+    /// row simply cannot fit and something must be off-screen.
+    ///
+    /// The padding numbers then make the DEFAULT case need no fade at all. An
+    /// inset-grouped section already indents this row 20pt per side, leaving a
+    /// 353pt viewport on a 393pt phone; the five chips wanted 392pt, so "Identity"
+    /// lost 39pt off its end. Trimming each chip's horizontal padding 14 → 10 and
+    /// the strip's own inset 20 → 16 brings the row to about 344pt, which fits
+    /// with room to spare — and, as a bonus, starts the strip 4pt closer to the
+    /// leading edge of the list cards below it.
     private var categoryChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        EdgeFadedScrollView {
             HStack(spacing: 8) {
                 chip(title: "All", tint: AppColor.primary, isSelected: categoryFilter == nil) {
                     categoryFilter = nil
@@ -75,8 +91,10 @@ struct VaultListView: View {
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
+            // 2, not 8: each chip now carries its own 44pt hit box, so the strip
+            // keeps the height it always had rather than growing by 12pt.
+            .padding(.vertical, 2)
         }
         .listRowInsets(EdgeInsets())
         .listRowBackground(Color.clear)
@@ -92,7 +110,7 @@ struct VaultListView: View {
         Button(action: action) {
             Text(title)
                 .font(.subheadline.weight(.medium))
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 10)
                 .padding(.vertical, 7)
                 .background(isSelected ? tint.opacity(0.18) : AppColor.surfaceVariant)
                 .foregroundStyle(isSelected ? tint : AppColor.onSurfaceVariant)
@@ -100,6 +118,13 @@ struct VaultListView: View {
                 .overlay(
                     Capsule().stroke(isSelected ? tint.opacity(0.5) : Color.clear, lineWidth: 1)
                 )
+                // The capsule is ~32pt tall and the target must not be. Narrowing
+                // the padding above shrank the chip in one axis, so the other one
+                // is stated rather than inherited: 44pt of tappable height around
+                // an unchanged capsule, which is the HIG floor and was already
+                // being missed before this change.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
