@@ -30,14 +30,6 @@ Two keys, one indirection — reference `SetupVaultUseCase.kt` / `UnlockWithPass
      (invalidated when biometrics change — mirrors `setInvalidatedByBiometricEnrollment`).
    - Threat-model equivalence matters, API parity does not. Nothing from this layer may
      ever appear in a `.pmvault` file.
-6. **Where the wrapped key lives differs by platform, deliberately.** Android keeps the
-   wrapped vault key in `vault_metadata` and binds it with the Keystore pepper. iOS keeps
-   it *only* in the Keychain: the database holds the salt, KDF cost and key version —
-   none of them secret — and the `wrapped_vault_key` / `wrapper_iv` columns stay in the
-   schema for parity but are written empty. This is strictly stronger on iOS: a stolen
-   database file has no wrapped key in it to attack offline at all. Do not "restore
-   parity" by moving the key back into SQLite; the two platforms meet the same threat
-   model by different routes, which is the whole point of this section.
 
 ## Storage row design (three envelopes — reference `VaultItemEntity.kt`)
 
@@ -85,7 +77,37 @@ Generator (length 8-64 slider default 16, four character-class toggles at least 
 entropy line, strength bar) →
 Settings (auto-lock timeout, change passphrase, Face ID toggle, export/import).
 
-**Out of v1 scope:** desktop pairing (QR/X25519/WebSocket bridge) and site icons.
+**Out of v1 scope:** desktop pairing (QR/X25519/WebSocket bridge).
+
+## Site icons (both platforms, identical contract)
+
+Reference `ui/components/FaviconImage.kt` and the `ImageLoader` in `PassManagerApp.kt`.
+This is the one feature in the app that touches the network, so the contract is
+exact and both platforms make the same promise:
+
+- **Default off.** `AppSettingsDefaults.USE_GOOGLE_FAVICONS = false`; the user opts
+  in from Settings, and the copy says what turning it on means.
+- **One host, ever:** `t0.gstatic.com`, requested as
+  `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=<percent-encoded https://domain>&size=128`.
+  Deliberately the CDN and not `www.google.com/s2/favicons`, which answers 301 and
+  redirects here — so "no other host is contacted" is true of the request that
+  actually runs, not merely of the one that was made. **Redirects are refused by
+  the loader**, which is what makes the promise enforceable rather than aspirational.
+  Nothing is ever requested from the site itself.
+- **Input is the domain only** — host with `www.` stripped, from the item's address
+  envelope. No path, no query, no credential material.
+- **A miss is remembered for the session** (bounded set, ~512 domains, cleared when
+  the setting is toggled back on) so scrolling past an iconless entry does not
+  re-announce its domain on every pass.
+- **Failure falls back to the category tile**, which is also what a locked vault and
+  a disabled setting show. If Google ever retires the endpoint every entry quietly
+  reverts to its category icon — the safe direction for a vault.
+
+Row layout consequence: when icons are on, the tile becomes the site's icon and the
+category is no longer visible in it, so Android's row carries the category as its
+subtitle. iOS shows the identifying value (username/address/cardholder/email) as its
+subtitle instead and surfaces the category as a small tinted glyph beside it, so the
+category survives the tile being replaced without spending the whole subtitle line.
 
 ## Visual identity
 
