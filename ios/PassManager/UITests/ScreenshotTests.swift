@@ -338,10 +338,47 @@ final class ScreenshotTests: XCTestCase {
             note("NO site icon resolved for github.com within 25s — the runner may have "
                  + "no route to t0.gstatic.com; 10-site-icons shows the category fallback")
         }
+        noteNonLoginRowsAreUntouched()
         capture("10-site-icons")
 
         captureSiteIconDetail()
         _ = setToggleInSettings(on: false)
+    }
+
+    /// Writes down that the four non-login rows stayed on their category tiles.
+    ///
+    /// THE SCREENSHOT CANNOT SHOW THIS, which is why it is worth a line in the
+    /// report. The seeded identity's subtitle is `ayse@example.com`; a lookup that
+    /// decided from the string parsed that to `example.com` and asked Google about
+    /// the user's mail provider. What the pixels showed either way was a small
+    /// grey square where a favicon had failed to arrive, indistinguishable from
+    /// the tile that is now correct — so "the image is unchanged" is not evidence
+    /// of anything and this is.
+    ///
+    /// Recorded rather than asserted, in keeping with the rest of the tour: the
+    /// unit suite is where this fails a build. Bounded waits, because proving an
+    /// element is absent means giving it time to turn up.
+    private func noteNonLoginRowsAreUntouched() {
+        // The one that actually leaked, and the only one of the four that could:
+        // the seeded card, bank and note subtitles are "Ayşe Yılmaz", "Kadıköy
+        // Bankası" and "a1b2-c3d4", none of which has a dot for a parser to bite
+        // on. The identity's "ayse@example.com" has both a dot and a valid
+        // authority, so it was the string guard's blind spot.
+        let leaked = app.images["Icon for example.com"]
+        if leaked.waitForExistence(timeout: 5) {
+            note("LEAK: the identity row is showing 'Icon for example.com' — the category "
+                 + "gate in SiteIcon.domain(for:address:) is not holding")
+        } else {
+            note("no icon for example.com — the identity row's email was not looked up")
+        }
+        // Then the whole picture, so a future seed that puts a URL-shaped string
+        // in some other category's envelope shows up here without anyone having
+        // to predict which one it will be.
+        let icons = app.images
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Icon for "))
+            .allElementsBoundByIndex
+            .map { $0.label }
+        note("site icons on screen: \(icons.isEmpty ? "none" : icons.joined(separator: ", "))")
     }
 
     /// The other place the contract puts an icon: the item hero.
