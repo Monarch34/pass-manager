@@ -122,7 +122,8 @@ internal fun VaultListItemRow(
                 }
             } else {
                 FaviconImage(
-                    url = address,
+                    category = category,
+                    address = address,
                     useGoogleFavicons = useGoogleFavicons,
                     size = 40.dp,
                     fallback = {

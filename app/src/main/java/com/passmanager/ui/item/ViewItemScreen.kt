@@ -289,11 +289,10 @@ fun ViewItemScreen(
                         .padding(padding)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    // Item header
-                    val faviconUrl = when (payload) {
-                        is ItemPayload.Login -> payload.address
-                        else -> ""
-                    }
+                    // Item header. The address envelope is handed over raw: FaviconImage gates the
+                    // lookup on the category itself, so this screen does not get to decide (and
+                    // cannot get it wrong) which categories are looked up.
+                    val faviconAddress = (payload as? ItemPayload.Login)?.address.orEmpty()
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -308,18 +307,15 @@ fun ViewItemScreen(
                                 .background(category.tint.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (faviconUrl.isNotBlank()) {
-                                FaviconImage(
-                                    url = faviconUrl,
-                                    useGoogleFavicons = uiState.useGoogleFavicons,
-                                    size = 60.dp,
-                                    fallback = {
-                                        Icon(category.icon, contentDescription = null, tint = category.tint, modifier = Modifier.size(30.dp))
-                                    }
-                                )
-                            } else {
-                                Icon(category.icon, contentDescription = null, tint = category.tint, modifier = Modifier.size(30.dp))
-                            }
+                            FaviconImage(
+                                category = category,
+                                address = faviconAddress,
+                                useGoogleFavicons = uiState.useGoogleFavicons,
+                                size = 60.dp,
+                                fallback = {
+                                    Icon(category.icon, contentDescription = null, tint = category.tint, modifier = Modifier.size(30.dp))
+                                }
+                            )
                         }
 
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

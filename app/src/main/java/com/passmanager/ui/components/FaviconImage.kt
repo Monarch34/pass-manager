@@ -26,26 +26,8 @@ import coil.request.ImageRequest
 import coil.size.Dimension
 import coil.size.Size
 import com.passmanager.R
+import com.passmanager.domain.model.ItemCategory
 import kotlinx.coroutines.flow.filterIsInstance
-import java.net.URI
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
-
-/**
- * Extracts the domain from a URL string, returns null if not parseable.
- */
-private fun extractDomain(url: String): String? {
-    val normalized = when {
-        url.startsWith("http://") || url.startsWith("https://") -> url
-        url.contains(".") -> "https://$url"
-        else -> return null
-    }
-    return try {
-        URI(normalized).host?.removePrefix("www.")
-    } catch (_: Exception) {
-        null
-    }
-}
 
 /**
  * Domains whose icon lookup already failed once in this process.
@@ -59,9 +41,6 @@ private val faviconMissDomains: MutableSet<String> =
     java.util.concurrent.ConcurrentHashMap.newKeySet()
 
 private const val MAX_FAVICON_MISS_DOMAINS = 512
-
-/** The only host this app contacts for icons. Kept next to the loader that enforces it. */
-internal const val FAVICON_HOST = "t0.gstatic.com"
 
 private fun recordFaviconMiss(domain: String) {
     if (faviconMissDomains.size >= MAX_FAVICON_MISS_DOMAINS) faviconMissDomains.clear()
@@ -95,6 +74,10 @@ private fun FaviconPlaceholder(modifier: Modifier = Modifier) {
  * near-zero chance of returning an icon. When [useGoogleFavicons] is false, no request of any kind
  * is made and [fallback] — the entry's category icon — is shown.
  *
+ * A lookup happens for [ItemCategory.LOGIN] and for nothing else. The composable is handed the
+ * item's [category] and its raw [address] envelope rather than a prepared domain precisely so that
+ * decision cannot be made anywhere but [faviconTargetFor]; see the reasoning there.
+ *
  * Failures are remembered process-wide, so a domain Google has no icon for is asked about once per
  * session instead of once per scroll pass.
  *
@@ -103,36 +86,23 @@ private fun FaviconPlaceholder(modifier: Modifier = Modifier) {
  */
 @Composable
 fun FaviconImage(
-    url: String,
+    category: ItemCategory,
+    address: String,
     useGoogleFavicons: Boolean,
     modifier: Modifier = Modifier,
     size: Dp = 30.dp,
     fallback: @Composable () -> Unit
 ) {
-    val domain = remember(url) { extractDomain(url.trim()) }
+    val target = remember(category, address) { faviconTargetFor(category, address) }
 
-    if (domain == null || !useGoogleFavicons) {
+    if (target == null || !useGoogleFavicons) {
         fallback()
         return
     }
 
-    if (faviconMissDomains.contains(domain)) {
+    if (faviconMissDomains.contains(target.domain)) {
         fallback()
         return
-    }
-
-    val iconUrl = remember(domain) {
-        // The charset-object overload of URLEncoder.encode is API 33; this app ships to API 26.
-        val encoded = URLEncoder.encode("https://$domain", StandardCharsets.UTF_8.name())
-        // Deliberately the CDN endpoint and not www.google.com/s2/favicons. That address answers 301
-        // and sends the client to exactly this URL on t0.gstatic.com — so "no other host is
-        // contacted" was only ever true of the request we made, not of the request that ran. Asking
-        // the CDN directly means the loader can refuse redirects outright (see PassManagerApp's
-        // ImageLoader) and the promise in settings_site_icons_subtitle_on becomes enforceable.
-        // If Google ever retires this shape the response stops being a 200 and every entry quietly
-        // falls back to its category icon, which is the safe direction for a vault.
-        "https://$FAVICON_HOST/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL" +
-            "&url=$encoded&size=128"
     }
 
     val context = LocalContext.current
@@ -144,9 +114,9 @@ fun FaviconImage(
         Size(Dimension.Pixels(decodePx), Dimension.Pixels(decodePx))
     }
 
-    val request = remember(iconUrl, coilSize) {
+    val request = remember(target.url, coilSize) {
         ImageRequest.Builder(context)
-            .data(iconUrl)
+            .data(target.url)
             .size(coilSize)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .crossfade(false)
@@ -158,10 +128,10 @@ fun FaviconImage(
     // Keyed on the domain alone: observing the state through snapshotFlow keeps one coroutine alive
     // for the row's lifetime instead of cancelling and relaunching on every
     // Empty -> Loading -> Success transition, which matters in this LazyColumn's fast path.
-    LaunchedEffect(domain) {
+    LaunchedEffect(target.domain) {
         snapshotFlow { painter.state }
             .filterIsInstance<AsyncImagePainter.State.Error>()
-            .collect { recordFaviconMiss(domain) }
+            .collect { recordFaviconMiss(target.domain) }
     }
 
     val clipMod = modifier
@@ -172,7 +142,8 @@ fun FaviconImage(
         is AsyncImagePainter.State.Success -> {
             Image(
                 painter = painter,
-                contentDescription = stringResource(R.string.favicon_content_description, domain),
+                contentDescription =
+                    stringResource(R.string.favicon_content_description, target.domain),
                 contentScale = ContentScale.Fit,
                 modifier = clipMod
             )
