@@ -52,6 +52,26 @@ struct SettingsView: View {
                          : "The saved key is discarded if your biometrics or passphrase change.")
                 }
 
+                // Headed "Network" rather than "Preferences", which is what
+                // Android calls the section it sits in. The header is doing real
+                // work here: this toggle is the ONLY thing in the app that can
+                // cause a request, so a section named for that says something
+                // true about everything else on the screen.
+                Section {
+                    Toggle("Site icons", isOn: $session.useSiteIcons)
+                } header: {
+                    SectionHeader("Network")
+                } footer: {
+                    // The promise, in the place where the user is deciding. Both
+                    // halves carry the meaning of Android's
+                    // settings_site_icons_subtitle_on / _off, compressed to the
+                    // one sentence per footer this screen settled on: what leaves
+                    // the device, where it goes, and that it goes nowhere else.
+                    Text(session.useSiteIcons
+                         ? "The site's domain — nothing else — goes to Google's icon service at t0.gstatic.com, the only host this app ever contacts, and redirects away from it are refused."
+                         : "No icon is downloaded and no network request of any kind is made; entries show their category.")
+                }
+
                 Section {
                     if let reminder = session.backupStatus.message {
                         WarningRow(message: reminder)

@@ -29,6 +29,23 @@ final class AppSession: ObservableObject {
         }
     }
 
+    /// Site icons. OFF unless the user says otherwise, mirroring Android's
+    /// `AppSettingsDefaults.USE_GOOGLE_FAVICONS = false`.
+    ///
+    /// This is the ONLY switch in the app that can cause a network request, so it
+    /// is off by default and it is the user's to turn on — see `SiteIcon` for
+    /// what a request looks like when they do, and Settings for the copy that
+    /// says so before they decide.
+    @Published var useSiteIcons: Bool = false {
+        didSet {
+            guard useSiteIcons != oldValue else {
+                return
+            }
+            UserDefaults.standard.set(useSiteIcons, forKey: Self.siteIconsKey)
+            SiteIconLoader.shared.settingChanged(enabled: useSiteIcons)
+        }
+    }
+
     /// Reflects whether a `.biometryCurrentSet` Keychain item actually exists —
     /// read without prompting, so the settings toggle can render honestly.
     @Published private(set) var biometricEnabled: Bool = false
@@ -41,6 +58,9 @@ final class AppSession: ObservableObject {
     @Published private(set) var transferStage: TransferStage = .idle
 
     private static let timeoutKey = "autoLockTimeoutSeconds"
+    /// Internal rather than private so the UI-test reset can clear it and the
+    /// screenshot tour stays deterministic across relaunches.
+    static let siteIconsKey = "useSiteIcons"
 
     private var store: VaultStore?
     private var vaultKey: Data?
@@ -63,6 +83,10 @@ final class AppSession: ObservableObject {
         if stored > 0 {
             self.autoLockTimeout = AutoLockTimeout.from(rawValue: stored)
         }
+        // `bool(forKey:)` answers false for a key that was never written, which is
+        // exactly the default this setting wants — an install that has never been
+        // near Settings makes no requests.
+        self.useSiteIcons = UserDefaults.standard.bool(forKey: Self.siteIconsKey)
         if let store = store {
             self.store = store
         }
@@ -167,6 +191,9 @@ final class AppSession: ObservableObject {
         }
         headerCache.clear()
         headers = []
+        // Site icons are keyed by the domains those headers named, which is the
+        // same plaintext under a different shape. See `SiteIconLoader.clear()`.
+        SiteIconLoader.shared.clear()
         // A lock that left a built export document or a decrypted import body in
         // memory would be a lock in name only. The user's INTENT survives; the
         // plaintext does not.
