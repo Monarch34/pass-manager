@@ -105,8 +105,9 @@ exact and both platforms make the same promise:
   consenting to their *logins'* domains being looked up; they are not consenting to
   their mail provider or the first line of a note. Gate on the category, not on how
   URL-shaped the string happens to look — a filter over free text is a guess, and a
-  guess is the wrong instrument for deciding what leaves a vault.
-  *(Android currently looks up every category and inherits this; see the note below.)*
+  guess is the wrong instrument for deciding what leaves a vault. Both platforms
+  enforce this by making the category a required argument of the only function that
+  can produce a request, so a call site cannot assemble one from a bare string.
 - **Ask for `size=256`.** The CDN returns whatever the site actually publishes,
   capped by the requested size — it does not synthesise resolution. Measured
   2026-08-27: `github.com` returns 32×32 at every requested size, `netflix.com`
