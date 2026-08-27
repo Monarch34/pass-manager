@@ -3,7 +3,6 @@ import SwiftUI
 struct SettingsView: View {
 
     @EnvironmentObject private var session: AppSession
-    @Environment(\.dismiss) private var dismiss
 
     @State private var showingChangePassphrase = false
 
@@ -23,22 +22,6 @@ struct SettingsView: View {
         )
     }
 
-    /// Dismisses this sheet, THEN triggers the state change that presents the
-    /// next one.
-    ///
-    /// UIKit will not present a sheet while another is still dismissing — the
-    /// request is dropped and nothing happens, which looks exactly like a dead
-    /// button. Doing both in the same runloop turn is the classic way to hit
-    /// that. The transfer sheets are hosted by RootView (so an auto-lock cannot
-    /// tear them down with this view), which makes this hand-off unavoidable, so
-    /// it is sequenced explicitly rather than left to luck.
-    private func dismissThen(_ action: @escaping () -> Void) {
-        dismiss()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            action()
-        }
-    }
-
     var body: some View {
         NavigationStack {
             Form {
@@ -49,9 +32,12 @@ struct SettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Security")
+                    SectionHeader("Security")
                 } footer: {
-                    Text("The vault locks this long after the app goes to the background. Locking discards the key held in memory.")
+                    // One sentence. These footers used to be paragraphs set
+                    // nearly as loud as the settings themselves, which made the
+                    // screen read as prose with controls buried in it.
+                    Text("The vault locks this long after the app goes to the background.")
                 }
 
                 Section {
@@ -60,67 +46,68 @@ struct SettingsView: View {
                     }
 
                     Toggle("Unlock with Face ID", isOn: biometricBinding)
-                    if session.biometricNeedsReEnrolment {
-                        Text("Face ID changed on this device, so the saved key was discarded. Turn it back on to enrol again.")
-                            .font(.caption)
-                            .foregroundStyle(AppColor.onSurfaceVariant)
-                    } else {
-                        Text("Stores the vault key in the Keychain behind Face ID. It is discarded automatically if the enrolled biometrics change, or if you change your passphrase.")
-                            .font(.caption)
-                            .foregroundStyle(AppColor.onSurfaceVariant)
-                    }
+                } footer: {
+                    Text(session.biometricNeedsReEnrolment
+                         ? "Face ID changed, so the saved key was discarded — turn it back on to enrol again."
+                         : "The saved key is discarded if your biometrics or passphrase change.")
                 }
 
                 Section {
                     if let reminder = session.backupStatus.message {
-                        Label {
-                            Text(reminder)
-                                .font(.caption)
-                                .foregroundStyle(AppColor.onSurfaceVariant)
-                        } icon: {
-                            Image(systemName: "exclamationmark.triangle")
-                                .foregroundStyle(AppColor.strengthFair)
-                        }
+                        WarningRow(message: reminder)
                     }
 
                     // Both of these only set state on the session. The sheets and
                     // the system pickers are hosted by RootView, because THIS
                     // view is torn down if the vault auto-locks mid-transfer and
                     // anything presented from here would go with it.
+                    //
+                    // Settings is a tab rather than a sheet now, so there is
+                    // nothing to dismiss first and the old 0.4s hand-off delay is
+                    // gone with it.
                     Button("Export vault…") {
-                        dismissThen { session.beginExport() }
+                        session.beginExport()
                     }
                     .disabled(session.itemCount == 0)
 
                     Button("Import vault…") {
-                        dismissThen { session.requestImportPicker() }
+                        session.requestImportPicker()
                     }
                 } header: {
-                    Text("Transfer")
+                    SectionHeader("Transfer")
                 } footer: {
-                    Text("An export is one encrypted .pmvault file with its own passphrase. It is how this vault moves to another device, and the only way back if this one is lost.")
+                    Text("An export is one encrypted .pmvault file with its own passphrase.")
                 }
 
                 Section {
-                    Button(role: .destructive) {
-                        session.lock(to: .warmLocked)
-                        dismiss()
-                    } label: {
-                        Label("Lock now", systemImage: "lock")
-                    }
+                    lockNowRow
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(AppColor.background)
             .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
+            .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $showingChangePassphrase) {
                 ChangePassphraseView()
+            }
+        }
+    }
+
+    /// Glyph and label both pinned to `AppColor.error`.
+    ///
+    /// `Button(role: .destructive)` reddens only the label; the lock icon kept
+    /// inheriting the teal accent, so the row read as two different intentions
+    /// at once.
+    private var lockNowRow: some View {
+        Button(role: .destructive) {
+            session.lock(to: .warmLocked)
+        } label: {
+            Label {
+                Text("Lock now")
+                    .foregroundStyle(AppColor.error)
+            } icon: {
+                Image(systemName: "lock.fill")
+                    .foregroundStyle(AppColor.error)
             }
         }
     }
@@ -146,9 +133,11 @@ struct ChangePassphraseView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Current") {
+                Section {
                     SecureField("Current passphrase", text: $current)
                         .textContentType(.password)
+                } header: {
+                    SectionHeader("Current")
                 }
 
                 Section {
@@ -160,19 +149,21 @@ struct ChangePassphraseView: View {
                         StrengthBar(strength: PasswordStrength.evaluate(next))
                     }
                 } header: {
-                    Text("New")
+                    SectionHeader("New")
                 } footer: {
-                    Text("At least 8 characters. Changing the passphrase re-wraps the vault key with a fresh salt; your items are not re-encrypted, and Face ID must be re-enrolled.")
+                    Text("At least 8 characters. Face ID must be re-enrolled afterwards.")
                 }
 
                 if failed {
                     Section {
                         Text("Current passphrase is wrong.")
-                            .font(.footnote)
+                            .font(AppFont.footnote)
                             .foregroundStyle(AppColor.error)
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(AppColor.background)
             .navigationTitle("Change passphrase")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
