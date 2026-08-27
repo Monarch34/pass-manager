@@ -1,10 +1,18 @@
 import XCTest
 
-/// Walks the app on a simulator and attaches one screenshot per screen.
+/// Walks the app on a simulator and attaches one screenshot per screen, ONCE PER
+/// APPEARANCE.
 ///
 /// The attachment NAMES are the contract with CI: the workflow exports
 /// attachments out of the `.xcresult` and the exported filenames derive from
-/// these, so they are fixed strings and not descriptions.
+/// these, so they are fixed strings and not descriptions. Every name carries an
+/// appearance suffix, so the light and dark sets never collide on export and can
+/// be compared side by side.
+///
+/// Capturing both appearances is not thoroughness for its own sake. Every colour
+/// in the palette has a dark value, but a hardcoded colour or a leaked `.tint`
+/// only reveals itself as a wrong-hued or low-contrast element on the other
+/// scheme — and a light-only tour can never show it.
 ///
 /// The tour is written to be TOLERANT rather than strict. A UI test that fails
 /// the build on one unreachable screen produces no artefact at all, which is the
@@ -15,6 +23,7 @@ import XCTest
 final class ScreenshotTests: XCTestCase {
 
     private var app: XCUIApplication!
+    private var suffix: String = ""
     private var captured: [String] = []
     private var skipped: [String] = []
     private var notes: [String] = []
@@ -28,13 +37,57 @@ final class ScreenshotTests: XCTestCase {
         continueAfterFailure = true
     }
 
+    override func tearDownWithError() throws {
+        // Leave the simulator light, or the next test class inherits the dark
+        // appearance this one finished in.
+        //
+        // `.unspecified` is the tempting value here and the simulator REFUSES
+        // it — "Requested appearance value (0) is not valid". It exists to mean
+        // "no override" when reading, not as something you may assign.
+        XCUIDevice.shared.appearance = .light
+    }
+
     func testCaptureScreens() {
+        runTour(appearance: .light, suffix: "-light")
+        runTour(appearance: .dark, suffix: "-dark")
+
+        attachReport()
+        XCTAssertGreaterThanOrEqual(
+            captured.count,
+            10,
+            "Only \(captured.count) screens captured across both appearances.\n"
+                + "captured: \(captured)\n"
+                + "skipped: \(skipped)\n"
+                + "notes: \(notes)"
+        )
+    }
+
+    /// One complete pass in one appearance.
+    ///
+    /// The app is relaunched from scratch each time rather than having its
+    /// appearance switched underneath it, because the tour ENDS on the lock
+    /// screen — flipping the scheme in place would start the second pass halfway
+    /// through the story, with no onboarding to photograph.
+    private func runTour(appearance: XCUIDevice.Appearance, suffix: String) {
+        self.suffix = suffix
+
+        // Set BEFORE launch so the system chrome comes up already in this scheme
+        // and no screenshot catches it mid-transition.
+        //
+        // This alone is NOT enough, and the first run proved it: the assignment
+        // reported success while the simulator stayed light, and every "dark"
+        // screenshot came back light apart from the clock. So the app is ALSO
+        // told which scheme to render, via a launch argument it honours with
+        // `.preferredColorScheme`. Belt and braces, because a silently-light
+        // dark set is worse than no dark set — it looks like evidence.
+        XCUIDevice.shared.appearance = appearance
+
         app = XCUIApplication()
         app.launchArguments += [
             "-uiTestReset",
-            "-uiTestRelaxedKeychain",
             "-uiTestSeed",
-            "-uiTestImportFixture"
+            "-uiTestImportFixture",
+            appearance == .dark ? "-uiTestAppearanceDark" : "-uiTestAppearanceLight"
         ]
         app.launch()
 
@@ -49,15 +102,7 @@ final class ScreenshotTests: XCTestCase {
         captureImportReview()
         captureLock()
 
-        attachReport()
-        XCTAssertGreaterThanOrEqual(
-            captured.count,
-            5,
-            "Only \(captured.count) screens captured.\n"
-                + "captured: \(captured)\n"
-                + "skipped: \(skipped)\n"
-                + "notes: \(notes)"
-        )
+        app.terminate()
     }
 
     // MARK: - Steps
@@ -130,7 +175,8 @@ final class ScreenshotTests: XCTestCase {
         }
         // The seeded rows decrypt their titles before the list renders them;
         // waiting on one real title avoids capturing a screen full of
-        // "Decrypting…".
+        // "Decrypting…". The subtitle comes from the same pass, so this also
+        // guarantees the row is showing its finished two-line form.
         _ = app.staticTexts["GitHub"].waitForExistence(timeout: 20)
         capture("02-vault-list")
     }
@@ -150,12 +196,15 @@ final class ScreenshotTests: XCTestCase {
     }
 
     private func captureViewItem() {
-        let firstRow = app.cells.element(boundBy: 0)
-        guard firstRow.waitForExistence(timeout: 10), firstRow.isHittable else {
+        // Tapping the title text rather than `cells.element(boundBy: 0)`: the
+        // first cell is the filter-chip strip now that it scrolls with the list,
+        // so an index would open nothing and silently drop this screen.
+        let title = app.staticTexts["GitHub"]
+        guard title.waitForExistence(timeout: 10), title.isHittable else {
             skip("04-view-item", "no vault row was reachable")
             return
         }
-        firstRow.tap()
+        title.tap()
         // The detail screen titles itself with the item, so wait on a field only
         // it shows. The password is masked by default, which is the state worth
         // photographing.
@@ -169,8 +218,8 @@ final class ScreenshotTests: XCTestCase {
     }
 
     private func captureGenerator() {
-        guard tap(button(exactly: "Password generator")) else {
-            skip("05-generator", "the generator button was not reachable")
+        guard tap(tab("Generator")) else {
+            skip("05-generator", "the generator tab was not reachable")
             return
         }
         guard app.navigationBars["Generator"].waitForExistence(timeout: 10) else {
@@ -178,9 +227,8 @@ final class ScreenshotTests: XCTestCase {
             return
         }
         // It generates on appear; give the first password a moment to render.
-        _ = app.staticTexts["Character sets"].waitForExistence(timeout: 10)
+        _ = app.staticTexts["CHARACTER SETS"].waitForExistence(timeout: 10)
         capture("05-generator")
-        _ = tap(button(exactly: "Done"))
     }
 
     private func captureSettings() {
@@ -192,11 +240,9 @@ final class ScreenshotTests: XCTestCase {
     }
 
     private func captureExport() {
-        if !app.navigationBars["Settings"].exists {
-            guard openSettings() else {
-                skip("08-export", "settings was not reachable")
-                return
-            }
+        guard openSettings() else {
+            skip("08-export", "settings was not reachable")
+            return
         }
         guard tap(button(startingWith: "Export vault")) else {
             skip("08-export", "the export row was not reachable")
@@ -260,17 +306,20 @@ final class ScreenshotTests: XCTestCase {
 
     // MARK: - Navigation helpers
 
+    /// Settings is a TAB now, not a sheet, so it is always one tap away and can
+    /// be re-entered without dismissing anything.
     private func openSettings() -> Bool {
         if app.navigationBars["Settings"].exists {
             return true
         }
-        guard app.navigationBars["Vault"].waitForExistence(timeout: 15) else {
-            return false
-        }
-        guard tap(button(exactly: "Settings")) else {
+        guard tap(tab("Settings")) else {
             return false
         }
         return app.navigationBars["Settings"].waitForExistence(timeout: 10)
+    }
+
+    private func tab(_ label: String) -> XCUIElement {
+        return app.tabBars.buttons[label]
     }
 
     private func goBack() {
@@ -309,18 +358,18 @@ final class ScreenshotTests: XCTestCase {
 
     private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = name
+        attachment.name = name + suffix
         attachment.lifetime = .keepAlways
         add(attachment)
-        captured.append(name)
+        captured.append(name + suffix)
     }
 
     private func skip(_ name: String, _ reason: String) {
-        skipped.append("\(name) — \(reason)")
+        skipped.append("\(name)\(suffix) — \(reason)")
     }
 
     private func note(_ text: String) {
-        notes.append(text)
+        notes.append("\(suffix.isEmpty ? "" : String(suffix.dropFirst()) + ": ")\(text)")
     }
 
     /// Every visible label, joined. The failure message is the only channel out

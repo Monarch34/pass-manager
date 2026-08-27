@@ -1,4 +1,9 @@
 import Foundation
+// For `ColorScheme` only. The appearance override below is a launch flag like
+// every other one in this file, and belongs with them rather than in the App
+// struct — but the value it resolves to is a SwiftUI type, so the import comes
+// with it.
+import SwiftUI
 import PassVaultCore
 import PassVaultStorage
 
@@ -27,6 +32,8 @@ enum UITestMode {
     static let resetFlag = "-uiTestReset"
     static let seedFlag = "-uiTestSeed"
     static let importFixtureFlag = "-uiTestImportFixture"
+    static let appearanceDarkFlag = "-uiTestAppearanceDark"
+    static let appearanceLightFlag = "-uiTestAppearanceLight"
 
     /// The passphrase the synthetic import fixture is written with. Mirrored by
     /// the UI test.
@@ -51,6 +58,35 @@ enum UITestMode {
         return isPresent(importFixtureFlag)
         #else
         return false
+        #endif
+    }
+
+    /// The appearance the screenshot tour asked for, or `nil` — which means
+    /// "follow the system", and is what every normal launch gets. The app ships
+    /// with no theme setting and this does not add one.
+    ///
+    /// The tour is supposed to drive the appearance with
+    /// `XCUIDevice.shared.appearance`, and on the CI runner that silently does
+    /// nothing: the assignment reports success, the simulator stays light, and the
+    /// entire "dark" set came back byte-for-byte light apart from the clock. Since
+    /// the artefact IS the deliverable, the appearance is forced from inside the
+    /// app, where it cannot fail quietly.
+    ///
+    /// Same `#if DEBUG` shape as the rest of the file. Forcing a colour scheme is
+    /// harmless where wiping a vault is not, so this one is gated for consistency
+    /// rather than for safety: a reader should be able to say "no launch argument
+    /// in here does anything to a shipped build" without checking each one.
+    static var forcedColorScheme: ColorScheme? {
+        #if DEBUG
+        if isPresent(appearanceDarkFlag) {
+            return .dark
+        }
+        if isPresent(appearanceLightFlag) {
+            return .light
+        }
+        return nil
+        #else
+        return nil
         #endif
     }
 

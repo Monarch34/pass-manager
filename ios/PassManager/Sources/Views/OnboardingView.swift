@@ -26,28 +26,34 @@ struct OnboardingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 28) {
-                VStack(spacing: 16) {
+                VStack(spacing: 12) {
                     ShieldMark(size: 88)
                     Text("PassManager")
                         .font(.largeTitle.bold())
                         .foregroundStyle(AppColor.onBackground)
+                    // One line saying what the app IS, before the wall of
+                    // instructions about the passphrase.
+                    Text("Your passwords, encrypted on this device.")
+                        .font(AppFont.rowSubtitle)
+                        .foregroundStyle(AppColor.onSurfaceVariant)
                     Text("Choose a master passphrase. It is the only way into this vault — it is never stored and cannot be recovered.")
-                        .font(.subheadline)
+                        .font(AppFont.footnote)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(AppColor.onSurfaceVariant)
+                        .padding(.top, 4)
                 }
-                .padding(.top, 48)
+                .padding(.top, 44)
 
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 8) {
                         SecureField("Master passphrase", text: $passphrase)
                             .textContentType(.newPassword)
-                            .textFieldStyle(.roundedBorder)
+                            .passphraseFieldChrome()
                         if !passphrase.isEmpty {
                             StrengthBar(strength: strength)
                         }
                         Text(isTooShort ? "At least 8 characters" : "Longer is stronger.")
-                            .font(.caption)
+                            .font(AppFont.footnote)
                             .foregroundStyle(isTooShort && !passphrase.isEmpty
                                              ? AppColor.error
                                              : AppColor.onSurfaceVariant)
@@ -56,7 +62,7 @@ struct OnboardingView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         SecureField("Confirm passphrase", text: $confirmation)
                             .textContentType(.newPassword)
-                            .textFieldStyle(.roundedBorder)
+                            .passphraseFieldChrome()
                             // Return creates the vault, so the flow completes
                             // without reaching for a button the keyboard may be
                             // covering.
@@ -64,27 +70,18 @@ struct OnboardingView: View {
                             .onSubmit(create)
                         if isMismatched {
                             Text("Passphrases do not match")
-                                .font(.caption)
+                                .font(AppFont.footnote)
                                 .foregroundStyle(AppColor.error)
                         }
                     }
                 }
 
-                Button(action: create) {
-                    HStack {
-                        if session.isBusy {
-                            ProgressView()
-                                .tint(AppColor.onPrimary)
-                        }
-                        Text(session.isBusy ? "Creating…" : "Create vault")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(canCreate ? AppColor.primary : AppColor.outlineVariant)
-                    .foregroundStyle(canCreate ? AppColor.onPrimary : AppColor.onSurfaceVariant)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
+                PrimaryActionButton(
+                    title: "Create vault",
+                    busyTitle: "Creating…",
+                    isBusy: session.isBusy,
+                    action: create
+                )
                 .disabled(!canCreate)
 
                 // Vault creation can fail for reasons the user can act on — no
@@ -93,11 +90,17 @@ struct OnboardingView: View {
                 // with nothing on screen to explain it. Found by a UI test that
                 // could not get past this screen and could not say why.
                 if let message = session.errorMessage, !message.isEmpty {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(AppColor.error)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
+                    Label {
+                        Text(message)
+                            .font(AppFont.footnote)
+                            .foregroundStyle(AppColor.error)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .foregroundStyle(AppColor.error)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityElement(children: .combine)
                 }
 
                 Spacer(minLength: 24)

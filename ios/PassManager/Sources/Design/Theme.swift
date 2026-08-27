@@ -56,6 +56,13 @@ enum AppColor {
         }
     }
 
+    /// Character classes in a generated password. These are SEMANTIC ALIASES, not
+    /// new colours: both resolve to values already declared above, so the palette
+    /// contract with Android is untouched. They exist so the generator can say
+    /// what it means rather than reaching for a strength colour by name.
+    static let digitTint = strengthGood
+    static let symbolTint = strengthFair
+
     // Logo. The plate is pinned to LIGHT_PRIMARY_CONTAINER in BOTH themes —
     // LogoPalette.kt explains why: the shield art is fixed light-scheme colour,
     // and on the dark scheme's container it measured 1.22:1 and vanished.
@@ -89,7 +96,94 @@ extension UIColor {
     }
 }
 
+/// The typographic scale, defined once.
+///
+/// Every entry is a RELATIVE text style, so Dynamic Type scales the whole app.
+/// `.system(size:)` appears nowhere in here on purpose — a fixed point size stops
+/// scaling and is reserved for glyph sizing, where the metric is the artwork
+/// rather than the text.
+///
+/// Views should reach for these rather than composing `.font(...)` inline, so the
+/// hierarchy is a decision made in one place instead of re-invented per screen.
+enum AppFont {
+
+    /// Primary identity of a list row.
+    static let rowTitle = Font.body.weight(.medium)
+    /// The row's identifying secondary value.
+    static let rowSubtitle = Font.subheadline
+    /// Grouped-list section header. Pair with ``SectionHeader``, which adds the
+    /// uppercasing and tracking that SwiftUI (unlike UIKit) does not apply.
+    static let sectionHeader = Font.footnote.weight(.semibold)
+    /// The small label sitting ABOVE a value in a detail row.
+    static let fieldLabel = Font.footnote
+    /// The value itself.
+    static let fieldValue = Font.body
+    /// Explanatory text under a section, and inline status lines.
+    static let footnote = Font.footnote
+
+    /// Secrets. Monospaced so an ambiguous glyph pair (`l`/`1`, `O`/`0`) can be
+    /// told apart when the user is reading a password out or typing it elsewhere.
+    static let secretValue = Font.system(.body, design: .monospaced)
+    /// The generator's hero password.
+    static let heroPassword = Font.system(.title2, design: .monospaced).weight(.medium)
+    /// Title of a detail screen's hero header.
+    static let heroTitle = Font.title3.weight(.semibold)
+    /// The category label under a hero title.
+    static let heroCategory = Font.subheadline.weight(.medium)
+
+    /// Numbers that change while a control is being dragged. Monospaced digits
+    /// hold a constant advance width, so the label does not jitter.
+    static let steadyDigits = Font.subheadline.monospacedDigit()
+    /// The entropy figure, which changes with every option change.
+    static let entropyValue = Font.footnote.monospacedDigit()
+}
+
+extension PasswordStrength {
+    /// The one mapping from strength to colour.
+    ///
+    /// Shared by the bar and by any label sitting next to it, so the two can
+    /// never disagree about what "fair" looks like.
+    var color: Color {
+        switch self {
+        case .weak: return AppColor.error
+        case .fair: return AppColor.strengthFair
+        case .good: return AppColor.strengthGood
+        case .strong: return AppColor.primary
+        }
+    }
+}
+
+/// An uppercase, lightly tracked section header.
+///
+/// UIKit uppercased grouped-list headers for us; SwiftUI does not, so the
+/// treatment is explicit here rather than repeated at every `Section`.
+struct SectionHeader: View {
+    private let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(AppFont.sectionHeader)
+            .tracking(0.6)
+            .foregroundStyle(AppColor.onSurfaceVariant)
+    }
+}
+
 extension ItemCategory {
+    /// Whether a "copy password" affordance makes sense for this category.
+    ///
+    /// Lives here rather than in the core package because it is a question about
+    /// which shortcuts the UI offers, not about what the model holds.
+    var hasCopyablePassword: Bool {
+        switch self {
+        case .login, .bank: return true
+        case .card, .note, .identity: return false
+        }
+    }
+
     /// SF Symbol per category. Chosen from symbols that have existed since well
     /// before iOS 16 so the list cannot render blank on an older device.
     var symbolName: String {
@@ -107,17 +201,29 @@ extension ItemCategory {
 struct CategoryTile: View {
     let category: ItemCategory
     var size: CGFloat = 40
+    /// When true the tile speaks its category instead of being skipped.
+    ///
+    /// The tile is normally decoration and is hidden from VoiceOver. In a vault
+    /// row it is the ONLY thing carrying the category — colour and glyph, both
+    /// invisible to a screen reader — so there it is announced rather than
+    /// hidden. It stays a label on the tile rather than a merged label on the
+    /// whole row, because merging the row would also swallow the title and
+    /// subtitle as separately addressable elements.
+    var announcesCategory: Bool = false
 
     var body: some View {
         RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
             .fill(AppColor.tint(for: category).opacity(0.16))
             .frame(width: size, height: size)
             .overlay(
+                // `.system(size:)` is glyph geometry, not text: the symbol is
+                // sized to the tile it sits in.
                 Image(systemName: category.symbolName)
                     .font(.system(size: size * 0.44, weight: .semibold))
                     .foregroundStyle(AppColor.tint(for: category))
             )
-            .accessibilityHidden(true)
+            .accessibilityHidden(!announcesCategory)
+            .accessibilityLabel(announcesCategory ? category.label : "")
     }
 }
 
@@ -158,28 +264,19 @@ struct StrengthBar: View {
     let strength: PasswordStrength
     var showsLabel: Bool = true
 
-    private var color: Color {
-        switch strength {
-        case .weak: return AppColor.error
-        case .fair: return AppColor.strengthFair
-        case .good: return AppColor.strengthGood
-        case .strong: return AppColor.primary
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
                 ForEach(0..<4, id: \.self) { index in
                     Capsule()
-                        .fill(index <= strength.rawValue ? color : AppColor.outlineVariant)
+                        .fill(index <= strength.rawValue ? strength.color : AppColor.outlineVariant)
                         .frame(height: 4)
                 }
             }
             if showsLabel {
                 Text(strength.label)
-                    .font(.caption)
-                    .foregroundStyle(color)
+                    .font(AppFont.footnote)
+                    .foregroundStyle(strength.color)
             }
         }
         .accessibilityElement(children: .ignore)

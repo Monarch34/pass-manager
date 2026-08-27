@@ -11,6 +11,11 @@ struct PassManagerApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(session)
+                // Resolved in `UITestMode`, with every other launch-argument hook
+                // and behind the same `#if DEBUG`. `nil` in a shipping build, so
+                // this reads as "follow the system" and nothing here parses
+                // argv.
+                .preferredColorScheme(UITestMode.forcedColorScheme)
                 .task {
                     session.bootstrap()
                 }
@@ -41,9 +46,11 @@ struct RootView: View {
             case .coldLocked, .warmLocked:
                 LockView()
             case .unlocked:
-                VaultListView()
+                MainTabView()
             }
         }
+        // The one place the accent is applied. Everything below inherits it, so
+        // no screen sets its own tint and none of them can drift apart.
         .tint(AppColor.primary)
         .background(AppColor.background)
         .sheet(isPresented: exportPassphrasePresented) {

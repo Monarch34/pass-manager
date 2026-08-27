@@ -41,7 +41,7 @@ struct ExportPassphraseView: View {
                     }
                     if let rejection = rejection, !passphrase.isEmpty {
                         Text(rejection.message)
-                            .font(.caption)
+                            .font(AppFont.footnote)
                             .foregroundStyle(AppColor.error)
                     }
                 } header: {
@@ -146,7 +146,7 @@ struct ImportReviewView: View {
             if let message = session.errorMessage, !message.isEmpty {
                 Section {
                     Text(message)
-                        .font(.footnote)
+                        .font(AppFont.footnote)
                         .foregroundStyle(AppColor.error)
                 }
             }

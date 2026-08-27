@@ -16,7 +16,7 @@ struct LockView: View {
         VStack(spacing: 28) {
             Spacer()
 
-            VStack(spacing: 14) {
+            VStack(spacing: 12) {
                 ShieldMark(size: 76)
                 Text("Vault locked")
                     .font(.title2.bold())
@@ -24,36 +24,31 @@ struct LockView: View {
                 Text(session.lockState == .coldLocked
                      ? "Enter your master passphrase to unlock."
                      : "Locked after inactivity.")
-                    .font(.subheadline)
+                    .font(AppFont.rowSubtitle)
+                    .multilineTextAlignment(.center)
                     .foregroundStyle(AppColor.onSurfaceVariant)
             }
 
-            VStack(spacing: 12) {
+            VStack(spacing: 14) {
                 SecureField("Master passphrase", text: $passphrase)
                     .textContentType(.password)
-                    .textFieldStyle(.roundedBorder)
+                    .passphraseFieldChrome()
+                    // Return unlocks, so the flow completes without reaching for
+                    // a button the keyboard may be covering.
                     .submitLabel(.go)
                     .onSubmit(unlock)
 
-                Button(action: unlock) {
-                    HStack {
-                        if session.isBusy {
-                            ProgressView()
-                                .tint(AppColor.onPrimary)
-                        }
-                        Text(session.isBusy ? "Unlocking…" : "Unlock")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(canUnlock ? AppColor.primary : AppColor.outlineVariant)
-                    .foregroundStyle(canUnlock ? AppColor.onPrimary : AppColor.onSurfaceVariant)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
+                PrimaryActionButton(
+                    title: "Unlock",
+                    busyTitle: "Unlocking…",
+                    isBusy: session.isBusy,
+                    action: unlock
+                )
                 .disabled(!canUnlock)
 
                 // Cold start always demands the passphrase; only a warm lock may
-                // offer biometrics.
+                // offer biometrics. Secondary action, so plain rather than
+                // prominent — there is only ever one primary on this screen.
                 if session.lockState.allowsBiometrics && session.biometricEnabled {
                     Button {
                         Task { @MainActor in
@@ -61,16 +56,17 @@ struct LockView: View {
                         }
                     } label: {
                         Label("Unlock with Face ID", systemImage: "faceid")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity, minHeight: 30)
                     }
+                    .buttonStyle(.borderless)
+                    .controlSize(.large)
                     .disabled(session.isBusy)
                 }
             }
 
             if let message = session.errorMessage, !message.isEmpty {
                 Text(message)
-                    .font(.footnote)
+                    .font(AppFont.footnote)
                     // A permanently invalidated enrolment is not something the
                     // user did wrong, so it is an instruction rather than an
                     // error shouted in red.
@@ -78,6 +74,7 @@ struct LockView: View {
                                      ? AppColor.onSurfaceVariant
                                      : AppColor.error)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer()
