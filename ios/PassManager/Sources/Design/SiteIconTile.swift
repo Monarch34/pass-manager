@@ -33,7 +33,18 @@ struct SiteIconTile: View {
     /// beside the subtitle instead and this tile must not say it twice.
     var announcesCategory: Bool = false
 
-    @State private var image: UIImage?
+    /// The icon AND the domain it belongs to, together.
+    ///
+    /// A `List` reuses a row's storage when the item at that position changes, so
+    /// an image held on its own would be drawn for one frame beside the next
+    /// item's title. Keeping the domain with it means a stale icon is simply not
+    /// the one being asked for, and is never shown.
+    @State private var loaded: Loaded?
+
+    private struct Loaded {
+        let domain: String
+        let image: UIImage
+    }
 
     /// `nil` whenever no request should be made — which is the same condition as
     /// "show the category tile", so there is only one thing to get right.
@@ -50,8 +61,8 @@ struct SiteIconTile: View {
 
     var body: some View {
         Group {
-            if let image = image, let domain = domain {
-                Image(uiImage: image)
+            if let domain = domain, let loaded = loaded, loaded.domain == domain {
+                Image(uiImage: loaded.image)
                     .resizable()
                     .scaledToFit()
                     .padding(size * 0.14)
@@ -76,10 +87,14 @@ struct SiteIconTile: View {
         // clears the image, on asks again — and not on every unrelated redraw.
         .task(id: domain) {
             guard let domain = domain else {
-                image = nil
+                loaded = nil
                 return
             }
-            image = await SiteIconLoader.shared.image(for: domain)
+            if let image = await SiteIconLoader.shared.image(for: domain) {
+                loaded = Loaded(domain: domain, image: image)
+            } else {
+                loaded = nil
+            }
         }
     }
 }
