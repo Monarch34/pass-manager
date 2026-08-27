@@ -331,7 +331,8 @@ final class ScreenshotTests: XCTestCase {
         // rest of the tour waits on. No test-only identifier: if this string is
         // wrong, VoiceOver is wrong too, and both are worth knowing.
         let icon = app.images["Icon for github.com"]
-        if icon.waitForExistence(timeout: 25) {
+        let resolved = icon.waitForExistence(timeout: 25)
+        if resolved {
             note("site icon resolved for github.com")
         } else {
             note("NO site icon resolved for github.com within 25s — the runner may have "
@@ -339,7 +340,29 @@ final class ScreenshotTests: XCTestCase {
         }
         capture("10-site-icons")
 
+        captureSiteIconDetail()
         _ = setToggleInSettings(on: false)
+    }
+
+    /// The other place the contract puts an icon: the item hero.
+    ///
+    /// Taken inside the same icons-on window as the list shot rather than as a
+    /// step of its own, so the setting is turned on once and put back once.
+    /// Skipped rather than failed for every reason the list shot is.
+    private func captureSiteIconDetail() {
+        let title = app.staticTexts["GitHub"]
+        guard title.waitForExistence(timeout: 10), title.isHittable else {
+            skip("11-site-icon-detail", "no vault row was reachable with icons on")
+            return
+        }
+        title.tap()
+        guard app.staticTexts["Password"].waitForExistence(timeout: 10) else {
+            skip("11-site-icon-detail", "the item detail never appeared")
+            goBack()
+            return
+        }
+        capture("11-site-icon-detail")
+        goBack()
     }
 
     private func setToggleInSettings(on: Bool) -> Bool {
