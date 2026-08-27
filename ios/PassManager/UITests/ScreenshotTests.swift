@@ -295,11 +295,12 @@ final class ScreenshotTests: XCTestCase {
     /// Every other screen in this tour is deterministic — seeded data, no
     /// network, identical bytes on every run. Site icons are not: they need a
     /// route from the runner's simulator to `t0.gstatic.com`, and whether that
-    /// exists is not this app's business. So the step is written to be
-    /// UNFALSIFIABLE-PROOF rather than optimistic: it turns the setting on,
-    /// waits a bounded time for a real icon to appear, RECORDS WHETHER ONE DID,
-    /// captures either way, and never fails the run. A missing icon is evidence
-    /// about the runner; a failed job would be evidence about nothing.
+    /// exists is not this app's business. So the step FAILS SAFE rather than
+    /// optimistically: it turns the setting on, waits a bounded time for a real
+    /// icon to appear, RECORDS WHETHER ONE DID, captures either way, and never
+    /// fails the run. A missing icon is evidence about the runner; a failed job
+    /// would be evidence about nothing, and would cost the other eighteen
+    /// screenshots.
     ///
     /// The setting is put back afterwards so that every capture after this one —
     /// and the whole second appearance pass — sees the same vault list the first
