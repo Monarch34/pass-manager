@@ -96,6 +96,17 @@ exact and both platforms make the same promise:
   Nothing is ever requested from the site itself.
 - **Input is the domain only** — host with `www.` stripped, from the item's address
   envelope. No path, no query, no credential material.
+- **Lookup runs for the `login` category and nothing else.** The address envelope is
+  shared by all five categories but only holds a *site* for logins: for an identity
+  it holds an email address, for a note the first characters of the body, for a card
+  the cardholder's name. Feeding those to a domain parser is not a stretch — an
+  identity's `ayse@example.com` parses cleanly to `example.com`, and a single-token
+  note parses to whatever it happens to be. A user who enables site icons is
+  consenting to their *logins'* domains being looked up; they are not consenting to
+  their mail provider or the first line of a note. Gate on the category, not on how
+  URL-shaped the string happens to look — a filter over free text is a guess, and a
+  guess is the wrong instrument for deciding what leaves a vault.
+  *(Android currently looks up every category and inherits this; see the note below.)*
 - **A miss is remembered for the session** (bounded set, ~512 domains, cleared when
   the setting is toggled back on) so scrolling past an iconless entry does not
   re-announce its domain on every pass.
