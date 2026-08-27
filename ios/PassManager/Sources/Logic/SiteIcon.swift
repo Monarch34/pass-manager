@@ -1,4 +1,5 @@
 import Foundation
+import PassVaultCore
 
 /// The exact shape of the one network request this app ever makes.
 ///
@@ -8,16 +9,36 @@ import Foundation
 /// device lives in this file, with no UIKit and no networking in it, so the
 /// promise can be tested rather than asserted — see `SiteIconTests`.
 ///
-/// Three rules, and they are the whole feature:
+/// Four rules, and they are the whole feature:
 ///
-/// 1. One host, ever. ``host`` is Google's icon CDN and nothing else is
+/// 1. Logins only. The address envelope is shared by all five categories and only
+///    holds a SITE for one of them. ``domain(for:address:)`` asks the category
+///    first and the string second.
+/// 2. One host, ever. ``host`` is Google's icon CDN and nothing else is
 ///    contacted — not the site itself, which is where the user's credentials
 ///    point.
-/// 2. Only a domain leaves. Never a path, never a query, never anything else off
-///    the item. ``domain(from:)`` is the only door, and it is narrow.
-/// 3. Redirects are refused. ``RedirectPolicy`` is what turns "one host" from a
+/// 3. Only a domain leaves. Never a path, never a query, never anything else off
+///    the item. ``domain(for:address:)`` is the only door, and it is narrow.
+/// 4. Redirects are refused. ``RedirectPolicy`` is what turns "one host" from a
 ///    statement about the request we made into one about the request that ran.
 enum SiteIcon {
+
+    /// A host that has already been through the gate below, and the only thing
+    /// the loader will accept.
+    ///
+    /// The initializer is `fileprivate`, so this file is the only place in the
+    /// app that can mint one and ``domain(for:address:)`` is the only function in
+    /// this file that does. That is what makes the category check structural
+    /// rather than advisory: a call site cannot hand the loader a string it
+    /// assembled itself, or one it took off an item of some other category,
+    /// because a `String` is not what the loader is asking for.
+    struct Domain: Hashable, Sendable {
+        let value: String
+
+        fileprivate init(_ value: String) {
+            self.value = value
+        }
+    }
 
     /// The only host this app contacts, kept next to the code that enforces it.
     ///
@@ -32,17 +53,51 @@ enum SiteIcon {
     /// vault.
     static let host = "t0.gstatic.com"
 
-    /// The domain to ask about, or `nil` when there is nothing askable.
+    /// The domain to ask about, or `nil` when nothing may be asked.
+    ///
+    /// THE CATEGORY DECIDES, NOT THE STRING. Every item carries an address
+    /// envelope and only a login's holds a site: an identity's is an email
+    /// address, a note's is the first characters of the body, a card's is the
+    /// cardholder's name, a bank's is the bank's name. Those parse as readily as
+    /// a URL does — `ayse@example.com` yields `example.com` with the userinfo
+    /// stripped and no whitespace to object to — so a lookup that reads only the
+    /// string discloses the user's mail provider the moment the setting is
+    /// switched on. Enabling site icons is consent to look up the domains of your
+    /// LOGINS.
+    ///
+    /// The alternative — a cleverer filter over free text — was considered and
+    /// refused. Deciding whether a string "looks like" a URL is a guess, and a
+    /// guess is the wrong instrument for deciding what leaves a vault. The
+    /// category is a fact the item already carries.
+    ///
+    /// The switch is exhaustive with no `default` on purpose: a sixth category
+    /// stops this file compiling until someone states, here, whether its envelope
+    /// holds a site.
+    static func domain(for category: ItemCategory, address: String) -> Domain? {
+        switch category {
+        case .login:
+            return parse(address).map(Domain.init)
+        case .card, .bank, .note, .identity:
+            return nil
+        }
+    }
+
+    /// The host inside an address, or `nil` when there is not one.
+    ///
+    /// PRIVATE, and that is the point: the gate above is the only way to reach
+    /// it, so no call site can parse an envelope without first saying which
+    /// category it came off.
     ///
     /// Mirrors Android's `extractDomain` case for case, including the one that
     /// looks like an oversight and is not: a string with NO DOT is not a URL and
-    /// is never guessed at. That case is what stops a card's cardholder name or
-    /// an identity's company — both of which share the address envelope with a
-    /// login's URL — from being sent anywhere.
+    /// is never guessed at. With the category gate in front, these guards are
+    /// defence in depth rather than the thing carrying the weight — they now
+    /// catch a login whose address is prose, which is a mistake rather than a
+    /// disclosure.
     ///
     /// `www.` is stripped so `www.github.com` and `github.com` are one domain and
     /// one request, exactly as on Android.
-    static func domain(from address: String) -> String? {
+    private static func parse(_ address: String) -> String? {
         let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized: String
         if trimmed.hasPrefix("https://") || trimmed.hasPrefix("http://") {
@@ -61,11 +116,12 @@ enum SiteIcon {
             return nil
         }
         // Java's `URI` REJECTS a string with a space in it outright, and Android
-        // leans on that to keep prose out of this function — an identity's
-        // company, "ACME Yazılım A.Ş.", has a dot in it and is not an address.
-        // Foundation's parsers have grown more forgiving over releases and a
-        // lenient one would hand back a "host" made of that prose, or of its
-        // percent-escaped form. Neither is a hostname, and neither is sent.
+        // leans on that to keep prose out of this function — "ACME Yazılım A.Ş."
+        // has a dot in it and is not an address. Foundation's parsers have grown
+        // more forgiving over releases and a lenient one would hand back a "host"
+        // made of that prose, or of its percent-escaped form. Neither is a
+        // hostname, and neither is sent. Typed into a LOGIN'S address field, which
+        // is now the only way prose gets this far.
         guard !host.contains("%"),
               host.rangeOfCharacter(from: .whitespacesAndNewlines) == nil
         else {
@@ -84,8 +140,11 @@ enum SiteIcon {
     /// `URLComponents`: `fallback_opts` carries LITERAL commas, and the `url`
     /// value is FULLY escaped — `URLComponents` would leave `:` and `/` in the
     /// clear, producing a different request from the one Android makes.
-    static func iconURL(for domain: String) -> URL? {
-        guard let encoded = ("https://" + domain)
+    ///
+    /// Takes a ``Domain`` rather than a `String`, so the only URL this app can
+    /// build is one for a host that came off a login.
+    static func iconURL(for domain: Domain) -> URL? {
+        guard let encoded = ("https://" + domain.value)
             .addingPercentEncoding(withAllowedCharacters: formUnreserved)
         else {
             return nil

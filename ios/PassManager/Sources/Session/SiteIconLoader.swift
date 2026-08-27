@@ -30,6 +30,9 @@ final class SiteIconLoader {
     /// scrolling path to save nothing anyone can measure.
     static let maxRememberedMisses = 512
 
+    /// Keyed by the domain's string rather than by ``SiteIcon/Domain`` itself:
+    /// `NSCache` below needs an `NSString`, and one key shape across all three
+    /// stores is one thing to keep straight instead of two.
     private var misses: Set<String> = []
     /// One in-flight fetch per domain, so five logins at the same site ask once.
     private var inFlight: [String: Task<UIImage?, Never>] = [:]
@@ -89,19 +92,26 @@ final class SiteIconLoader {
 
     /// The icon for a domain, or `nil` if there is not one to be had.
     ///
-    /// Callers must have decided that the setting is ON before getting here: this
-    /// type does not read the setting, it is simply never asked when the setting
-    /// is off. That is deliberate — "no request of any kind when the setting is
-    /// off" is easiest to verify when the code that could make one is not
-    /// reachable.
-    func image(for domain: String) async -> UIImage? {
-        if let cached = images.object(forKey: domain as NSString) {
+    /// TAKES A ``SiteIcon/Domain``, WHICH THIS TYPE CANNOT MAKE. The only mint is
+    /// `SiteIcon.domain(for:address:)`, which refuses every category but `.login`,
+    /// so "we only look up logins" is enforced by what this function will accept
+    /// rather than by every caller remembering to check. A row holding an
+    /// identity's email has nothing to pass here.
+    ///
+    /// Callers must also have decided that the setting is ON before getting here:
+    /// this type does not read the setting, it is simply never asked when the
+    /// setting is off. That is deliberate — "no request of any kind when the
+    /// setting is off" is easiest to verify when the code that could make one is
+    /// not reachable.
+    func image(for domain: SiteIcon.Domain) async -> UIImage? {
+        let key = domain.value
+        if let cached = images.object(forKey: key as NSString) {
             return cached
         }
-        if misses.contains(domain) {
+        if misses.contains(key) {
             return nil
         }
-        if let running = inFlight[domain] {
+        if let running = inFlight[key] {
             return await running.value
         }
 
@@ -113,9 +123,9 @@ final class SiteIconLoader {
         // forever. The fetch finishes, the result is cached, and the next row to
         // want it pays nothing.
         let task = Task { await Self.fetch(domain: domain, session: session) }
-        inFlight[domain] = task
+        inFlight[key] = task
         let image = await task.value
-        inFlight[domain] = nil
+        inFlight[key] = nil
 
         guard generation == self.generation else {
             // The vault locked, or the setting moved, while this was in the air.
@@ -123,9 +133,9 @@ final class SiteIconLoader {
             return nil
         }
         if let image = image {
-            images.setObject(image, forKey: domain as NSString)
+            images.setObject(image, forKey: key as NSString)
         } else {
-            recordMiss(domain)
+            recordMiss(key)
         }
         return image
     }
@@ -145,7 +155,7 @@ final class SiteIconLoader {
     /// refused by the policy above, a body that is not an image, a transport
     /// error — because the caller has exactly one fallback and it is correct for
     /// all of them.
-    private nonisolated static func fetch(domain: String, session: URLSession) async -> UIImage? {
+    private nonisolated static func fetch(domain: SiteIcon.Domain, session: URLSession) async -> UIImage? {
         guard let url = SiteIcon.iconURL(for: domain) else {
             return nil
         }

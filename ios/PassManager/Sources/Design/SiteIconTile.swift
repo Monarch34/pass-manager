@@ -8,8 +8,10 @@ import PassVaultCore
 /// INTERCHANGEABLE WITH ``CategoryTile`` BY CONSTRUCTION: same footprint, same
 /// 25% corner radius, so a row does not move when an icon arrives, when one fails
 /// to, or when the setting is switched off. Every failure lands in the same
-/// place — a disabled setting, an address with no domain in it, a locked vault, a
-/// 404, a refused redirect, a body that is not an image.
+/// place — a disabled setting, an item that is not a login, an address with no
+/// domain in it, a locked vault, a 404, a refused redirect, a body that is not an
+/// image. Four of the five categories therefore stay on their tile permanently,
+/// which is the intended look and not a degraded one.
 ///
 /// The icon is drawn on a plate rather than straight onto the row. A favicon is
 /// artwork drawn for a white browser tab and a great many of them are a dark
@@ -20,8 +22,11 @@ import PassVaultCore
 /// makes the row read the same way in both appearances.
 struct SiteIconTile: View {
 
+    /// Decides whether the address envelope is even looked at: only a login's
+    /// holds a site. See `SiteIcon.domain(for:address:)`.
     let category: ItemCategory
-    /// The item's address envelope. Only a domain is ever taken out of it.
+    /// The item's address envelope. Only a login's domain is ever taken out of
+    /// it — for every other category this string is never parsed at all.
     let address: String
     /// Passed in rather than read from the environment, so that "the setting is
     /// off, therefore nothing is requested" is visible at the call site instead
@@ -49,17 +54,21 @@ struct SiteIconTile: View {
     @State private var loaded: Loaded?
 
     private struct Loaded {
-        let domain: String
+        let domain: SiteIcon.Domain
         let image: UIImage
     }
 
     /// `nil` whenever no request should be made — which is the same condition as
     /// "show the category tile", so there is only one thing to get right.
-    private var domain: String? {
+    ///
+    /// The category goes in alongside the address and the gate refuses everything
+    /// but a login, so a card, a bank, a note and an identity all land here as
+    /// `nil` without their envelope ever being parsed.
+    private var domain: SiteIcon.Domain? {
         guard useSiteIcons else {
             return nil
         }
-        return SiteIcon.domain(from: address)
+        return SiteIcon.domain(for: category, address: address)
     }
 
     private var shape: RoundedRectangle {
@@ -81,7 +90,7 @@ struct SiteIconTile: View {
                     .overlay(shape.stroke(AppColor.outlineVariant, lineWidth: 1))
                     // Named the way Android names it. VoiceOver would otherwise
                     // meet an unlabelled image where the category used to be.
-                    .accessibilityLabel("Icon for \(domain)")
+                    .accessibilityLabel("Icon for \(domain.value)")
             } else {
                 CategoryTile(
                     category: category,
