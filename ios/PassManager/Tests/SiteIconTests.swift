@@ -50,7 +50,15 @@ final class SiteIconTests: XCTestCase {
         XCTAssertNil(SiteIcon.domain(from: ""))
         XCTAssertNil(SiteIcon.domain(from: "   "))
         XCTAssertNil(SiteIcon.domain(from: "https://"))
+    }
+
+    /// Prose that happens to contain a full stop is not an address. The address
+    /// envelope is shared, so an identity's company lands here — and "ACME
+    /// Yazılım A.Ş." would otherwise clear the dot test.
+    func testProseWithADotIsNotADomain() {
+        XCTAssertNil(SiteIcon.domain(from: "ACME Yazılım A.Ş."))
         XCTAssertNil(SiteIcon.domain(from: "not a url, but it has a dot."))
+        XCTAssertNil(SiteIcon.domain(from: "https://not a host either.com"))
     }
 
     func testSurroundingWhitespaceIsIgnored() {

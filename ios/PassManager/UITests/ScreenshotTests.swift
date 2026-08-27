@@ -352,9 +352,15 @@ final class ScreenshotTests: XCTestCase {
         return setToggle(toggle, on: on)
     }
 
-    /// A SwiftUI `Toggle` reports "1"/"0" through `value`, so the state is read
+    /// A SwiftUI `Toggle` reports "1"/"0" through `value`, so the state is READ
     /// rather than assumed — tapping blind would silently invert the setting if
-    /// it were ever already on.
+    /// it were ever already on, and the tour would photograph the wrong thing
+    /// while reporting success.
+    ///
+    /// Two attempts, because the element's frame is the whole Form row while the
+    /// switch itself is at the trailing end of it: a centre tap lands on the
+    /// label, which does not always activate the control. The second attempt
+    /// aims where the switch actually is.
     private func setToggle(_ toggle: XCUIElement, on: Bool) -> Bool {
         let wanted = on ? "1" : "0"
         if (toggle.value as? String) == wanted {
@@ -363,16 +369,25 @@ final class ScreenshotTests: XCTestCase {
         guard toggle.isHittable else {
             return false
         }
+
         toggle.tap()
-        // The switch animates; give the value a moment to settle before reading
-        // it. Built directly rather than through `XCTestCase.expectation(for:)`,
-        // which registers with the test case and expects to be waited on by
-        // `waitForExpectations`.
+        if settles(toggle, at: wanted, timeout: 3) {
+            return true
+        }
+
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        return settles(toggle, at: wanted, timeout: 3)
+    }
+
+    /// Built directly rather than through `XCTestCase.expectation(for:)`, which
+    /// registers with the test case and expects `waitForExpectations` to be the
+    /// thing that waits on it.
+    private func settles(_ element: XCUIElement, at value: String, timeout: TimeInterval) -> Bool {
         let settled = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "value == %@", wanted),
-            object: toggle
+            predicate: NSPredicate(format: "value == %@", value),
+            object: element
         )
-        return XCTWaiter().wait(for: [settled], timeout: 5) == .completed
+        return XCTWaiter().wait(for: [settled], timeout: timeout) == .completed
     }
 
     private func captureLock() {

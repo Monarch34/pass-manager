@@ -60,6 +60,17 @@ enum SiteIcon {
         guard let host = URLComponents(string: normalized)?.host, !host.isEmpty else {
             return nil
         }
+        // Java's `URI` REJECTS a string with a space in it outright, and Android
+        // leans on that to keep prose out of this function — an identity's
+        // company, "ACME Yazılım A.Ş.", has a dot in it and is not an address.
+        // Foundation's parsers have grown more forgiving over releases and a
+        // lenient one would hand back a "host" made of that prose, or of its
+        // percent-escaped form. Neither is a hostname, and neither is sent.
+        guard !host.contains("%"),
+              host.rangeOfCharacter(from: .whitespacesAndNewlines) == nil
+        else {
+            return nil
+        }
         let stripped = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
         return stripped.isEmpty ? nil : stripped
     }
