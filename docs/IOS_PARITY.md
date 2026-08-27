@@ -107,6 +107,22 @@ exact and both platforms make the same promise:
   URL-shaped the string happens to look — a filter over free text is a guess, and a
   guess is the wrong instrument for deciding what leaves a vault.
   *(Android currently looks up every category and inherits this; see the note below.)*
+- **Ask for `size=256`.** The CDN returns whatever the site actually publishes,
+  capped by the requested size — it does not synthesise resolution. Measured
+  2026-08-27: `github.com` returns 32×32 at every requested size, `netflix.com`
+  caps at 64×64, while `stackoverflow.com` and `garantibbva.com.tr` return 180×180
+  at `size=256` where `size=128` returns 128×128, and `migros.com.tr` returns
+  144×144. For the domains that cap below the request the response is
+  byte-identical, so asking for 256 costs nothing there and gains real resolution
+  everywhere else. Re-measure before changing this rather than reasoning about it.
+- **Never upscale a raster icon by a fractional factor.** A 40pt tile is 120px on a
+  3x screen; smooth-scaling a 32×32 source to fill it is what makes an icon look
+  cheap, and no request parameter can fix a site that publishes 32×32. So: inset
+  the icon inside its plate rather than filling the plate edge to edge, and when
+  the source is smaller than the target box draw it at the largest **integer**
+  multiple that fits, centred. Downscaling a larger source is always preferred and
+  should use high-quality interpolation. The plate is the container; the icon is
+  content inside it.
 - **A miss is remembered for the session** (bounded set, ~512 domains, cleared when
   the setting is toggled back on) so scrolling past an iconless entry does not
   re-announce its domain on every pass.
