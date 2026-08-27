@@ -88,7 +88,7 @@ exact and both platforms make the same promise:
 - **Default off.** `AppSettingsDefaults.USE_GOOGLE_FAVICONS = false`; the user opts
   in from Settings, and the copy says what turning it on means.
 - **One host, ever:** `t0.gstatic.com`, requested as
-  `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=<percent-encoded https://domain>&size=128`.
+  `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=<percent-encoded https://domain>&size=256`.
   Deliberately the CDN and not `www.google.com/s2/favicons`, which answers 301 and
   redirects here — so "no other host is contacted" is true of the request that
   actually runs, not merely of the one that was made. **Redirects are refused by
@@ -96,6 +96,34 @@ exact and both platforms make the same promise:
   Nothing is ever requested from the site itself.
 - **Input is the domain only** — host with `www.` stripped, from the item's address
   envelope. No path, no query, no credential material.
+- **Lookup runs for the `login` category and nothing else.** The address envelope is
+  shared by all five categories but only holds a *site* for logins: for an identity
+  it holds an email address, for a note the first characters of the body, for a card
+  the cardholder's name. Feeding those to a domain parser is not a stretch — an
+  identity's `ayse@example.com` parses cleanly to `example.com`, and a single-token
+  note parses to whatever it happens to be. A user who enables site icons is
+  consenting to their *logins'* domains being looked up; they are not consenting to
+  their mail provider or the first line of a note. Gate on the category, not on how
+  URL-shaped the string happens to look — a filter over free text is a guess, and a
+  guess is the wrong instrument for deciding what leaves a vault. Both platforms
+  enforce this by making the category a required argument of the only function that
+  can produce a request, so a call site cannot assemble one from a bare string.
+- **Ask for `size=256`.** The CDN returns whatever the site actually publishes,
+  capped by the requested size — it does not synthesise resolution. Measured
+  2026-08-27: `github.com` returns 32×32 at every requested size, `netflix.com`
+  caps at 64×64, while `stackoverflow.com` and `garantibbva.com.tr` return 180×180
+  at `size=256` where `size=128` returns 128×128, and `migros.com.tr` returns
+  144×144. For the domains that cap below the request the response is
+  byte-identical, so asking for 256 costs nothing there and gains real resolution
+  everywhere else. Re-measure before changing this rather than reasoning about it.
+- **Never upscale a raster icon by a fractional factor.** A 40pt tile is 120px on a
+  3x screen; smooth-scaling a 32×32 source to fill it is what makes an icon look
+  cheap, and no request parameter can fix a site that publishes 32×32. So: inset
+  the icon inside its plate rather than filling the plate edge to edge, and when
+  the source is smaller than the target box draw it at the largest **integer**
+  multiple that fits, centred. Downscaling a larger source is always preferred and
+  should use high-quality interpolation. The plate is the container; the icon is
+  content inside it.
 - **A miss is remembered for the session** (bounded set, ~512 domains, cleared when
   the setting is toggled back on) so scrolling past an iconless entry does not
   re-announce its domain on every pass.
