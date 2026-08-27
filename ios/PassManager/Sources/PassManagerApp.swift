@@ -41,9 +41,11 @@ struct RootView: View {
             case .coldLocked, .warmLocked:
                 LockView()
             case .unlocked:
-                VaultListView()
+                MainTabView()
             }
         }
+        // The one place the accent is applied. Everything below inherits it, so
+        // no screen sets its own tint and none of them can drift apart.
         .tint(AppColor.primary)
         .background(AppColor.background)
         .sheet(isPresented: exportPassphrasePresented) {
