@@ -8,8 +8,6 @@ struct VaultListView: View {
     @State private var query: String = ""
     @State private var categoryFilter: ItemCategory?
     @State private var showingAdd = false
-    @State private var showingSettings = false
-    @State private var showingGenerator = false
 
     private var visibleItems: [VaultItemHeaderRow] {
         return session.filteredHeaders(query: query, category: categoryFilter)
@@ -17,13 +15,9 @@ struct VaultListView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                categoryChips
-
+            Group {
                 if session.itemCount == 0 {
                     emptyVault
-                } else if visibleItems.isEmpty {
-                    noMatches
                 } else {
                     itemList
                 }
@@ -33,24 +27,11 @@ struct VaultListView: View {
             .navigationBarTitleDisplayMode(.large)
             .searchable(text: $query, prompt: "Search vault")
             .toolbar {
-                // `.navigationBarLeading` / `.navigationBarTrailing`, not
-                // `.topBarLeading` / `.topBarTrailing` — those are iOS 17.
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        showingSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                    }
-                    .accessibilityLabel("Settings")
-                }
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    Button {
-                        showingGenerator = true
-                    } label: {
-                        Image(systemName: "dice")
-                    }
-                    .accessibilityLabel("Password generator")
-
+                // Settings and the generator are tabs now, so `+` is the only
+                // action left here — which is what a trailing nav-bar slot is
+                // for. `.navigationBarTrailing`, not `.topBarTrailing`: that
+                // spelling is iOS 17 and the deployment target is 16.
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showingAdd = true
                     } label: {
@@ -66,16 +47,18 @@ struct VaultListView: View {
         .sheet(isPresented: $showingAdd) {
             AddEditItemView(itemID: nil)
         }
-        .sheet(isPresented: $showingSettings) {
-            SettingsView()
-        }
-        .sheet(isPresented: $showingGenerator) {
-            GeneratorView(constraintCategory: nil, onUse: nil)
-        }
     }
 
     // MARK: - Pieces
 
+    /// The filter chips, shaped to sit as the FIRST ROW OF THE LIST rather than
+    /// above it.
+    ///
+    /// Pinned above the list they permanently occupied the top of the screen and
+    /// the last chip was clipped by the enclosing frame with no way to reach it.
+    /// As a list row the strip scrolls away with the content, and the horizontal
+    /// padding moves INSIDE the scroll view so the trailing chip can scroll fully
+    /// into view instead of being cut off at the edge.
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -92,9 +75,12 @@ struct VaultListView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
         }
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 
     private func chip(
@@ -121,16 +107,45 @@ struct VaultListView: View {
     private var itemList: some View {
         List {
             Section {
-                ForEach(visibleItems, id: \.id) { header in
-                    NavigationLink(value: header.id) {
-                        row(for: header)
-                    }
+                categoryChips
+            }
+
+            if visibleItems.isEmpty {
+                Section {
+                    noMatches
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
-                .onDelete(perform: delete)
-            } footer: {
-                Text(countLine)
-                    .font(.footnote)
-                    .foregroundStyle(AppColor.onSurfaceVariant)
+            } else {
+                Section {
+                    ForEach(visibleItems, id: \.id) { header in
+                        NavigationLink(value: header.id) {
+                            row(for: header)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                session.deleteItem(id: header.id)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            copyPasswordButton(for: header)
+                        }
+                        .contextMenu {
+                            copyPasswordButton(for: header)
+                            Button(role: .destructive) {
+                                session.deleteItem(id: header.id)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    }
+                } footer: {
+                    Text(countLine)
+                        .font(AppFont.footnote)
+                        .foregroundStyle(AppColor.onSurfaceVariant)
+                }
             }
         }
         .listStyle(.insetGrouped)
@@ -138,20 +153,55 @@ struct VaultListView: View {
         .background(AppColor.background)
     }
 
+    /// Copy-password, offered only where the category actually has one.
+    ///
+    /// This is the one place in the list that reads a payload, and it does so
+    /// ONLY in response to a deliberate tap on a single row — never to render
+    /// one. Rendering stays on the header cache.
+    @ViewBuilder
+    private func copyPasswordButton(for header: VaultItemHeaderRow) -> some View {
+        if header.category.hasCopyablePassword {
+            Button {
+                copyPassword(for: header.id)
+            } label: {
+                Label("Copy password", systemImage: "doc.on.doc")
+            }
+            .tint(AppColor.primary)
+        }
+    }
+
     private func row(for header: VaultItemHeaderRow) -> some View {
         HStack(spacing: 12) {
-            CategoryTile(category: header.category)
+            CategoryTile(category: header.category, announcesCategory: true)
             VStack(alignment: .leading, spacing: 2) {
                 // The title comes from the decrypted header cache. Before that
                 // pass completes it is empty, and the row says so rather than
                 // showing a placeholder that looks like real data.
                 Text(displayTitle(for: header))
-                    .font(.body.weight(.medium))
+                    .font(AppFont.rowTitle)
                     .foregroundStyle(AppColor.onSurface)
                     .lineLimit(1)
-                Text(header.category.label)
-                    .font(.caption)
-                    .foregroundStyle(AppColor.onSurfaceVariant)
+
+                // The subtitle is the item's IDENTIFYING secondary value — the
+                // login's address, the card's cardholder, the bank's name. It
+                // used to repeat the category, which the tile to its left
+                // already says in both colour and glyph, so the row spent a
+                // whole line telling you nothing.
+                //
+                // This is the third envelope, decrypted by the header cache
+                // alongside the title. Rendering a row never touches the
+                // payload.
+                //
+                // An item whose envelope is genuinely empty gets a single-line
+                // row. That is correct, not a missing subtitle.
+                let subtitle = session.subtitle(for: header.id)
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(AppFont.rowSubtitle)
+                        .foregroundStyle(AppColor.onSurfaceVariant)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -163,53 +213,66 @@ struct VaultListView: View {
         return title.isEmpty ? "Decrypting…" : title
     }
 
+    private func copyPassword(for id: String) {
+        guard let payload = session.payload(for: id) else {
+            return
+        }
+        switch payload {
+        case .login(let value):
+            Clipboard.copySecret(value.password)
+        case .bank(let value):
+            Clipboard.copySecret(value.password)
+        case .card, .note, .identity:
+            break
+        }
+    }
+
     private var countLine: String {
         let count = visibleItems.count
         return count == 1 ? "1 item" : "\(count) items"
     }
 
     private var emptyVault: some View {
-        placeholder(
-            symbol: "lock.open.rotation",
-            title: "Your vault is empty",
-            message: "Tap + to add your first login, card, note, identity or bank record."
-        )
-    }
-
-    private var noMatches: some View {
-        placeholder(
-            symbol: "magnifyingglass",
-            title: "No matches",
-            message: "Nothing here matches that search."
-        )
-    }
-
-    private func placeholder(symbol: String, title: String, message: String) -> some View {
         VStack(spacing: 12) {
             Spacer()
-            Image(systemName: symbol)
-                .font(.system(size: 44))
-                .foregroundStyle(AppColor.outline)
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(AppColor.onSurface)
-            Text(message)
-                .font(.subheadline)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(AppColor.onSurfaceVariant)
-                .padding(.horizontal, 40)
+            placeholder(
+                symbol: "lock.open.rotation",
+                title: "Your vault is empty",
+                message: "Tap + to add your first login, card, note, identity or bank record."
+            )
             Spacer()
             Spacer()
         }
         .frame(maxWidth: .infinity)
     }
 
-    private func delete(at offsets: IndexSet) {
-        let items = visibleItems
-        for index in offsets {
-            if index < items.count {
-                session.deleteItem(id: items[index].id)
-            }
+    /// Kept INSIDE the list rather than replacing it, so the chip that filtered
+    /// everything away is still on screen to be switched off again.
+    private var noMatches: some View {
+        placeholder(
+            symbol: "magnifyingglass",
+            title: "No matches",
+            message: "Nothing here matches that filter."
+        )
+        .padding(.vertical, 28)
+    }
+
+    private func placeholder(symbol: String, title: String, message: String) -> some View {
+        VStack(spacing: 12) {
+            // `.system(size:)` is glyph sizing, not text — this is artwork.
+            Image(systemName: symbol)
+                .font(.system(size: 40))
+                .foregroundStyle(AppColor.outline)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(AppColor.onSurface)
+            Text(message)
+                .font(AppFont.rowSubtitle)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(AppColor.onSurfaceVariant)
+                .padding(.horizontal, 32)
         }
+        .frame(maxWidth: .infinity)
     }
 }
