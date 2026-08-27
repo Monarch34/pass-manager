@@ -38,9 +38,13 @@ final class ScreenshotTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
-        // Leave the simulator as it was found, or the next test class inherits a
-        // dark appearance it never asked for.
-        XCUIDevice.shared.appearance = .unspecified
+        // Leave the simulator light, or the next test class inherits the dark
+        // appearance this one finished in.
+        //
+        // `.unspecified` is the tempting value here and the simulator REFUSES
+        // it — "Requested appearance value (0) is not valid". It exists to mean
+        // "no override" when reading, not as something you may assign.
+        XCUIDevice.shared.appearance = .light
     }
 
     func testCaptureScreens() {
@@ -67,8 +71,15 @@ final class ScreenshotTests: XCTestCase {
     private func runTour(appearance: XCUIDevice.Appearance, suffix: String) {
         self.suffix = suffix
 
-        // Set BEFORE launch so the app comes up already in this scheme and no
-        // screenshot catches it mid-transition.
+        // Set BEFORE launch so the system chrome comes up already in this scheme
+        // and no screenshot catches it mid-transition.
+        //
+        // This alone is NOT enough, and the first run proved it: the assignment
+        // reported success while the simulator stayed light, and every "dark"
+        // screenshot came back light apart from the clock. So the app is ALSO
+        // told which scheme to render, via a launch argument it honours with
+        // `.preferredColorScheme`. Belt and braces, because a silently-light
+        // dark set is worse than no dark set — it looks like evidence.
         XCUIDevice.shared.appearance = appearance
 
         app = XCUIApplication()
@@ -76,7 +87,8 @@ final class ScreenshotTests: XCTestCase {
             "-uiTestReset",
             "-uiTestRelaxedKeychain",
             "-uiTestSeed",
-            "-uiTestImportFixture"
+            "-uiTestImportFixture",
+            appearance == .dark ? "-uiTestAppearanceDark" : "-uiTestAppearanceLight"
         ]
         app.launch()
 

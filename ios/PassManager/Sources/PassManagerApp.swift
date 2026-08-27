@@ -11,6 +11,7 @@ struct PassManagerApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(session)
+                .preferredColorScheme(Self.forcedColorScheme)
                 .task {
                     session.bootstrap()
                 }
@@ -18,6 +19,27 @@ struct PassManagerApp: App {
         .onChange(of: scenePhase) { phase in
             session.handleScenePhase(phase)
         }
+    }
+
+    /// Appearance override for the screenshot tour. `nil` in every normal
+    /// launch, which means "follow the system" — the app ships with no theme
+    /// setting and this does not add one.
+    ///
+    /// The tour is supposed to drive this with `XCUIDevice.shared.appearance`,
+    /// and on the CI runner that silently does nothing: the assignment reports
+    /// success, the simulator stays light, and the entire "dark" set came back
+    /// byte-for-byte light apart from the clock. Since the artefact IS the
+    /// deliverable, the appearance is forced from inside the app where it cannot
+    /// fail quietly.
+    private static var forcedColorScheme: ColorScheme? {
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("-uiTestAppearanceDark") {
+            return .dark
+        }
+        if arguments.contains("-uiTestAppearanceLight") {
+            return .light
+        }
+        return nil
     }
 }
 
