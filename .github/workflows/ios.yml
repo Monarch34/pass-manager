@@ -208,6 +208,37 @@ jobs:
           APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -type d -name "PassManager.app" -path "*iphonesimulator*" | head -1)
           echo "Found: $APP_PATH"
           mkdir -p out && cp -R "$APP_PATH" out/
+
+      # A .app that a browser-streaming service (Appetize and friends) can install
+      # into a simulator — the only way to hand this app to someone who has no Mac
+      # and let them actually touch it.
+      #
+      # `ditto`, not `zip` and not upload-artifact's own zipping: neither of those
+      # preserves the executable bit or the symlinks inside a bundle, and a .app
+      # whose binary is not +x will not install. Nesting a correct zip inside the
+      # artifact's zip is what carries the permissions across.
+      #
+      # PlugIns holds the XCTest runner injected during the test run. It is dead
+      # weight for a demo build and confuses installers that scan for extensions.
+      - name: Package the simulator app for browser streaming
+        if: success() && steps.probe.outputs.present == 'true'
+        continue-on-error: true
+        run: |
+          set -x
+          rm -rf out/PassManager.app/PlugIns
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent out/PassManager.app dist/PassManager-simulator.zip
+          ls -la dist
+
+      - name: Upload streamable app bundle
+        if: always() && steps.probe.outputs.present == 'true'
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-app
+          path: dist/PassManager-simulator.zip
+          if-no-files-found: warn
+
       - name: Upload logs and artifact
         if: always() && steps.probe.outputs.present == 'true'
         uses: actions/upload-artifact@v4
