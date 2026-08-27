@@ -445,10 +445,24 @@ final class ScreenshotTests: XCTestCase {
         return app.buttons[label]
     }
 
+    /// Taps an element, SCROLLING TO IT FIRST if it is below the fold.
+    ///
+    /// Settings grew a section when site icons arrived, which pushed "Lock now"
+    /// off the bottom of the screen — and the tour would have skipped the lock
+    /// capture entirely while reporting only "the lock row was not reachable".
+    /// A screen with more on it than fits is a normal screen, not a broken one,
+    /// so the tour scrolls like a user would rather than the app being kept
+    /// short enough for a test to reach everything without moving.
+    ///
+    /// The swipe happens only when the element exists and cannot be hit, which
+    /// is the exact case where the tap would have failed anyway.
     @discardableResult
     private func tap(_ element: XCUIElement, timeout: TimeInterval = 10) -> Bool {
         guard element.waitForExistence(timeout: timeout) else {
             return false
+        }
+        if !element.isHittable {
+            app.swipeUp()
         }
         guard element.isHittable else {
             return false

@@ -201,85 +201,25 @@ struct VaultListView: View {
     }
 
     private func row(for header: VaultItemHeaderRow) -> some View {
-        HStack(spacing: 12) {
-            // The tile becomes the SITE'S icon when the user has turned site
-            // icons on and one can be had; otherwise it is the category tile it
-            // has always been, with the same footprint and the same corner
-            // radius, so the row does not move either way.
+        // The title comes from the decrypted header cache. Before that pass
+        // completes it is empty, and the row says so rather than showing a
+        // placeholder that looks like real data.
+        let title = displayTitle(for: header)
+        return VaultRow(
+            category: header.category,
+            title: title,
+            // The subtitle is the item's IDENTIFYING secondary value — the
+            // login's address, the card's cardholder, the bank's name. It used to
+            // repeat the category, which the tile to its left already says in
+            // both colour and glyph, so the row spent a whole line telling you
+            // nothing.
             //
-            // The address envelope is what the tile is handed, and a domain is
-            // all that is ever taken out of it — see `SiteIcon`.
-            SiteIconTile(
-                category: header.category,
-                address: session.subtitle(for: header.id),
-                useSiteIcons: session.useSiteIcons,
-                // Exactly one element in this row speaks the category: the tile
-                // when it is showing one, the glyph on the subtitle line when the
-                // tile has been given over to the site.
-                announcesCategory: !session.useSiteIcons
-            )
-            VStack(alignment: .leading, spacing: 2) {
-                // The title comes from the decrypted header cache. Before that
-                // pass completes it is empty, and the row says so rather than
-                // showing a placeholder that looks like real data.
-                let title = displayTitle(for: header)
-                Text(title)
-                    .font(AppFont.rowTitle)
-                    .foregroundStyle(AppColor.onSurface)
-                    .lineLimit(1)
-
-                // The subtitle is the item's IDENTIFYING secondary value — the
-                // login's address, the card's cardholder, the bank's name. It
-                // used to repeat the category, which the tile to its left
-                // already says in both colour and glyph, so the row spent a
-                // whole line telling you nothing.
-                //
-                // This is the third envelope, decrypted by the header cache
-                // alongside the title. Rendering a row never touches the
-                // payload.
-                subtitleLine(for: header, title: title)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 4)
-    }
-
-    /// The second line of a row, which changes shape with the site-icon setting.
-    ///
-    /// WITH ICONS OFF this is what it has always been: the identifying value, or
-    /// nothing at all when there is none worth showing. The tile beside it is
-    /// still saying the category, and repeating that here is the exact mistake
-    /// this row was cured of.
-    ///
-    /// WITH ICONS ON the tile has been given over to the site, so the category
-    /// moves here as a small tinted glyph in front of the same value. It is drawn
-    /// for every row in that mode rather than only for rows whose icon actually
-    /// resolved — one rule for the whole list, no glyph appearing a beat late
-    /// when an image lands, and no ragged edge down the column where some rows
-    /// start with a glyph and others do not.
-    ///
-    /// A row with no identifying value falls back to the category's own name, so
-    /// the category never disappears entirely just because the tile stopped
-    /// carrying it.
-    @ViewBuilder
-    private func subtitleLine(for header: VaultItemHeaderRow, title: String) -> some View {
-        let value = subtitle(for: header, title: title)
-        if session.useSiteIcons {
-            HStack(spacing: 5) {
-                CategoryGlyph(category: header.category)
-                subtitleText(value ?? header.category.label)
-            }
-        } else if let value = value {
-            subtitleText(value)
-        }
-    }
-
-    private func subtitleText(_ value: String) -> some View {
-        return Text(value)
-            .font(AppFont.rowSubtitle)
-            .foregroundStyle(AppColor.onSurfaceVariant)
-            .lineLimit(1)
-            .truncationMode(.middle)
+            // This is the third envelope, decrypted by the header cache alongside
+            // the title. Rendering a row never touches the payload.
+            subtitle: subtitle(for: header, title: title),
+            address: session.subtitle(for: header.id),
+            useSiteIcons: session.useSiteIcons
+        )
     }
 
     private func displayTitle(for header: VaultItemHeaderRow) -> String {
@@ -366,5 +306,84 @@ struct VaultListView: View {
                 .padding(.horizontal, 32)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// One vault entry: tile, title, identifying value.
+///
+/// A view rather than a function on the list, because it needs STATE — whether
+/// its tile is currently showing a site icon. That answer arrives from the
+/// network long after the row was laid out, and it decides where the category
+/// lives.
+///
+/// THE RULE IS "THE CATEGORY IS WHEREVER THE TILE ISN'T." While the tile is the
+/// category tile, the tile says it and the subtitle line stays exactly what it
+/// has always been: the identifying value, or a single-line row when there is
+/// none worth showing. The moment the tile becomes a site's icon, the category
+/// moves onto the subtitle line as a small tinted glyph.
+///
+/// Drawn this way rather than "a glyph on every row while the setting is on",
+/// which is what the first version did and what the screenshot then argued
+/// against: on a row still showing its category tile, the glyph is the same
+/// symbol in the same tint twice, twelve points apart — the exact repetition
+/// this row was cured of. The cost of the narrower rule is that the glyph
+/// arrives with the image rather than with the row, which is one small shift of
+/// one line, once.
+private struct VaultRow: View {
+
+    let category: ItemCategory
+    let title: String
+    /// `nil` when there is nothing worth putting on a second line.
+    let subtitle: String?
+    /// The address envelope. Only a domain is ever taken out of it.
+    let address: String
+    let useSiteIcons: Bool
+
+    @State private var tileShowsSiteIcon = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SiteIconTile(
+                category: category,
+                address: address,
+                useSiteIcons: useSiteIcons,
+                // Exactly one element speaks the category to VoiceOver: the tile
+                // while it is one, the glyph once it is not.
+                announcesCategory: !tileShowsSiteIcon,
+                onIconVisible: { tileShowsSiteIcon = $0 }
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(AppFont.rowTitle)
+                    .foregroundStyle(AppColor.onSurface)
+                    .lineLimit(1)
+                subtitleLine
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var subtitleLine: some View {
+        if tileShowsSiteIcon {
+            HStack(spacing: 5) {
+                CategoryGlyph(category: category)
+                // A row with no identifying value shows the category's own name
+                // here, so the category never disappears entirely just because
+                // the tile stopped carrying it.
+                subtitleText(subtitle ?? category.label)
+            }
+        } else if let subtitle = subtitle {
+            subtitleText(subtitle)
+        }
+    }
+
+    private func subtitleText(_ value: String) -> some View {
+        return Text(value)
+            .font(AppFont.rowSubtitle)
+            .foregroundStyle(AppColor.onSurfaceVariant)
+            .lineLimit(1)
+            .truncationMode(.middle)
     }
 }

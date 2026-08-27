@@ -32,6 +32,13 @@ struct SiteIconTile: View {
     /// carrying the category. When an icon IS showing, the category is carried
     /// beside the subtitle instead and this tile must not say it twice.
     var announcesCategory: Bool = false
+    /// Called when this tile starts or stops showing a real site icon.
+    ///
+    /// The tile is the only place that knows — the answer arrives from the
+    /// network, long after the row was laid out — and the row needs it, because
+    /// the category has to move exactly when the tile stops carrying it and not
+    /// one row sooner.
+    var onIconVisible: ((Bool) -> Void)? = nil
 
     /// The icon AND the domain it belongs to, together.
     ///
@@ -88,13 +95,12 @@ struct SiteIconTile: View {
         .task(id: domain) {
             guard let domain = domain else {
                 loaded = nil
+                onIconVisible?(false)
                 return
             }
-            if let image = await SiteIconLoader.shared.image(for: domain) {
-                loaded = Loaded(domain: domain, image: image)
-            } else {
-                loaded = nil
-            }
+            let image = await SiteIconLoader.shared.image(for: domain)
+            loaded = image.map { Loaded(domain: domain, image: $0) }
+            onIconVisible?(image != nil)
         }
     }
 }
