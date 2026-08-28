@@ -32,7 +32,9 @@ data class ViewItemUiState(
     val error: UserMessage? = null,
     val isDeleted: Boolean = false,
     val passwordVisible: Boolean = false,
-    val useGoogleFavicons: Boolean = AppSettingsDefaults.USE_GOOGLE_FAVICONS
+    val useGoogleFavicons: Boolean = AppSettingsDefaults.USE_GOOGLE_FAVICONS,
+    /** Row timestamp, off the envelope rather than the payload — no decrypt needed to show it. */
+    val updatedAtMs: Long? = null
 ) {
     /** Convenience derived from the sealed payload type — no string tag needed. */
     val category: ItemCategory get() = payload?.category ?: ItemCategory.LOGIN
@@ -94,7 +96,12 @@ class ViewItemViewModel @Inject constructor(
                 try {
                     val decrypted = decryptItemUseCase(vaultItem)
                     _uiState.update {
-                        it.copy(payload = decrypted, isLoading = false, error = null)
+                        it.copy(
+                            payload = decrypted,
+                            isLoading = false,
+                            error = null,
+                            updatedAtMs = vaultItem.updatedAt
+                        )
                     }
                 } catch (e: Exception) {
                     _uiState.update {

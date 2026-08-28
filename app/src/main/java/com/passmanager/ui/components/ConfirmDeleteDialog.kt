@@ -12,19 +12,20 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.passmanager.R
 
 /**
@@ -38,7 +39,14 @@ fun ConfirmDeleteDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    // The platform default dialog width is around 300.dp and ignores what this layout asks for,
+    // which put the two actions under the stacking threshold below and left them centred in a
+    // column on every phone. Taking the width lets the padding and the max width here mean what
+    // they say, and the stacked branch goes back to being for genuinely narrow screens.
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -64,7 +72,9 @@ fun ConfirmDeleteDialog(
                     ) {
                         Text(
                             text = title,
-                            style = MaterialTheme.typography.headlineSmall,
+                            style = MaterialTheme.typography.headlineSmall.copy(
+                                fontWeight = FontWeight.Normal
+                            ),
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.Start
@@ -79,24 +89,36 @@ fun ConfirmDeleteDialog(
                         )
                         Spacer(Modifier.height(24.dp))
 
+                        // Both actions are text buttons, and the destructive one is red type
+                        // rather than a red slab: a filled error button is the largest, loudest
+                        // thing on a dialog whose whole point is to give the reader a moment to
+                        // reconsider, and it sits exactly where a confirming tap would land.
                         val cancelButton: @Composable (Modifier) -> Unit = { mod ->
-                            OutlinedButton(
+                            TextButton(
                                 onClick = onDismiss,
-                                modifier = mod.heightIn(min = 48.dp)
+                                modifier = mod.heightIn(min = 48.dp),
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.primary
+                                )
                             ) {
-                                Text(stringResource(R.string.cancel))
+                                Text(
+                                    stringResource(R.string.cancel).uppercase(),
+                                    style = MaterialTheme.typography.labelLarge
+                                )
                             }
                         }
                         val deleteButton: @Composable (Modifier) -> Unit = { mod ->
-                            Button(
+                            TextButton(
                                 onClick = onConfirm,
                                 modifier = mod.heightIn(min = 48.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.error,
-                                    contentColor = MaterialTheme.colorScheme.onError
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
                                 )
                             ) {
-                                Text(stringResource(R.string.item_delete_button))
+                                Text(
+                                    stringResource(R.string.item_delete_button).uppercase(),
+                                    style = MaterialTheme.typography.labelLarge
+                                )
                             }
                         }
 
@@ -111,11 +133,14 @@ fun ConfirmDeleteDialog(
                         } else {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(
+                                    8.dp,
+                                    Alignment.End
+                                ),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                cancelButton(Modifier.weight(1f))
-                                deleteButton(Modifier.weight(1f))
+                                cancelButton(Modifier)
+                                deleteButton(Modifier)
                             }
                         }
                     }

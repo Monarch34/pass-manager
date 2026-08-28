@@ -6,45 +6,26 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FabPosition
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import com.passmanager.ui.components.AppSnackbarHost
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,21 +33,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.passmanager.R
 import com.passmanager.domain.model.ItemCategory
-import com.passmanager.domain.model.VaultSortOrder
 import com.passmanager.ui.components.ConfirmDeleteDialog
 import com.passmanager.ui.components.ErrorSnackbarEffect
 import com.passmanager.ui.components.SkeletonLoading
@@ -77,7 +54,6 @@ fun VaultListScreen(
     /** When the vault group filter is a specific category, add-item opens with that category selected. */
     onNavigateToAddItem: (filterCategory: ItemCategory?) -> Unit,
     onNavigateToViewItem: (String) -> Unit,
-    onNavigateToSettings: () -> Unit,
     onOpenDrawer: () -> Unit = {},
     viewModel: VaultListViewModel = hiltViewModel()
 ) {
@@ -124,47 +100,22 @@ fun VaultListScreen(
     Scaffold(
         snackbarHost = { AppSnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
-        floatingActionButtonPosition = FabPosition.Center,
+        // One button, and it adds an item. Lock and Settings used to flank it as satellite FABs,
+        // which put three floating controls over the list and made the primary action the middle
+        // of three equals; both now live in the drawer, where the rest of the navigation is.
         floatingActionButton = {
             AnimatedVisibility(
                 visible = !uiState.isSelectionMode,
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                FloatingActionButton(
+                    onClick = { onNavigateToAddItem(uiState.categoryFilter) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = RoundedCornerShape(18.dp)
                 ) {
-                    SmallFloatingActionButton(
-                        onClick = { viewModel.lock() },
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        shape = MaterialTheme.shapes.large
-                    ) {
-                        Icon(
-                            Icons.Default.Lock,
-                            contentDescription = stringResource(R.string.vault_lock_button)
-                        )
-                    }
-                    FloatingActionButton(
-                        onClick = { onNavigateToAddItem(uiState.categoryFilter) },
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        shape = MaterialTheme.shapes.large
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.item_add_title))
-                    }
-                    SmallFloatingActionButton(
-                        onClick = onNavigateToSettings,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        shape = MaterialTheme.shapes.large
-                    ) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = stringResource(R.string.nav_settings)
-                        )
-                    }
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.item_add_title))
                 }
             }
         }
@@ -214,10 +165,14 @@ fun VaultListScreen(
             // over a populated vault during the first pipeline pass.
             if (uiState.hasLoaded) {
                 Text(
-                    text = stringResource(R.string.vault_item_count, filteredItems.size),
+                    text = pluralStringResource(
+                        R.plurals.vault_item_count,
+                        filteredItems.size,
+                        filteredItems.size
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 2.dp)
+                    modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 2.dp)
                 )
             }
 
@@ -230,6 +185,7 @@ fun VaultListScreen(
             } else if (uiState.hasLoaded && filteredItems.isEmpty()) {
                 VaultListEmptyState(
                     searchQuery = uiState.searchQuery,
+                    isFiltered = uiState.categoryFilter != null,
                     modifier = Modifier.weight(1f).fillMaxSize()
                 )
             } else {
@@ -237,6 +193,7 @@ fun VaultListScreen(
                     state = listState,
                     flingBehavior = vaultListFling,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 96.dp),
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
@@ -262,8 +219,6 @@ fun VaultListScreen(
                             onToggleSelection = onToggleSelection
                         )
                     }
-
-                    item { Spacer(Modifier.height(80.dp)) }
                 }
             }
         }

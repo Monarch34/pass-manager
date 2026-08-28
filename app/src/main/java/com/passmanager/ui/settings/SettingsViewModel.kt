@@ -180,6 +180,11 @@ class SettingsViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
+    /** Locks the vault from Settings, without waiting out the auto-lock timeout. */
+    fun lock() {
+        lockStateProvider.lock()
+    }
+
     fun toggleBiometric() {
         if (_uiState.value.biometricEnabled) disableBiometric() else prepareBiometricEnrollment()
     }

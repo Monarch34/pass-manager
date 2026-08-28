@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,15 +11,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHostState
@@ -43,6 +38,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
@@ -51,7 +47,9 @@ import com.passmanager.ui.components.AppShieldLogo
 import com.passmanager.ui.components.BiometricPromptEffect
 import com.passmanager.ui.components.ErrorSnackbarEffect
 import com.passmanager.ui.components.LoadingButton
-import com.passmanager.ui.components.SecureTextField
+import com.passmanager.ui.components.PillOutlinedButton
+import com.passmanager.ui.components.PillPassphraseField
+import com.passmanager.ui.theme.CardShape
 import com.passmanager.ui.components.shakeOnTrigger
 
 @Composable
@@ -124,17 +122,18 @@ fun LockScreen(
             ) {
                 AppShieldLogo(size = 112.dp)
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(20.dp))
                 Text(
                     stringResource(R.string.lock_title),
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onBackground
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     text = stringResource(R.string.lock_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
                 )
                 // A permanently lost device key is not something a snackbar can carry: the user
                 // needs a standing explanation and a way out, so it stays on screen with the one
@@ -143,7 +142,7 @@ fun LockScreen(
                     Spacer(Modifier.height(24.dp))
                     Surface(
                         color = MaterialTheme.colorScheme.errorContainer,
-                        shape = MaterialTheme.shapes.medium,
+                        shape = CardShape,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
@@ -160,9 +159,9 @@ fun LockScreen(
                     }
                 }
 
-                Spacer(Modifier.height(36.dp))
+                Spacer(Modifier.height(26.dp))
 
-                SecureTextField(
+                PillPassphraseField(
                     value = passphrase,
                     onValueChange = { passphrase = it },
                     label = stringResource(R.string.lock_passphrase_hint),
@@ -208,42 +207,24 @@ fun LockScreen(
                         }
                 )
 
+                // No "or" rule between the two buttons. They are alternatives, not a fork: the
+                // divider made the second one look like a fallback for when the first had failed.
                 if (uiState.biometricAvailable) {
-                    Spacer(Modifier.height(20.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        HorizontalDivider(modifier = Modifier.weight(1f))
-                        Text(
-                            text = stringResource(R.string.lock_or_divider),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        HorizontalDivider(modifier = Modifier.weight(1f))
-                    }
-                    Spacer(Modifier.height(20.dp))
-                    OutlinedButton(
+                    Spacer(Modifier.height(14.dp))
+                    PillOutlinedButton(
+                        text = stringResource(R.string.lock_biometric_button),
+                        icon = Icons.Default.Fingerprint,
+                        enabled = !uiState.isLoading,
                         onClick = {
                             view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
                             viewModel.prepareBiometricCipher()
                         },
-                        enabled = !uiState.isLoading,
-                        shape = MaterialTheme.shapes.extraLarge,
                         modifier = Modifier
                             .fillMaxWidth()
                             .semantics {
                                 contentDescription = biometricButtonLabel
                             }
-                    ) {
-                        Icon(
-                            Icons.Default.Fingerprint,
-                            contentDescription = null
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.lock_biometric_button))
-                    }
+                    )
                 }
             }
         }

@@ -3,25 +3,20 @@ package com.passmanager.ui.vault
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,9 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -47,7 +40,9 @@ import androidx.compose.ui.unit.dp
 import com.passmanager.R
 import com.passmanager.domain.model.ItemCategory
 import com.passmanager.domain.model.VaultSortOrder
-import com.passmanager.ui.components.AppShieldLogo
+import com.passmanager.ui.components.CategoryChip
+import com.passmanager.ui.components.PanelEmptyState
+import com.passmanager.ui.components.PanelHeader
 import com.passmanager.ui.model.tint
 
 /** Width of the fade drawn over an edge of a chip row that has more chips past it. */
@@ -67,26 +62,14 @@ fun VaultListTopBar(
     modifier: Modifier = Modifier
 ) {
     if (isSelectionMode) {
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(start = 8.dp, end = 4.dp, top = 12.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+        PanelHeader(
+            title = stringResource(R.string.vault_selected_count, selectedCount),
+            modifier = modifier,
+            large = true,
+            navigationIcon = Icons.Default.Close,
+            navigationContentDescription = stringResource(R.string.action_close),
+            onNavigationClick = onClearSelection
         ) {
-            IconButton(onClick = onClearSelection) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = stringResource(R.string.action_close),
-                    tint = MaterialTheme.colorScheme.onBackground
-                )
-            }
-            Spacer(Modifier.width(4.dp))
-            Text(
-                stringResource(R.string.vault_selected_count, selectedCount),
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.weight(1f)
-            )
             IconButton(onClick = onShowDeleteDialog) {
                 Icon(
                     Icons.Default.Delete,
@@ -96,26 +79,14 @@ fun VaultListTopBar(
             }
         }
     } else {
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(start = 8.dp, end = 4.dp, top = 12.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+        PanelHeader(
+            title = stringResource(R.string.vault_title),
+            modifier = modifier,
+            large = true,
+            navigationIcon = Icons.Default.Menu,
+            navigationContentDescription = stringResource(R.string.nav_open_drawer),
+            onNavigationClick = onOpenDrawer
         ) {
-            IconButton(onClick = onOpenDrawer) {
-                Icon(
-                    Icons.Default.Menu,
-                    contentDescription = stringResource(R.string.nav_open_drawer),
-                    tint = MaterialTheme.colorScheme.onBackground
-                )
-            }
-            Spacer(Modifier.width(4.dp))
-            Text(
-                stringResource(R.string.vault_title),
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.weight(1f)
-            )
             var sortMenuExpanded by remember { mutableStateOf(false) }
             Box {
                 IconButton(onClick = { sortMenuExpanded = true }) {
@@ -156,77 +127,59 @@ fun VaultListTopBar(
     }
 }
 
+/**
+ * The category filter strip. It carries no heading of its own: six chips reading All, Login, Card,
+ * Note, Identity, Bank are self-evidently a filter, and the label above them was a line of prose
+ * between the search field and the results that nobody needed twice.
+ */
 @Composable
 fun VaultListFiltersRow(
     categoryFilter: ItemCategory?,
     onFilterChange: (ItemCategory?) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier) {
-        Text(
-            text = stringResource(R.string.vault_group_filter_label),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 2.dp)
-        )
-        val listState = rememberLazyListState()
-        // Six chips do not fit on a 1080px screen. Fading only the side that actually has more
-        // chips behind it says "keep scrolling" without shrinking the labels.
-        val startFade by animateFloatAsState(
-            targetValue = if (listState.canScrollBackward) 1f else 0f,
-            label = "chipRowStartFade"
-        )
-        val endFade by animateFloatAsState(
-            targetValue = if (listState.canScrollForward) 1f else 0f,
-            label = "chipRowEndFade"
-        )
+    val listState = rememberLazyListState()
+    // Six chips do not fit on a 1080px screen. Fading only the side that actually has more
+    // chips behind it says "keep scrolling" without shrinking the labels.
+    val startFade by animateFloatAsState(
+        targetValue = if (listState.canScrollBackward) 1f else 0f,
+        label = "chipRowStartFade"
+    )
+    val endFade by animateFloatAsState(
+        targetValue = if (listState.canScrollForward) 1f else 0f,
+        label = "chipRowEndFade"
+    )
 
-        LazyRow(
-            state = listState,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = ChipRowEdgePadding, vertical = 4.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalEdgeFade(startFraction = startFade, endFraction = endFade)
-        ) {
-            item(key = "all") {
-                FilterChip(
-                    selected = categoryFilter == null,
-                    onClick = { onFilterChange(null) },
-                    label = { Text(stringResource(R.string.vault_group_all)) },
-                    // The brand plays the same role for "All" that each category tint plays for
-                    // its own chip; the default indigo selection belonged to neither system.
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = onTintColor(MaterialTheme.colorScheme.primary)
-                    )
-                )
-            }
-            items(ItemCategory.entries, key = { it.name }) { category ->
-                FilterChip(
-                    selected = categoryFilter == category,
-                    onClick = {
-                        onFilterChange(
-                            if (categoryFilter == category) null else category
-                        )
-                    },
-                    label = { Text(category.label) },
-                    colors = categoryFilterChipColors(category)
-                )
-            }
+    LazyRow(
+        state = listState,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = ChipRowEdgePadding, vertical = 4.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalEdgeFade(startFraction = startFade, endFraction = endFade)
+    ) {
+        item(key = "all") {
+            // "All" is not a category, so it borrows the brand — the same role each category tint
+            // plays for its own chip, without inventing a sixth hue for the absence of a filter.
+            CategoryChip(
+                label = stringResource(R.string.vault_group_all),
+                selected = categoryFilter == null,
+                tint = MaterialTheme.colorScheme.primary,
+                onClick = { onFilterChange(null) }
+            )
+        }
+        items(ItemCategory.entries, key = { it.name }) { category ->
+            CategoryChip(
+                label = category.label,
+                selected = categoryFilter == category,
+                tint = category.tint,
+                onClick = {
+                    onFilterChange(if (categoryFilter == category) null else category)
+                }
+            )
         }
     }
 }
-
-/**
- * Paints the selected chip in the category's own tint, the same one its rows and icons use, so a
- * category does not appear in two unrelated colors on the same screen.
- */
-@Composable
-internal fun categoryFilterChipColors(category: ItemCategory) = FilterChipDefaults.filterChipColors(
-    selectedContainerColor = category.tint,
-    selectedLabelColor = onTintColor(category.tint)
-)
 
 /** Black or white on [tint] — whichever wins the WCAG contrast ratio against it. */
 internal fun onTintColor(tint: Color): Color =
@@ -270,36 +223,26 @@ internal fun Modifier.horizontalEdgeFade(
         )
     }
 
+/**
+ * The two ways a vault list can be blank. They read differently on purpose: an empty vault is an
+ * invitation and says what to do next, whereas no matches is a dead end and says only that the
+ * filter is the reason — the shield logo used to stand in for both and answered neither.
+ */
 @Composable
 fun VaultListEmptyState(
     searchQuery: String,
+    isFiltered: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            AppShieldLogo(
-                size = 72.dp,
-                modifier = Modifier.alpha(0.45f)
-            )
-            Text(
-                text = if (searchQuery.isBlank()) stringResource(R.string.vault_empty_title)
-                else stringResource(R.string.vault_no_results, searchQuery),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (searchQuery.isBlank()) {
-                Text(
-                    text = stringResource(R.string.vault_empty_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                )
-            }
-        }
-    }
+    val nothingToShow = searchQuery.isBlank() && !isFiltered
+    PanelEmptyState(
+        icon = if (nothingToShow) Icons.Default.LockOpen else Icons.Default.SearchOff,
+        title = stringResource(
+            if (nothingToShow) R.string.vault_empty_title else R.string.vault_no_matches_title
+        ),
+        message = stringResource(
+            if (nothingToShow) R.string.vault_empty_hint else R.string.vault_no_matches_hint
+        ),
+        modifier = modifier
+    )
 }

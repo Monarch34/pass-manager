@@ -14,6 +14,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -37,6 +38,9 @@ fun MainTabNavHost(
     openSettingsOnStart: Boolean = false
 ) {
     val navController = rememberNavController()
+    val drawerViewModel: AppDrawerViewModel = hiltViewModel()
+    val drawerItemCount by drawerViewModel.itemCount.collectAsStateWithLifecycle()
+    val desktopConnected by drawerViewModel.desktopConnected.collectAsStateWithLifecycle()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -73,6 +77,8 @@ fun MainTabNavHost(
         drawerContent = {
             AppDrawerContent(
                 currentRoute = currentRoute,
+                itemCount = drawerItemCount,
+                desktopConnected = desktopConnected,
                 onItemClick = { item ->
                     scope.launch { drawerState.close() }
                     navController.navigate(item.route) {
@@ -80,6 +86,10 @@ fun MainTabNavHost(
                         launchSingleTop = true
                         restoreState = true
                     }
+                },
+                onLockNow = {
+                    scope.launch { drawerState.close() }
+                    drawerViewModel.lock()
                 }
             )
         }
@@ -108,13 +118,6 @@ fun MainTabNavHost(
                         )
                     },
                     onNavigateToViewItem = { itemId -> viewItemSheetId = itemId },
-                    onNavigateToSettings = {
-                        navController.navigate(Screen.DrawerSettings.route) {
-                            popUpTo(Screen.VaultList.route) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
                     onOpenDrawer = { scope.launch { drawerState.open() } }
                 )
 

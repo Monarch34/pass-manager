@@ -4,8 +4,8 @@
 
     <!-- Onboarding -->
     <string name="onboarding_title">Create Master Passphrase</string>
-    <string name="onboarding_tagline">Your secrets, locked tight.</string>
-    <string name="onboarding_subtitle">This passphrase encrypts all your data. It cannot be recovered if lost.</string>
+    <string name="onboarding_tagline">Your passwords, encrypted on this device.</string>
+    <string name="onboarding_subtitle">Choose a master passphrase. It is never stored and cannot be recovered.</string>
     <string name="onboarding_passphrase_hint">Master passphrase</string>
     <string name="onboarding_confirm_hint">Confirm passphrase</string>
     <string name="onboarding_create_button">Create Vault</string>
@@ -25,24 +25,25 @@
     <string name="lock_wrong_passphrase">Incorrect passphrase</string>
     <string name="lock_unlock_failed">Unlock failed</string>
     <string name="lock_biometric_unlock_failed">Biometric unlock failed</string>
-    <string name="lock_or_divider">or</string>
     <string name="lock_throttled_countdown">Too many attempts. Try again in %1$d s.</string>
 
     <!-- Vault List -->
     <string name="vault_title">Vault</string>
-    <string name="vault_empty_title">No items yet</string>
-    <string name="vault_empty_hint">Tap + to add your first</string>
-    <string name="vault_no_results">No results for \"%1$s\"</string>
+    <string name="vault_empty_title">Your vault is empty</string>
+    <string name="vault_empty_hint">Tap + to add your first login, card, note, identity or bank record.</string>
+    <string name="vault_no_matches_title">No matches</string>
+    <string name="vault_no_matches_hint">Nothing here matches that filter.</string>
     <string name="vault_empty_message">No items yet. Tap + to add one.</string>
-    <string name="vault_search_hint">Search title, URL, or group…</string>
+    <string name="vault_search_hint">Search vault</string>
     <string name="vault_sort_menu_cd">Sort vault list</string>
     <string name="vault_sort_name_az">Name (A–Z)</string>
     <string name="vault_sort_date_newest">Date (newest first)</string>
     <string name="vault_sort_date_oldest">Date (oldest first)</string>
     <string name="vault_group_all">All</string>
-    <string name="vault_group_filter_label">Group</string>
-    <string name="vault_lock_button">Lock vault now</string>
-    <string name="vault_item_count">%1$d items</string>
+    <plurals name="vault_item_count">
+        <item quantity="one">1 item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
     <string name="vault_selected_count">%1$d selected</string>
     <string name="vault_delete_selected_title">Delete items?</string>
     <string name="vault_delete_selected_message">Delete %1$d selected items? This cannot be undone.</string>
@@ -52,8 +53,6 @@
     <!-- Item Screens -->
     <string name="item_add_title">Add item</string>
     <string name="item_edit_title">Edit item</string>
-    <string name="item_add_subtitle">Everything you save here stays encrypted on this device.</string>
-    <string name="item_edit_subtitle">Update this entry. Changes apply when you save.</string>
     <string name="item_view_title">Item Details</string>
     <string name="item_entry_fallback">Entry</string>
     <string name="item_details_title">Details</string>
@@ -67,8 +66,10 @@
     <string name="item_notes_hint">Notes</string>
     <string name="item_save_button">Save</string>
     <string name="item_delete_button">Delete</string>
-    <string name="item_delete_confirm_title">Delete Item?</string>
-    <string name="item_delete_confirm_message">This action cannot be undone.</string>
+    <string name="item_delete_action">Delete item</string>
+    <string name="item_last_updated">Last updated %1$s</string>
+    <string name="item_delete_confirm_title">Delete this item?</string>
+    <string name="item_delete_confirm_message">This cannot be undone.</string>
     <string name="item_copy_username">Copy username</string>
     <string name="item_copy_password">Copy password</string>
     <string name="item_clipboard_copied_clears">Copied — clears in 15s</string>
@@ -124,29 +125,23 @@
     <!-- Password Generator -->
     <string name="generator_title">Generator</string>
     <string name="generator_empty_hint">Generate a password below</string>
-    <string name="generator_entropy_bits">≈ %1$d bits</string>
+    <string name="generator_entropy_line">%1$d bits of entropy</string>
     <string name="generator_length_label">Length: %d</string>
-    <string name="generator_length_title">Password length</string>
-    <string name="generator_length_hint">Longer is stronger. Drag the bar to set length (8–64).</string>
+    <string name="generator_length_title">Length</string>
+    <string name="generator_length_hint">Longer is stronger. 8–64 characters.</string>
     <string name="generator_length_semantics">Password length, %1$d characters</string>
-    <string name="generator_characters_label">characters</string>
-    <string name="generator_charset_title">Character sets</string>
-    <string name="generator_charset_hint">Keep at least one enabled.</string>
+    <string name="generator_charset_hint">At least one set stays on.</string>
     <string name="generator_uppercase">Uppercase (A–Z)</string>
-    <string name="generator_uppercase_desc">Latin capitals</string>
     <string name="generator_lowercase">Lowercase (a–z)</string>
-    <string name="generator_lowercase_desc">Latin small letters</string>
     <string name="generator_digits">Digits (0–9)</string>
-    <string name="generator_digits_desc">Numeric</string>
     <string name="generator_symbols">Symbols (!@#…)</string>
-    <string name="generator_symbols_desc">Special characters</string>
     <string name="generator_constraint_title">Bank password rules apply</string>
     <string name="generator_constraint_hint">%1$d–%2$d characters with an uppercase letter, a lowercase letter and a digit. Length and character sets are limited to what the bank form accepts.</string>
-    <string name="generator_regenerate_button">Regenerate</string>
     <string name="generator_generate_button">Generate</string>
     <string name="generator_use_button">Use this password</string>
     <string name="generator_copy_button">Copy</string>
     <string name="generator_copied">Copied</string>
+    <string name="generator_mix_line">%1$d letters · %2$d digits · %3$d symbols</string>
 
     <!-- Password Strength -->
     <string name="strength_weak">Weak</string>
@@ -156,23 +151,25 @@
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
-    <string name="settings_section_security">SECURITY</string>
-    <string name="settings_section_preferences">PREFERENCES</string>
-    <string name="settings_biometric_title">Biometric Unlock</string>
-    <string name="settings_biometric_subtitle">Use fingerprint or face to unlock</string>
+    <string name="settings_section_security">Security</string>
+    <string name="settings_section_transfer">Transfer</string>
+    <string name="settings_transfer_footnote">An export is one encrypted .pmvault file with its own passphrase.</string>
+    <string name="settings_never_exported">This vault has never been exported.</string>
+    <string name="settings_lock_now">Lock now</string>
+    <string name="settings_biometric_title">Unlock with biometrics</string>
     <string name="settings_biometric_prompt_title">Enable Biometric</string>
     <string name="settings_biometric_prompt_subtitle">Authenticate to enable biometric unlock</string>
-    <string name="settings_auto_lock_title">Auto-lock Timeout</string>
-    <string name="settings_auto_lock_subtitle">Lock vault after %1$s of inactivity</string>
+    <string name="settings_auto_lock_title">Auto-lock after</string>
+    <string name="settings_auto_lock_subtitle">Locks this long after backgrounding</string>
     <string name="settings_auto_lock_1min">1 minute</string>
     <string name="settings_auto_lock_5min">5 minutes</string>
     <string name="settings_auto_lock_15min">15 minutes</string>
     <string name="settings_auto_lock_30min">30 minutes</string>
     <string name="settings_site_icons_title">Site icons</string>
+    <string name="settings_site_icons_short">Contacts t0.gstatic.com only. Off by default.</string>
     <string name="settings_site_icons_subtitle_on">On: the domain of each login — and only of logins — is sent to Google’s icon service (t0.gstatic.com), which returns the icon. Cards, notes, identities and bank entries are never looked up. No other host is contacted, and redirects away from it are refused.</string>
     <string name="settings_site_icons_subtitle_off">Off: no icon is downloaded and no network request is made. Entries show their category icon.</string>
-    <string name="settings_change_passphrase_title">Change Master Passphrase</string>
-    <string name="settings_change_passphrase_subtitle">Re-encrypt your vault key with a new passphrase</string>
+    <string name="settings_change_passphrase_title">Change master passphrase</string>
     <string name="settings_change_passphrase_sheet_title">Change Passphrase</string>
     <string name="settings_change_passphrase_sheet_subtitle">Your vault will be re-encrypted. Keep the app open until this finishes.</string>
     <string name="settings_current_passphrase_hint">Current passphrase</string>
@@ -186,11 +183,8 @@
     <string name="settings_passphrase_change_failed">Failed to change passphrase</string>
 
     <!-- Encrypted vault export / import (.pmvault, docs/FORMAT.md) -->
-    <string name="settings_section_backup">BACKUP</string>
-    <string name="settings_export_title">Export vault</string>
-    <string name="settings_export_subtitle">Save every item to an encrypted .pmvault file</string>
+    <string name="settings_export_title">Export vault…</string>
     <string name="settings_export_last">Last export: %1$s</string>
-    <string name="settings_export_never">Not exported yet</string>
     <string name="settings_export_file_name">passmanager-vault.pmvault</string>
     <string name="settings_export_dialog_title">Choose an export passphrase</string>
     <string name="settings_export_dialog_message">This passphrase, and nothing else, protects the file. Do not reuse your master passphrase — anyone holding both the file and this passphrase holds your vault.</string>
@@ -200,8 +194,7 @@
     <string name="settings_export_action">Export</string>
     <string name="settings_export_done">Vault exported</string>
     <string name="settings_export_failed">Could not export the vault</string>
-    <string name="settings_import_title">Import vault</string>
-    <string name="settings_import_subtitle">Merge items from a .pmvault file. Nothing is ever deleted.</string>
+    <string name="settings_import_title">Import vault…</string>
     <string name="settings_import_dialog_title">Unlock the backup file</string>
     <string name="settings_import_dialog_message">Enter the export passphrase this file was saved with.</string>
     <string name="settings_import_passphrase_hint">Export passphrase</string>
@@ -288,11 +281,13 @@
 
     <!-- Navigation -->
     <string name="nav_open_drawer">Open navigation menu</string>
-    <string name="nav_settings">Settings</string>
     <string name="drawer_vault">Vault</string>
     <string name="drawer_generator">Generator</string>
-    <string name="drawer_desktop_link">Desktop Link</string>
+    <string name="drawer_desktop_link">Desktop link</string>
     <string name="drawer_settings">Settings</string>
+    <string name="drawer_lock_now">Lock now</string>
+    <string name="drawer_status_unlocked">%1$s · unlocked</string>
+    <string name="drawer_desktop_connected">Connected</string>
 
     <!-- Desktop link -->
     <string name="desktop_link_title">Desktop link</string>
@@ -306,8 +301,6 @@
     <string name="desktop_link_scan_to_connect">Scan to connect</string>
     <string name="desktop_link_connecting">Connecting to desktop…</string>
     <string name="desktop_link_connected">Connected</string>
-    <string name="desktop_link_desktop_at">Desktop at %1$s</string>
-    <string name="desktop_link_passwords_sent">%1$d of %2$d passwords sent</string>
     <string name="desktop_link_last_item">Last: %1$s</string>
     <string name="desktop_link_disconnect">Disconnect</string>
     <string name="desktop_link_session_ended">Session ended: %1$s</string>
@@ -316,6 +309,11 @@
     <string name="desktop_link_try_again">Try again</string>
     <string name="desktop_link_safety_number_label">Security code</string>
     <string name="desktop_link_safety_number_hint">Verify this matches the desktop before entering the code</string>
+    <string name="desktop_link_verify_attempts">%1$d attempts remaining</string>
+    <string name="desktop_link_sent_of">%1$d of %2$d</string>
+    <string name="desktop_link_sent_label">Passwords sent</string>
+    <string name="desktop_link_session_footnote">One copy every 10 seconds · the session ends after 5 minutes idle, or the moment the vault locks.</string>
+    <string name="desktop_link_network_footnote">Both devices must be on the same local network. Passwords travel over an encrypted channel — nothing is uploaded, and the master passphrase never leaves this phone.</string>
     <string name="desktop_notification_password_sent">Sent %1$s password to desktop</string>
     <string name="desktop_pairing_channel_name">Desktop pairing</string>
     <string name="desktop_pairing_channel_desc">Notifications for desktop password transfers</string>

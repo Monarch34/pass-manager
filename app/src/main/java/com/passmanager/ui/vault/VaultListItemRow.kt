@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -29,18 +28,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.passmanager.domain.model.ItemCategory
 import com.passmanager.domain.model.VaultItemHeader
 import com.passmanager.ui.components.FaviconImage
 import com.passmanager.ui.model.icon
 import com.passmanager.ui.model.tint
+import com.passmanager.ui.theme.CardShape
+import com.passmanager.ui.theme.PlateShape
 
 // One VectorPainter instance must never be shared between draw sites: a painter drawn at 22.dp in
 // the leading tile and at 14.dp beside the label keeps one internal draw cache, and the two sizes
 // composite into each other — every row rendered its category glyph twice, overlapped. Each Icon
 // below therefore takes the ImageVector itself and owns its painter. The subcomposition that costs
 // is real but small, and correctness beat it on screen.
+
+/**
+ * The category marker down the left edge. Inset from the card rather than flush with it, and short
+ * rather than full-height: flush and full-height it read as a second border on a card that already
+ * has an edge, and a list of five categories became five stripes competing with the tinted tiles
+ * that carry the same information.
+ */
+private val CategoryStripWidth = 3.dp
+private val CategoryStripHeight = 28.dp
+private val CategoryStripInset = 7.dp
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -56,32 +67,36 @@ internal fun VaultListItemRow(
     onToggleSelection: () -> Unit
 ) {
     val category = item.category
-    val cardShape = MaterialTheme.shapes.large
-    val outlineStroke = if (isSelected) {
-        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-    } else {
-        BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
-    }
     val stripColor = if (isSelected) {
         MaterialTheme.colorScheme.primary
     } else {
         category.tint.copy(alpha = 0.55f)
     }
+    // Selection borrows the brand at the same low alpha the filter chips and the drawer use, so
+    // the app has one selected-looking thing rather than three. The 2.dp stroke is the state
+    // marker; an unselected row carries no stroke at all.
     val containerColor = if (isSelected) {
-        MaterialTheme.colorScheme.secondaryContainer
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
     } else {
         MaterialTheme.colorScheme.surfaceContainerLow
     }
     // A Material Surface at zero elevation adds nothing that background() does not: it only costs a
     // second rounded clip and two CompositionLocal providers per row. Every text and icon below
-    // carries an explicit colour, so LocalContentColor is never read here. The modifier order
-    // matches what Surface produced (border outside the clip, ripple inside it), so the row looks
-    // the same as before.
+    // carries an explicit colour, so LocalContentColor is never read here.
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .border(outlineStroke, cardShape)
-            .clip(cardShape)
+            .then(
+                if (isSelected) {
+                    Modifier.border(
+                        BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+                        CardShape
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .clip(CardShape)
             .background(containerColor)
             .combinedClickable(
                 onClick = { if (isSelectionMode) onToggleSelection() else onOpenItem() },
@@ -91,14 +106,15 @@ internal fun VaultListItemRow(
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .width(4.dp)
-                .fillMaxHeight()
+                .padding(start = CategoryStripInset)
+                .size(width = CategoryStripWidth, height = CategoryStripHeight)
+                .clip(RoundedCornerShape(2.dp))
                 .background(stripColor)
         )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 16.dp, top = 14.dp, bottom = 14.dp)
+                .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp)
                 .semantics(mergeDescendants = true) {
                     contentDescription =
                         "${title.ifEmpty { "Loading title" }}, ${category.label}. Tap to open."
@@ -109,7 +125,7 @@ internal fun VaultListItemRow(
                 Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(PlateShape)
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -131,12 +147,12 @@ internal fun VaultListItemRow(
                     useGoogleFavicons = useGoogleFavicons,
                     size = 40.dp,
                     plateColor = category.tint.copy(alpha = 0.14f),
-                    plateShape = RoundedCornerShape(12.dp),
+                    plateShape = PlateShape,
                     fallback = {
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(PlateShape)
                                 .background(category.tint.copy(alpha = 0.14f)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -155,9 +171,11 @@ internal fun VaultListItemRow(
                 Text(
                     text = title.ifEmpty { "…" },
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -166,7 +184,7 @@ internal fun VaultListItemRow(
                         category.icon,
                         contentDescription = null,
                         modifier = Modifier.size(14.dp),
-                        tint = category.tint.copy(alpha = 0.75f)
+                        tint = category.tint.copy(alpha = 0.55f)
                     )
                     Text(
                         text = category.label,

@@ -1,53 +1,35 @@
 package com.passmanager.ui.generator
 
-import com.passmanager.R
-import com.passmanager.ui.util.rememberSecureClipboard
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Straighten
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHostState
-import com.passmanager.ui.components.AppSnackbarHost
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,27 +39,47 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.passmanager.ui.components.PasswordStrengthBar
+import com.passmanager.R
+import com.passmanager.domain.validation.PasswordStrengthEvaluator
+import com.passmanager.ui.components.AppSnackbarHost
+import com.passmanager.ui.components.PanelCard
+import com.passmanager.ui.components.PanelHeader
+import com.passmanager.ui.components.PillButton
+import com.passmanager.ui.components.PillOutlinedButton
+import com.passmanager.ui.components.SectionFootnote
+import com.passmanager.ui.theme.CardShape
+import com.passmanager.ui.theme.FootnoteStyle
+import com.passmanager.ui.theme.StrengthFairColor
+import com.passmanager.ui.util.rememberSecureClipboard
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
-private val GenCardPadding = 16.dp
 private val GenSectionGap = 12.dp
-private val GenIconSize = 22.dp
 
-/** Characters per line in the preview block — sized to fill the card at titleLarge monospace. */
+/** Characters per line in the preview block — sized to fill the card at monospace 19sp. */
 private const val PreviewPasswordCharsPerLine = 16
+
+/**
+ * Entropy at which the meter reads full. Well past the point a password is unbreakable; the tick
+ * row is a slope, not a pass mark, and stopping it at "strong" made every good password look
+ * identical to every excellent one.
+ */
+private const val FullMeterEntropyBits = 130f
 
 /** Thick track + vertical pill thumb. */
 private val LengthTrackHeight = 10.dp
@@ -114,34 +116,41 @@ fun PasswordGeneratorScreen(
         stringResource(R.string.generator_length_semantics, sliderValue.roundToInt().coerceIn(8, 64))
 
     val lengthSliderInteraction = remember { MutableInteractionSource() }
-    val sliderPrimary         = MaterialTheme.colorScheme.primary
+    val sliderPrimary = MaterialTheme.colorScheme.primary
     val sliderPrimaryContainer = MaterialTheme.colorScheme.primaryContainer
     val lengthSliderColors = SliderDefaults.colors(
-        thumbColor         = sliderPrimary,
-        activeTrackColor   = sliderPrimary,
+        thumbColor = sliderPrimary,
+        activeTrackColor = sliderPrimary,
         inactiveTrackColor = sliderPrimaryContainer.copy(alpha = 0.55f)
     )
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        stringResource(R.string.generator_title),
-                        style = MaterialTheme.typography.titleLarge
+            PanelHeader(
+                title = stringResource(R.string.generator_title),
+                large = true,
+                navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
+                navigationContentDescription = stringResource(R.string.action_back),
+                onNavigationClick = onNavigateBack
+            ) {
+                // The Use button belongs beside the way back, not at the foot of the panel: the
+                // generator is opened from a form to answer one question, and the answer is at the
+                // top of the screen.
+                if (showUseButton) {
+                    PillButton(
+                        text = stringResource(R.string.generator_use_button),
+                        enabled = uiState.password.isNotEmpty(),
+                        onClick = {
+                            view.performHapticFeedback(
+                                android.view.HapticFeedbackConstants.CONFIRM
+                            )
+                            onPasswordSelected(uiState.password.toCharArray())
+                        },
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                )
-            )
+                }
+            }
         },
         snackbarHost = { AppSnackbarHost(snackbarHostState) }
     ) { padding ->
@@ -151,378 +160,356 @@ fun PasswordGeneratorScreen(
                 .padding(padding)
                 .imePadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 16.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(GenSectionGap)
         ) {
             Spacer(Modifier.height(4.dp))
 
-            // ── Preview card ───────────────────────────────────────────────────
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.extraLarge,
-                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-                colors = CardDefaults.elevatedCardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(GenCardPadding),
-                    verticalArrangement = Arrangement.spacedBy(0.dp)
-                ) {
-                    // Password display — the hero of the screen, so nothing sits above it.
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large,
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 24.dp, vertical = 24.dp)
-                        ) {
-                            if (uiState.password.isEmpty()) {
-                                Text(
-                                    text = stringResource(R.string.generator_empty_hint),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            } else {
-                                Text(
-                                    text = uiState.password.chunked(PreviewPasswordCharsPerLine)
-                                        .joinToString("\n"),
-                                    style = MaterialTheme.typography.titleLarge.copy(
-                                        fontFamily = FontFamily.Monospace,
-                                        letterSpacing = 2.sp,
-                                        lineHeight = MaterialTheme.typography.titleLarge.fontSize * 1.5f
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
-                    }
-
-                    if (uiState.password.isNotEmpty()) {
-                        Spacer(Modifier.height(12.dp))
-                        PasswordStrengthBar(
-                            password = uiState.password,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-
-                    // Bottom row: entropy + copy button
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        if (uiState.password.isNotEmpty()) {
-                            Text(
-                                text = stringResource(R.string.generator_entropy_bits, uiState.entropyBits),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            Spacer(Modifier.width(1.dp))
-                        }
-                        FilledTonalButton(
-                            colors = brandTonalButtonColors(),
-                            onClick = {
-                                if (uiState.password.isNotEmpty()) {
-                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                                    clipboard.copy(uiState.password)
-                                    scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.generator_copied)) }
-                                }
-                            },
-                            enabled = uiState.password.isNotEmpty(),
-                            shape = MaterialTheme.shapes.large
-                        ) {
-                            Icon(
-                                Icons.Default.ContentCopy,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                stringResource(R.string.generator_copy_button),
-                                style = MaterialTheme.typography.labelLarge
-                            )
-                        }
-                    }
-                }
-            }
-
-            // ── Length card ────────────────────────────────────────────────────
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.extraLarge,
-                colors = CardDefaults.outlinedCardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
-                border = BorderStroke(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(GenCardPadding),
-                    verticalArrangement = Arrangement.spacedBy(0.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Straighten,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(GenIconSize)
-                        )
-                        Text(
-                            text = stringResource(R.string.generator_length_title),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Text(
-                        text = stringResource(R.string.generator_length_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "${sliderValue.roundToInt().coerceIn(8, 64)}",
-                            style = MaterialTheme.typography.displaySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = stringResource(R.string.generator_characters_label),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-
-                    Slider(
-                        value = sliderValue,
-                        onValueChange = { sliderValue = it },
-                        onValueChangeFinished = {
-                            view.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
-                            viewModel.setLength(sliderValue.roundToInt().coerceIn(8, 64))
-                        },
-                        valueRange = 8f..64f,
-                        steps = 0,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .semantics { contentDescription = lengthSemantics },
-                        interactionSource = lengthSliderInteraction,
-                        colors = lengthSliderColors,
-                        thumb = {
-                            SliderDefaults.Thumb(
-                                interactionSource = lengthSliderInteraction,
-                                colors = lengthSliderColors,
-                                enabled = true,
-                                thumbSize = LengthThumbSize,
-                            )
-                        },
-                        track = { sliderState ->
-                            SliderDefaults.Track(
-                                sliderState = sliderState,
-                                colors = lengthSliderColors,
-                                enabled = true,
-                                modifier = Modifier.height(LengthTrackHeight),
-                                thumbTrackGapSize = 2.dp,
-                            )
-                        }
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            "8",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                        Text(
-                            "64",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    }
-                }
-            }
-
-            // ── Character sets card ────────────────────────────────────────────
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.extraLarge,
-                colors = CardDefaults.outlinedCardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
-                border = BorderStroke(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                )
-            ) {
-                Column(Modifier.padding(vertical = 4.dp)) {
-                    Text(
-                        text = stringResource(R.string.generator_charset_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = GenCardPadding, vertical = 8.dp)
-                    )
-                    Text(
-                        text = stringResource(R.string.generator_charset_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .padding(horizontal = GenCardPadding)
-                            .padding(bottom = 8.dp)
-                    )
-                    CharsetSwitchRow(
-                        stringResource(R.string.generator_uppercase),
-                        stringResource(R.string.generator_uppercase_desc),
-                        uiState.includeUppercase,
-                        enabledCharsetCount
-                    ) { viewModel.toggleUppercase() }
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                        modifier = Modifier.padding(horizontal = GenCardPadding)
-                    )
-                    CharsetSwitchRow(
-                        stringResource(R.string.generator_lowercase),
-                        stringResource(R.string.generator_lowercase_desc),
-                        uiState.includeLowercase,
-                        enabledCharsetCount
-                    ) { viewModel.toggleLowercase() }
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                        modifier = Modifier.padding(horizontal = GenCardPadding)
-                    )
-                    CharsetSwitchRow(
-                        stringResource(R.string.generator_digits),
-                        stringResource(R.string.generator_digits_desc),
-                        uiState.includeDigits,
-                        enabledCharsetCount
-                    ) { viewModel.toggleDigits() }
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                        modifier = Modifier.padding(horizontal = GenCardPadding)
-                    )
-                    CharsetSwitchRow(
-                        stringResource(R.string.generator_symbols),
-                        stringResource(R.string.generator_symbols_desc),
-                        uiState.includeSymbols,
-                        enabledCharsetCount
-                    ) { viewModel.toggleSymbols() }
-                }
-            }
-
-            // ── Action buttons ─────────────────────────────────────────────────
-            FilledTonalButton(
-                colors = brandTonalButtonColors(),
-                onClick = {
+            GeneratedPasswordCard(
+                password = uiState.password,
+                entropyBits = uiState.entropyBits,
+                onRegenerate = {
                     view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
                     viewModel.generate()
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = MaterialTheme.shapes.extraLarge
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
+                onCopy = {
+                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                    clipboard.copy(uiState.password)
+                    scope.launch {
+                        snackbarHostState.showSnackbar(context.getString(R.string.generator_copied))
+                    }
+                }
+            )
+
+            PanelCard(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.generator_length_title),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "${sliderValue.roundToInt().coerceIn(8, 64)}",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontFamily = FontFamily.Monospace
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Slider(
+                    value = sliderValue,
+                    onValueChange = { sliderValue = it },
+                    onValueChangeFinished = {
+                        view.performHapticFeedback(
+                            android.view.HapticFeedbackConstants.CONTEXT_CLICK
+                        )
+                        viewModel.setLength(sliderValue.roundToInt().coerceIn(8, 64))
+                    },
+                    valueRange = 8f..64f,
+                    steps = 0,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .semantics { contentDescription = lengthSemantics },
+                    interactionSource = lengthSliderInteraction,
+                    colors = lengthSliderColors,
+                    thumb = {
+                        SliderDefaults.Thumb(
+                            interactionSource = lengthSliderInteraction,
+                            colors = lengthSliderColors,
+                            enabled = true,
+                            thumbSize = LengthThumbSize
+                        )
+                    },
+                    track = { sliderState ->
+                        SliderDefaults.Track(
+                            sliderState = sliderState,
+                            colors = lengthSliderColors,
+                            enabled = true,
+                            modifier = Modifier.height(LengthTrackHeight),
+                            thumbTrackGapSize = 2.dp
+                        )
+                    }
+                )
+
                 Text(
-                    stringResource(R.string.generator_regenerate_button),
-                    style = MaterialTheme.typography.titleSmall
+                    text = stringResource(R.string.generator_length_hint),
+                    style = FootnoteStyle,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            if (showUseButton) {
-                Button(
-                    onClick = {
-                        view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                        onPasswordSelected(uiState.password.toCharArray())
-                    },
-                    enabled = uiState.password.isNotEmpty(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = MaterialTheme.shapes.extraLarge
-                ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        stringResource(R.string.generator_use_button),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                }
+            PanelCard(
+                contentPadding = PaddingValues(
+                    start = 18.dp,
+                    end = 18.dp,
+                    top = 8.dp,
+                    bottom = 14.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                CharsetSwitchRow(
+                    label = stringResource(R.string.generator_uppercase),
+                    checked = uiState.includeUppercase,
+                    enabledCharsetCount = enabledCharsetCount,
+                    onCheckedChange = { viewModel.toggleUppercase() }
+                )
+                CharsetSwitchRow(
+                    label = stringResource(R.string.generator_lowercase),
+                    checked = uiState.includeLowercase,
+                    enabledCharsetCount = enabledCharsetCount,
+                    onCheckedChange = { viewModel.toggleLowercase() }
+                )
+                CharsetSwitchRow(
+                    label = stringResource(R.string.generator_digits),
+                    checked = uiState.includeDigits,
+                    enabledCharsetCount = enabledCharsetCount,
+                    onCheckedChange = { viewModel.toggleDigits() }
+                )
+                CharsetSwitchRow(
+                    label = stringResource(R.string.generator_symbols),
+                    checked = uiState.includeSymbols,
+                    enabledCharsetCount = enabledCharsetCount,
+                    onCheckedChange = { viewModel.toggleSymbols() }
+                )
+                Text(
+                    text = stringResource(R.string.generator_charset_hint),
+                    style = FootnoteStyle,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
             }
 
-            Spacer(Modifier.height(8.dp))
+            // Opened from a bank form, the generator is not free to pick anything: say so, rather
+            // than let the user wonder why the length snapped back on the way out.
+            uiState.constraint?.let { constraint ->
+                SectionFootnote(
+                    stringResource(
+                        R.string.generator_constraint_hint,
+                        constraint.minLength,
+                        constraint.maxLength
+                    )
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
 
 /**
- * Tonal buttons in the primary (teal) family. The M3 default tonal container is
- * secondaryContainer — indigo here — which read as a second, unrelated accent next to the teal
- * slider, strength bar and Use button on the same screen.
+ * The password, its meter and the two things you can do with it, in one card.
+ *
+ * The password block sits on a lighter tone than the rest of the card so the characters read as
+ * output rather than as a heading, and the tick row is drawn along the seam between the two — it
+ * belongs to the password above it, not to the controls below.
  */
 @Composable
-private fun brandTonalButtonColors() = ButtonDefaults.filledTonalButtonColors(
-    containerColor = MaterialTheme.colorScheme.primaryContainer,
-    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-)
+private fun GeneratedPasswordCard(
+    password: String,
+    entropyBits: Int,
+    onRegenerate: () -> Unit,
+    onCopy: () -> Unit
+) {
+    val strength = remember(password) {
+        if (password.isEmpty()) null else PasswordStrengthEvaluator.evaluate(password)
+    }
+    val strengthColor = when (strength?.ordinal) {
+        0 -> MaterialTheme.colorScheme.error
+        1 -> StrengthFairColor
+        2 -> MaterialTheme.colorScheme.tertiary
+        3 -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val strengthLabels = listOf(
+        stringResource(R.string.strength_weak),
+        stringResource(R.string.strength_fair),
+        stringResource(R.string.strength_good),
+        stringResource(R.string.strength_strong)
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(CardShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Column(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 68.dp)
+                    .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 15.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (password.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.generator_empty_hint),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    // Laid out sixteen to a line on a sixteen-column grid, so every character
+                    // occupies the same slot whichever line it lands on and a shorter last line
+                    // stays aligned with the one above it. Proportional monospace alone does not
+                    // achieve that once a glyph is wider than the cell.
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        password.chunked(PreviewPasswordCharsPerLine).forEach { line ->
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                repeat(PreviewPasswordCharsPerLine) { column ->
+                                    Text(
+                                        text = line.getOrNull(column)?.toString() ?: "",
+                                        style = MaterialTheme.typography.titleLarge.copy(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 19.sp,
+                                            lineHeight = 27.sp,
+                                            textAlign = TextAlign.Center
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            EntropyMeter(
+                entropyBits = entropyBits,
+                color = strengthColor,
+                modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 3.dp)
+            )
+        }
+
+        Column(
+            modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = strength?.let { strengthLabels[it.ordinal].uppercase() } ?: "",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = strengthColor
+                )
+                Text(
+                    text = stringResource(R.string.generator_entropy_line, entropyBits),
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // What the pool actually turned out to be, rather than what was asked for: a symbol
+            // set that is switched on can still produce a password without one.
+            Text(
+                text = characterMixLine(password),
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontFamily = FontFamily.Monospace
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillOutlinedButton(
+                    text = "",
+                    icon = Icons.Default.Refresh,
+                    onClick = onRegenerate,
+                    contentPadding = PaddingValues(vertical = 15.dp),
+                    modifier = Modifier.width(56.dp)
+                )
+                PillButton(
+                    text = stringResource(R.string.generator_copy_button),
+                    enabled = password.isNotEmpty(),
+                    onClick = onCopy,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+/** Four ticks that fill as entropy climbs towards [FullMeterEntropyBits]. */
+@Composable
+private fun EntropyMeter(
+    entropyBits: Int,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    val filled = ((entropyBits / FullMeterEntropyBits).coerceIn(0f, 1f) * 4).roundToInt()
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        repeat(4) { index ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(
+                        if (index < filled) color else MaterialTheme.colorScheme.outlineVariant
+                    )
+            )
+        }
+    }
+}
+
+@Composable
+private fun characterMixLine(password: String): String {
+    val letters = password.count { it.isLetter() }
+    val digits = password.count { it.isDigit() }
+    val symbols = password.length - letters - digits
+    return stringResource(R.string.generator_mix_line, letters, digits, symbols)
+}
 
 @Composable
 private fun CharsetSwitchRow(
-    headline: String,
-    supporting: String,
+    label: String,
     checked: Boolean,
     enabledCharsetCount: Int,
     onCheckedChange: () -> Unit
 ) {
-    ListItem(
-        headlineContent = {
-            Text(headline, style = MaterialTheme.typography.bodyLarge)
-        },
-        supportingContent = {
-            Text(
-                supporting,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1
-            )
-        },
-        trailingContent = {
-            Switch(
-                checked = checked,
-                onCheckedChange = { new ->
-                    if (new == checked) return@Switch
-                    if (!new && checked && enabledCharsetCount <= 1) return@Switch
-                    onCheckedChange()
-                }
-            )
-        },
-        colors = ListItemDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        modifier = Modifier.fillMaxWidth()
-    )
+    // The last enabled set cannot be switched off — there would be nothing to draw from — so it
+    // dims rather than disappearing, and the footnote under the group says why.
+    val isLastEnabled = checked && enabledCharsetCount <= 1
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (isLastEnabled) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            modifier = Modifier.weight(1f)
+        )
+        Switch(
+            checked = checked,
+            enabled = !isLastEnabled,
+            onCheckedChange = { new ->
+                if (new == checked) return@Switch
+                if (!new && checked && enabledCharsetCount <= 1) return@Switch
+                onCheckedChange()
+            }
+        )
+    }
 }

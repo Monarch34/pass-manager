@@ -9,8 +9,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
+import com.passmanager.ui.theme.PillShape
 
 @Composable
 fun LoadingButton(
@@ -21,11 +23,15 @@ fun LoadingButton(
     modifier: Modifier = Modifier,
     colors: ButtonColors = ButtonDefaults.buttonColors()
 ) {
+    // Fully round, and taller than a Material button: this is the one commit action on the panels
+    // that use it — create the vault, unlock it, change the passphrase — and it is the last thing
+    // under a column of fields that are all rounded rectangles.
     Button(
         onClick = onClick,
         enabled = enabled && !isLoading,
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = PillShape,
         colors = colors,
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
         modifier = modifier
     ) {
         if (isLoading) {
@@ -37,7 +43,7 @@ fun LoadingButton(
                 color = LocalContentColor.current
             )
         } else {
-            Text(text, style = MaterialTheme.typography.labelLarge)
+            Text(text.uppercase(), style = MaterialTheme.typography.labelLarge)
         }
     }
 }

@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHostState
 import com.passmanager.ui.components.AppSnackbarHost
 import androidx.compose.material3.Text
@@ -31,6 +30,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.passmanager.R
@@ -38,7 +38,8 @@ import com.passmanager.ui.components.AppShieldLogo
 import com.passmanager.ui.components.ErrorSnackbarEffect
 import com.passmanager.ui.components.LoadingButton
 import com.passmanager.ui.components.PasswordStrengthBar
-import com.passmanager.ui.components.SecureTextField
+import com.passmanager.ui.components.PillPassphraseField
+import com.passmanager.ui.components.SectionFootnote
 
 @Composable
 fun OnboardingScreen(
@@ -88,23 +89,33 @@ fun OnboardingScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 AppShieldLogo(size = 96.dp)
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(16.dp))
                 Text(
                     text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.headlineLarge,
                     color = MaterialTheme.colorScheme.onBackground
                 )
+                Spacer(Modifier.height(6.dp))
                 Text(
                     text = stringResource(R.string.onboarding_tagline),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(40.dp))
+                Spacer(Modifier.height(6.dp))
+                // The one thing a new user has to understand before they type: nobody can hand
+                // this passphrase back. It belongs on the screen where the choice is made, not in
+                // a dialog after it.
+                SectionFootnote(
+                    text = stringResource(R.string.onboarding_subtitle),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(32.dp))
 
                 // The fields sit straight on the gradient: the wrapper plate they used to share
                 // added a third nesting level (background, plate, outlined field) that no other
                 // screen has.
-                SecureTextField(
+                PillPassphraseField(
                     value = passphrase,
                     onValueChange = { passphrase = it },
                     label = stringResource(R.string.onboarding_passphrase_hint),
@@ -116,13 +127,15 @@ fun OnboardingScreen(
                     Spacer(Modifier.height(8.dp))
                     PasswordStrengthBar(
                         password = passphrase,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp)
                     )
                 }
 
                 Spacer(Modifier.height(16.dp))
 
-                SecureTextField(
+                PillPassphraseField(
                     value = confirm,
                     onValueChange = { confirm = it },
                     label = stringResource(R.string.onboarding_confirm_hint),
@@ -137,7 +150,21 @@ fun OnboardingScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(Modifier.height(32.dp))
+                // Saying so under the field beats a red field the moment the first character of
+                // the confirmation differs from the first character of the passphrase.
+                if (confirm.isNotEmpty() && confirm != passphrase) {
+                    Spacer(Modifier.height(8.dp))
+                    SectionFootnote(
+                        text = stringResource(R.string.onboarding_passphrase_mismatch),
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp)
+                    )
+                }
+
+                Spacer(Modifier.height(28.dp))
 
                 LoadingButton(
                     text = stringResource(R.string.onboarding_create_button),

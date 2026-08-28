@@ -2,9 +2,10 @@ package com.passmanager.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,81 +13,69 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.PhonelinkErase
-import androidx.compose.material.icons.filled.PhonelinkLock
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
-import com.passmanager.ui.components.AppSnackbarHost
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.passmanager.BuildConfig
 import com.passmanager.R
-import androidx.hilt.navigation.compose.hiltViewModel
-import com.passmanager.ui.common.clearAllFocus
-import com.passmanager.ui.components.BiometricPromptEffect
-import com.passmanager.ui.common.resolve
+import com.passmanager.domain.model.PmVaultFile
 import com.passmanager.ui.common.UserMessage
+import com.passmanager.ui.common.clearAllFocus
+import com.passmanager.ui.common.resolve
+import com.passmanager.ui.components.AppSnackbarHost
+import com.passmanager.ui.components.BiometricPromptEffect
+import com.passmanager.ui.components.DestructiveAction
 import com.passmanager.ui.components.ErrorSnackbarEffect
 import com.passmanager.ui.components.LoadingButton
+import com.passmanager.ui.components.PanelCard
+import com.passmanager.ui.components.PanelHeader
+import com.passmanager.ui.components.PanelRow
+import com.passmanager.ui.components.PanelRowDivider
+import com.passmanager.ui.components.PanelSecureTextField
 import com.passmanager.ui.components.PasswordStrengthBar
-import com.passmanager.ui.components.SecureTextField
-import com.passmanager.domain.model.PmVaultFile
+import com.passmanager.ui.components.SectionFootnote
+import com.passmanager.ui.components.SectionHeader
+import com.passmanager.ui.theme.FootnoteStyle
+import com.passmanager.ui.theme.StrengthFairColor
 import java.text.DateFormat
 import java.util.Date
 
-/** Width of the auto-lock dropdown anchor. Fits "30 minutes" plus the chevron at labelLarge. */
-private val AutoLockAnchorWidth = 168.dp
+/** Vertical padding inside a card that groups several rows; each row adds its own. */
+private val GroupedCardPadding = PaddingValues(horizontal = 18.dp, vertical = 4.dp)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -137,8 +126,8 @@ fun SettingsScreen(
         onFail = {}
     )
 
-    val min1  = stringResource(R.string.settings_auto_lock_1min)
-    val min5  = stringResource(R.string.settings_auto_lock_5min)
+    val min1 = stringResource(R.string.settings_auto_lock_1min)
+    val min5 = stringResource(R.string.settings_auto_lock_5min)
     val min15 = stringResource(R.string.settings_auto_lock_15min)
     val min30 = stringResource(R.string.settings_auto_lock_30min)
     val autoLockOptions = remember(min1, min5, min15, min30) {
@@ -148,17 +137,12 @@ fun SettingsScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.settings_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                )
+            PanelHeader(
+                title = stringResource(R.string.settings_title),
+                large = true,
+                navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
+                navigationContentDescription = stringResource(R.string.action_back),
+                onNavigationClick = onNavigateBack
             )
         },
         snackbarHost = { AppSnackbarHost(snackbarHostState) }
@@ -168,349 +152,197 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = stringResource(R.string.settings_section_security),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-            )
+            Spacer(Modifier.height(4.dp))
 
-            if (uiState.biometricAvailableOnDevice) {
-                ListItem(
-                    headlineContent = {
-                        Text(stringResource(R.string.settings_biometric_title), style = MaterialTheme.typography.titleSmall)
-                    },
-                    supportingContent = {
-                        Text(
-                            stringResource(R.string.settings_biometric_subtitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
-                    leadingContent = {
-                        SettingIconBox(
-                            icon = Icons.Default.Fingerprint,
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            iconTint = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    trailingContent = {
-                        Switch(
-                            checked = uiState.biometricEnabled,
-                            onCheckedChange = { viewModel.toggleBiometric() }
+            // ── Security ───────────────────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SectionHeader(stringResource(R.string.settings_section_security))
+
+                AutoLockCard(
+                    autoLockSeconds = uiState.autoLockSeconds,
+                    options = autoLockOptions,
+                    onSelect = { viewModel.setAutoLockTimeout(it) }
+                )
+
+                PanelCard(
+                    contentPadding = GroupedCardPadding,
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
+                ) {
+                    PanelRow(
+                        title = stringResource(R.string.settings_change_passphrase_title),
+                        onClick = { viewModel.openChangePassphraseSheet() }
+                    ) {
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
-                )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-            }
 
-            ListItem(
-                headlineContent = {
-                    Text(stringResource(R.string.settings_change_passphrase_title), style = MaterialTheme.typography.titleSmall)
-                },
-                supportingContent = {
-                    Text(
-                        stringResource(R.string.settings_change_passphrase_subtitle),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                leadingContent = {
-                    SettingIconBox(
-                        icon = Icons.Default.VpnKey,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        iconTint = MaterialTheme.colorScheme.primary
-                    )
-                },
-                modifier = Modifier.clickable { viewModel.openChangePassphraseSheet() }
-            )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    if (uiState.biometricAvailableOnDevice) {
+                        PanelRowDivider()
+                        PanelRow(title = stringResource(R.string.settings_biometric_title)) {
+                            Switch(
+                                checked = uiState.biometricEnabled,
+                                onCheckedChange = { viewModel.toggleBiometric() }
+                            )
+                        }
+                    }
 
-            ListItem(
-                headlineContent = {
-                    Text(stringResource(R.string.device_binding_title), style = MaterialTheme.typography.titleSmall)
-                },
-                supportingContent = {
-                    Text(
-                        stringResource(
+                    PanelRowDivider()
+                    // Deliberately one-way: there is no downgrade action here. Unsealing a vault
+                    // back to passphrase-only would quietly undo the protection the user opted in
+                    // to, so a bound vault is a statement of fact rather than a control.
+                    PanelRow(
+                        title = stringResource(R.string.device_binding_title),
+                        supporting = stringResource(
                             if (uiState.isDeviceBound) {
                                 R.string.device_binding_status_on
                             } else {
                                 R.string.device_binding_status_off
                             }
                         ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                leadingContent = {
-                    SettingIconBox(
-                        icon = if (uiState.isDeviceBound) Icons.Default.PhonelinkLock else Icons.Default.PhonelinkErase,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        iconTint = MaterialTheme.colorScheme.primary
-                    )
-                },
-                // Deliberately one-way: there is no downgrade action here. Unsealing a vault back
-                // to passphrase-only would quietly undo the protection the user opted into.
-                modifier = if (uiState.isDeviceBound) {
-                    Modifier
-                } else {
-                    Modifier.clickable { viewModel.openDeviceBindingDialog() }
-                }
-            )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        onClick = if (uiState.isDeviceBound) {
+                            null
+                        } else {
+                            { viewModel.openDeviceBindingDialog() }
+                        }
+                    ) {
+                        if (!uiState.isDeviceBound) {
+                            Icon(
+                                Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
 
-            Text(
-                text = stringResource(R.string.settings_section_backup),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-            )
-
-            val lastExportLabel = uiState.lastExportAtMs?.let { millis ->
-                remember(millis) {
-                    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                        .format(Date(millis))
-                }
-            }
-            ListItem(
-                headlineContent = {
-                    Text(stringResource(R.string.settings_export_title), style = MaterialTheme.typography.titleSmall)
-                },
-                supportingContent = {
-                    Column {
-                        Text(
-                            stringResource(R.string.settings_export_subtitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = if (lastExportLabel == null) {
-                                stringResource(R.string.settings_export_never)
-                            } else {
-                                stringResource(R.string.settings_export_last, lastExportLabel)
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    PanelRowDivider()
+                    PanelRow(
+                        title = stringResource(R.string.settings_site_icons_title),
+                        supporting = stringResource(R.string.settings_site_icons_short)
+                    ) {
+                        Switch(
+                            checked = uiState.useGoogleFavicons,
+                            onCheckedChange = { viewModel.setUseGoogleFavicons(it) }
                         )
                     }
-                },
-                leadingContent = {
-                    SettingIconBox(
-                        icon = Icons.Default.Upload,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        iconTint = MaterialTheme.colorScheme.primary
-                    )
-                },
-                modifier = Modifier.clickable { exportPicker.launch(exportFileName) }
-            )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-            ListItem(
-                headlineContent = {
-                    Text(stringResource(R.string.settings_import_title), style = MaterialTheme.typography.titleSmall)
-                },
-                supportingContent = {
-                    Text(
-                        stringResource(R.string.settings_import_subtitle),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                leadingContent = {
-                    SettingIconBox(
-                        icon = Icons.Default.Download,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        iconTint = MaterialTheme.colorScheme.primary
-                    )
-                },
-                // "*/*": .pmvault has no registered MIME type, so a narrower filter would grey the
-                // file out in the picker on most providers.
-                modifier = Modifier.clickable { importPicker.launch(arrayOf("*/*")) }
-            )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-            Text(
-                text = stringResource(R.string.settings_section_preferences),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-            )
-
-            ListItem(
-                headlineContent = {
-                    Text(
-                        stringResource(R.string.settings_site_icons_title),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                },
-                supportingContent = {
-                    Text(
-                        stringResource(
-                            if (uiState.useGoogleFavicons) {
-                                R.string.settings_site_icons_subtitle_on
-                            } else {
-                                R.string.settings_site_icons_subtitle_off
-                            }
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                leadingContent = {
-                    SettingIconBox(
-                        icon = Icons.Default.Public,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        iconTint = MaterialTheme.colorScheme.primary
-                    )
-                },
-                trailingContent = {
-                    Switch(
-                        checked = uiState.useGoogleFavicons,
-                        onCheckedChange = { viewModel.setUseGoogleFavicons(it) }
-                    )
                 }
-            )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-            var autoLockDropdownExpanded by remember { mutableStateOf(false) }
-            var autoLockAnchorWidthPx by remember { mutableIntStateOf(0) }
-            val density = LocalDensity.current
-            val focusManager = LocalFocusManager.current
-            val autoLockMenuWidthDp =
-                if (autoLockAnchorWidthPx > 0) {
-                    with(density) { autoLockAnchorWidthPx.toDp() }
-                } else {
-                    200.dp
-                }
-            val selectedAutoLockLabel = autoLockOptions.find { it.first == uiState.autoLockSeconds }?.second
-                ?: "${uiState.autoLockSeconds}s"
-
-            fun dismissAutoLockMenu() {
-                autoLockDropdownExpanded = false
-                focusManager.clearAllFocus()
+                // The row above says what the setting does in one line; this says exactly which
+                // host is contacted and for which categories. That detail is the reason the
+                // setting exists, so it stays on the screen — as a footnote, not as a paragraph
+                // wedged into a list row.
+                SectionFootnote(
+                    stringResource(
+                        if (uiState.useGoogleFavicons) {
+                            R.string.settings_site_icons_subtitle_on
+                        } else {
+                            R.string.settings_site_icons_subtitle_off
+                        }
+                    )
+                )
             }
 
-            ListItem(
-                headlineContent = {
-                    Text(stringResource(R.string.settings_auto_lock_title), style = MaterialTheme.typography.titleSmall)
-                },
-                supportingContent = {
-                    Text(
-                        stringResource(R.string.settings_auto_lock_subtitle, selectedAutoLockLabel),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                leadingContent = {
-                    SettingIconBox(
-                        icon = Icons.Default.Timer,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        iconTint = MaterialTheme.colorScheme.primary
-                    )
-                },
-                trailingContent = {
-                    ExposedDropdownMenuBox(
-                        expanded = autoLockDropdownExpanded,
-                        onExpandedChange = { expanded: Boolean ->
-                            autoLockDropdownExpanded = expanded
-                            if (!expanded) focusManager.clearAllFocus()
-                        },
-                        // A definite width, not a range. ListItem measures its trailing slot against
-                        // the full row width, so anything elastic here wins the whole row: the text
-                        // field inside fills whatever it is given, a widthIn range let that reach
-                        // 280.dp, and the headline and supporting text were left about 26.dp to wrap
-                        // in. They collapsed to nothing and the row grew to roughly 1.5 screens tall
-                        // — that was the empty space you could scroll into below the settings list.
-                        modifier = Modifier
-                            .width(AutoLockAnchorWidth)
-                            .onGloballyPositioned { coordinates ->
-                                val w = coordinates.size.width
-                                if (w > 0) autoLockAnchorWidthPx = w
-                            }
-                    ) {
-                        OutlinedTextField(
-                            value = selectedAutoLockLabel,
-                            onValueChange = {},
-                            readOnly = true,
-                            singleLine = true,
-                            trailingIcon = {
-                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = autoLockDropdownExpanded)
-                            },
-                            shape = MaterialTheme.shapes.medium,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            ),
-                            textStyle = MaterialTheme.typography.labelLarge,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                        )
-                        DropdownMenu(
-                            expanded = autoLockDropdownExpanded,
-                            onDismissRequest = { dismissAutoLockMenu() },
-                            modifier = Modifier
-                                .widthIn(min = autoLockMenuWidthDp, max = autoLockMenuWidthDp)
-                                .heightIn(max = 280.dp)
-                        ) {
-                            autoLockOptions.forEach { option: Pair<Int, String> ->
-                                val seconds = option.first
-                                val label = option.second
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    onClick = {
-                                        viewModel.setAutoLockTimeout(seconds)
-                                        dismissAutoLockMenu()
-                                    }
-                                )
-                            }
+            // ── Transfer ───────────────────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SectionHeader(stringResource(R.string.settings_section_transfer))
+
+                val lastExportLabel = uiState.lastExportAtMs?.let { millis ->
+                    remember(millis) {
+                        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                            .format(Date(millis))
+                    }
+                }
+                if (lastExportLabel == null) {
+                    PanelCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = StrengthFairColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = stringResource(R.string.settings_never_exported),
+                                style = FootnoteStyle,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     }
                 }
-            )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                PanelCard(
+                    contentPadding = GroupedCardPadding,
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
+                ) {
+                    PanelRow(
+                        title = stringResource(R.string.settings_export_title),
+                        supporting = lastExportLabel?.let {
+                            stringResource(R.string.settings_export_last, it)
+                        },
+                        onClick = { exportPicker.launch(exportFileName) }
+                    ) {
+                        Icon(
+                            Icons.Default.Upload,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    PanelRowDivider()
+                    // "*/*": .pmvault has no registered MIME type, so a narrower filter would grey
+                    // the file out in the picker on most providers.
+                    PanelRow(
+                        title = stringResource(R.string.settings_import_title),
+                        onClick = { importPicker.launch(arrayOf("*/*")) }
+                    ) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                SectionFootnote(stringResource(R.string.settings_transfer_footnote))
+            }
 
             if (BuildConfig.DEBUG) {
-                Text(
-                    text = stringResource(R.string.settings_debug_section),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                )
-                ListItem(
-                    headlineContent = {
-                        Text(
-                            stringResource(R.string.settings_debug_seed_demo_title),
-                            style = MaterialTheme.typography.titleSmall
-                        )
-                    },
-                    supportingContent = {
-                        Text(
-                            stringResource(R.string.settings_debug_seed_demo_subtitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
-                    leadingContent = {
-                        SettingIconBox(
-                            icon = Icons.Default.BugReport,
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            iconTint = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    trailingContent = {
-                        TextButton(
-                            onClick = { viewModel.seedDemoVaultItems() },
-                            enabled = !uiState.isSeedingDemo
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SectionHeader(stringResource(R.string.settings_debug_section))
+                    PanelCard(
+                        contentPadding = GroupedCardPadding,
+                        verticalArrangement = Arrangement.spacedBy(0.dp)
+                    ) {
+                        PanelRow(
+                            title = stringResource(R.string.settings_debug_seed_demo_title),
+                            supporting = stringResource(R.string.settings_debug_seed_demo_subtitle)
                         ) {
-                            Text(stringResource(R.string.settings_debug_seed_demo_action))
+                            TextButton(
+                                onClick = { viewModel.seedDemoVaultItems() },
+                                enabled = !uiState.isSeedingDemo
+                            ) {
+                                Text(stringResource(R.string.settings_debug_seed_demo_action))
+                            }
                         }
                     }
-                )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                }
             }
+
+            DestructiveAction(
+                icon = Icons.Default.Lock,
+                label = stringResource(R.string.settings_lock_now),
+                onClick = viewModel::lock
+            )
+
+            Spacer(Modifier.height(20.dp))
         }
     }
 
@@ -570,6 +402,69 @@ fun SettingsScreen(
     }
 }
 
+/**
+ * Auto-lock: one row whose trailing half is the current value and the chevron that opens the menu.
+ * The value used to live in the supporting line as prose — "Lock vault after 5 minutes" — which
+ * meant the setting read the same whether or not you could change it.
+ */
+@Composable
+private fun AutoLockCard(
+    autoLockSeconds: Int,
+    options: List<Pair<Int, String>>,
+    onSelect: (Int) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    val selectedLabel = options.find { it.first == autoLockSeconds }?.second
+        ?: "${autoLockSeconds}s"
+
+    fun dismiss() {
+        expanded = false
+        focusManager.clearAllFocus()
+    }
+
+    PanelCard(
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 4.dp),
+        onClick = { expanded = true }
+    ) {
+        PanelRow(
+            title = stringResource(R.string.settings_auto_lock_title),
+            supporting = stringResource(R.string.settings_auto_lock_subtitle)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = selectedLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Icon(
+                    Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { dismiss() },
+                    modifier = Modifier
+                        .widthIn(min = 168.dp)
+                        .heightIn(max = 280.dp)
+                ) {
+                    options.forEach { (seconds, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = {
+                                onSelect(seconds)
+                                dismiss()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChangePassphraseSheet(
@@ -586,7 +481,7 @@ private fun ChangePassphraseSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
         dragHandle = null
     ) {
         ChangePassphraseSheetBody(
@@ -626,41 +521,34 @@ private fun ChangePassphraseSheetBody(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
+            .padding(horizontal = 20.dp)
             .navigationBarsPadding()
             .imePadding()
-            .padding(bottom = 24.dp)
+            .padding(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text(
             text = stringResource(R.string.settings_change_passphrase_sheet_title),
             style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        Text(
-            text = stringResource(R.string.settings_change_passphrase_sheet_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 16.dp)
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 4.dp)
         )
 
-        SecureTextField(
+        PanelSecureTextField(
             value = currentPass,
             onValueChange = onCurrentPassChange,
             label = stringResource(R.string.settings_current_passphrase_hint),
-            modifier = Modifier.fillMaxWidth()
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
 
-        Spacer(Modifier.height(12.dp))
-
-        SecureTextField(
+        PanelSecureTextField(
             value = newPass,
             onValueChange = onNewPassChange,
             label = stringResource(R.string.settings_new_passphrase_hint),
-            modifier = Modifier.fillMaxWidth()
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
 
         if (newPass.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
             PasswordStrengthBar(
                 password = newPass,
                 modifier = Modifier
@@ -669,25 +557,23 @@ private fun ChangePassphraseSheetBody(
             )
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        SecureTextField(
+        PanelSecureTextField(
             value = confirmPass,
             onValueChange = onConfirmPassChange,
             label = stringResource(R.string.settings_confirm_passphrase_hint),
-            modifier = Modifier.fillMaxWidth()
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
 
         if (error != null) {
-            Spacer(Modifier.height(8.dp))
             Text(
                 text = error.resolve(),
                 color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
+                style = FootnoteStyle,
+                modifier = Modifier.padding(horizontal = 4.dp)
             )
         }
 
-        Spacer(Modifier.height(16.dp))
+        SectionFootnote(stringResource(R.string.settings_change_passphrase_sheet_subtitle))
 
         LoadingButton(
             text = stringResource(R.string.settings_update_passphrase_button),
@@ -703,28 +589,6 @@ private fun ChangePassphraseSheetBody(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(stringResource(R.string.cancel))
-        }
-    }
-}
-
-@Composable
-private fun SettingIconBox(
-    icon: ImageVector,
-    containerColor: Color,
-    iconTint: Color
-) {
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = containerColor,
-        modifier = Modifier.size(40.dp)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier.size(22.dp)
-            )
         }
     }
 }
