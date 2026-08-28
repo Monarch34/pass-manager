@@ -15,6 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # macos-15 is the last runner image carrying Xcode 16.x (16.0-16.4, default 16.4).
+  # macos-14 retires 2026-11-02, with brownouts from 2026-10-05; macos-latest is now
+  # macOS 26, which ships only Xcode 26.x.
+  XCODE_APP: "/Applications/Xcode_16.4.app"
+
   # Pinned rather than `brew install xcodegen`: XcodeGen 2.45.x started writing
   # pbxproj objectVersion 77, which the runner image's Xcode cannot open, and the
   # failure arrives as an unrelated-looking parse error. Pinning makes the generated
@@ -24,9 +29,9 @@ env:
 jobs:
   core-test:
     name: Core package tests
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Swift version
         run: swift --version
       - name: Check for core package
@@ -46,17 +51,17 @@ jobs:
           swift test 2>&1 | tee core-test.log
       - name: Upload core test log
         if: always() && steps.probe.outputs.present == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: core-test-log
           path: ios/PassVaultCore/core-test.log
 
   app-build:
     name: App build (simulator, ad-hoc signed)
-    runs-on: macos-14
+    runs-on: macos-15
     needs: core-test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check for app project
         id: probe
         run: |
@@ -66,14 +71,21 @@ jobs:
             echo "present=false" >> "$GITHUB_OUTPUT"
             echo "::notice::ios/PassManager/project.yml not present yet — skipping."
           fi
-      - name: Select newest Xcode on the runner
+      # Pinned, not "newest on the runner". That heuristic was right on macos-14, whose
+      # newest Xcode was 16.2; macos-15 also ships Xcode 26.3, so the same line would jump
+      # two major versions without a word. macos-15 is the last image carrying any 16.x at
+      # all, so this pin has a shelf life -- moving to Xcode 26 is a deliberate change with
+      # its own build to prove it, not something a runner upgrade gets to decide.
+      - name: Select the pinned Xcode
         if: steps.probe.outputs.present == 'true'
         run: |
           set -euo pipefail
-          LATEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
-          echo "Available: $(ls -d /Applications/Xcode*.app | tr '\n' ' ')"
-          echo "Selecting: $LATEST"
-          sudo xcode-select -s "$LATEST/Contents/Developer"
+          ls -d /Applications/Xcode*.app
+          if [ ! -d "$XCODE_APP" ]; then
+            echo "::error::$XCODE_APP is not on this runner image."
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
           xcodebuild -version
 
       - name: Install pinned XcodeGen
@@ -174,7 +186,7 @@ jobs:
       - name: Upload tour recording
         if: always() && steps.probe.outputs.present == 'true'
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-tour-video
           path: video/tour.mp4
@@ -202,7 +214,7 @@ jobs:
       - name: Upload screenshots
         if: always() && steps.probe.outputs.present == 'true'
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-screenshots
           path: screenshots/
@@ -243,7 +255,7 @@ jobs:
       - name: Upload streamable app bundle
         if: always() && steps.probe.outputs.present == 'true'
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-simulator-app
           path: dist/PassManager-simulator.zip
@@ -251,7 +263,7 @@ jobs:
 
       - name: Upload logs and artifact
         if: always() && steps.probe.outputs.present == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: app-build-output
           path: |
