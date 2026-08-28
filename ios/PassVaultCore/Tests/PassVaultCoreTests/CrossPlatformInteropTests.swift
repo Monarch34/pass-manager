@@ -302,9 +302,10 @@ final class CrossPlatformInteropTests: XCTestCase {
 
     /// The committed reverse fixture is not taken on trust. Rebuild it from this
     /// package's own primitives, reusing only the salt and IV that a writer would
-    /// have drawn at random, and require byte equality. If the generator script
-    /// diverged from this writer anywhere — key order, slash escaping, omitted
-    /// defaults, AAD extent, tag placement — this fails.
+    /// have drawn at random. If the generator script diverged from this writer in
+    /// slash escaping, omitted defaults, AAD extent or tag placement, this fails.
+    ///
+    /// Key ORDER is deliberately not among them — see step 2.
     func testIosExportIsExactlyWhatThisWriterProduces() throws {
         let file = [UInt8](try fixture("ios-export-v1", "pmvault"))
 
@@ -323,7 +324,21 @@ final class CrossPlatformInteropTests: XCTestCase {
         )
         assertBytesEqual(rebuiltHeader, storedHeader, "header")
 
-        // 2. The body plaintext is byte-for-byte what this writer would emit.
+        // 2. The body plaintext is STRUCTURALLY what this writer would emit.
+        //
+        // This compared re-encoded bytes until the CI runner moved from Xcode 16.2 to
+        // 16.4, and what it was really pinning was Foundation's `.sortedKeys` collation:
+        // case-insensitive before, case-sensitive after. That reorders exactly one payload
+        // in this fixture — the card, where "cardNumber" and "cardholderName" swap, because
+        // 'N' (0x4E) precedes 'h' (0x68) only when case is respected. Every other payload
+        // here sorts identically under both rules, which is why it stayed hidden.
+        //
+        // Key order is not part of the format. FORMAT.md fixes none, and both readers
+        // locate fields by name — `testDiscriminatorIsFoundAnywhereInTheObject` above
+        // exists precisely because Android writes "type" first and this writer does not.
+        // So assert the structure, which the format does fix, and leave byte equality to
+        // the things that actually carry it: the header (step 1, which is also the AAD),
+        // the IV, and the ciphertext (step 3).
         let key = try Argon2id.deriveKey(
             passphrase: Data(Self.passphrase.utf8),
             salt: salt,
@@ -337,7 +352,13 @@ final class CrossPlatformInteropTests: XCTestCase {
         )
         let decoded = try JSONDecoder().decode(PmVaultBody.self, from: plaintext)
         let reencoded = try PmVaultFile.makeEncoder().encode(decoded)
-        assertBytesEqual(reencoded, plaintext, "body")
+        XCTAssertEqual(
+            try JSONSerialization.jsonObject(with: reencoded) as? NSDictionary,
+            try JSONSerialization.jsonObject(with: plaintext) as? NSDictionary,
+            "body structure differs from what this writer produces"
+        )
+        // The bytes may be permuted, but nothing may be added, dropped or reshaped.
+        XCTAssertEqual(reencoded.count, plaintext.count, "body length differs")
 
         // 3. Sealing that plaintext with the same key, IV and AAD reproduces the
         //    stored ciphertext exactly, which pins the whole container.
