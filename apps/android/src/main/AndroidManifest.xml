@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Nothing is declared yet. The application, its activity and its security posture
+         (allowBackup, data extraction rules, FLAG_SECURE) arrive with the UI, so that
+         each one lands in the same change as the code it protects. -->
+
+</manifest>

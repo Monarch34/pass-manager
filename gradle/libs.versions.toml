@@ -1,0 +1,47 @@
+# One catalog for the whole build. There is exactly one Gradle build here and exactly one
+# place a version is written down.
+#
+# The core four are not independently chosen — they are the intersection of three published
+# compatibility tables, and moving any one of them moves the others:
+#
+#   Kotlin 2.4.10 supports  Gradle 7.6.3-9.5.0  and  AGP 8.5.2-9.1.0
+#   AGP 9.1.1     requires  Gradle 9.3.1+
+#   => Gradle 9.5.0 is the only point satisfying both ends.
+#
+# Newer things exist (Gradle 9.7.1, AGP 9.3.2) and are deliberately not used: they fall
+# outside the Kotlin Multiplatform plugin's tested envelope, and "probably fine" is not a
+# property worth having in the build of a password manager.
+
+[versions]
+kotlin = "2.4.10"
+agp = "9.1.1"
+
+# Android. compileSdk 37 is Android 17, which AGP 9.1.1 supports. minSdk 26 is the floor
+# the crypto needs: AES-GCM through the platform provider and a usable Keystore.
+compileSdk = "37"
+targetSdk = "37"
+minSdk = "26"
+
+# One JDK for compiling and one bytecode level, both 17. Google's Android-KMP guidance
+# suggests a 21 toolchain, and that is the eventual move, but 21 compiles to Java 21
+# bytecode by default and then Android needs a jvmTarget override to be dexable. Two knobs
+# that must agree is a way to be wrong; 17 is AGP's own minimum and default, is on both CI
+# images and every development machine here, and needs no override at all.
+jvmToolchain = "17"
+
+# Provisions the toolchain JDK on a machine that does not already have it, so a fresh
+# checkout builds without anyone editing JAVA_HOME.
+foojay = "1.0.0"
+
+[libraries]
+# Deliberately empty. Phase 1 is the skeleton; every module below depends only on the
+# Kotlin standard library and kotlin.test. Dependencies arrive with the code that needs
+# them, so the catalog never lists something nothing imports.
+
+[plugins]
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+android-application = { id = "com.android.application", version.ref = "agp" }
+# The KMP-specific Android plugin. From AGP 9.0 the Kotlin Multiplatform plugin is no
+# longer compatible with `com.android.library` in the same module, so a shared module uses
+# this one and configures Android inside `kotlin { android { } }`.
+android-kmp-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }

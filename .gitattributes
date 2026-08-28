@@ -1,0 +1,37 @@
+# Normalize line endings to LF in the repository.
+* text=auto eol=lf
+
+# The Gradle wrapper script must stay LF or it will not run on Linux/macOS CI.
+gradlew text eol=lf
+
+# Binary — never touched.
+*.jar binary
+*.klib binary
+*.png binary
+*.ico binary
+*.webp binary
+*.ttf binary
+*.otf binary
+*.keystore binary
+*.jks binary
+*.pmvault binary
+*.xcframework binary
+
+# Source and configuration.
+*.kt      text eol=lf
+*.kts     text eol=lf
+*.java    text eol=lf
+*.swift   text eol=lf
+*.c       text eol=lf
+*.h       text eol=lf
+*.def     text eol=lf
+*.xml     text eol=lf
+*.json    text eol=lf
+*.toml    text eol=lf
+*.yml     text eol=lf
+*.properties text eol=lf
+*.md      text eol=lf
+
+# Interop fixtures are compared byte-for-byte across platforms. Any normalization
+# here would rewrite the bytes the test exists to pin.
+fixtures/** -text

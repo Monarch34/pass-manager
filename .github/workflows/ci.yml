@@ -1,0 +1,123 @@
+name: CI
+
+# Two hosts, because the split is real: everything except Apple linking runs on Linux, and
+# Apple linking cannot run anywhere but macOS. Kotlin/Native compiles iOS klibs on any
+# host, so the Linux job already type-checks the iOS source sets — what the macOS job adds
+# is the link step, the simulator tests, and the XCFramework.
+
+on:
+  push:
+    branches: [v2]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test (JVM, Android, iOS klibs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          # No `cache:` — gradle/actions/setup-gradle owns the Gradle User Home cache and
+          # the two mechanisms interfere.
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # AGP reads sdk.dir from local.properties BEFORE consulting ANDROID_HOME and takes
+      # the first hit, so a stray copy does not lose to the runner's correct value — it
+      # wins, and the build fails on a path from someone else's machine.
+      - name: Assert no local.properties shadows ANDROID_HOME
+        run: |
+          if [ -f local.properties ]; then
+            echo "::error::local.properties exists and would override ANDROID_HOME:"
+            cat local.properties
+            exit 1
+          fi
+          echo "ANDROID_HOME=${ANDROID_HOME:-<unset>}"
+
+      - name: Build and test
+        run: ./gradlew --no-daemon build
+
+      - name: Fail if the build mutated tracked files
+        run: |
+          if ! git diff --quiet; then
+            echo "::error::the build modified tracked files:"
+            git --no-pager diff --stat
+            exit 1
+          fi
+
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-linux
+          path: '**/build/reports/'
+          if-no-files-found: warn
+
+  apple:
+    name: Apple targets and XCFramework
+    runs-on: macos-26
+    env:
+      # Pinned rather than taking the image default. Kotlin 2.4.10 states support for
+      # Xcode 26.4; macos-26 also carries 26.5 and 26.6, and "whatever is newest" is how a
+      # runner refresh silently changes the compiler's toolchain underneath the build.
+      XCODE_APP: /Applications/Xcode_26.4.1.app
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Select the pinned Xcode
+        run: |
+          set -euo pipefail
+          ls -d /Applications/Xcode*.app
+          if [ ! -d "$XCODE_APP" ]; then
+            echo "::error::$XCODE_APP is not on this runner image."
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
+
+      # The link step, which no other host can perform.
+      - name: Link Apple binaries
+        run: ./gradlew --no-daemon linkDebugTestIosSimulatorArm64 linkReleaseFrameworkIosArm64
+
+      # commonTest actually executing on a device architecture. Until this runs, the iOS
+      # actual of every expect declaration has only ever been type-checked.
+      - name: Run iOS simulator tests
+        run: ./gradlew --no-daemon iosSimulatorArm64Test
+
+      - name: Assemble the XCFramework
+        run: ./gradlew --no-daemon assemblePassManagerKitXCFramework
+
+      - name: Show what was produced
+        run: find ios/framework/build/XCFrameworks -maxdepth 3 | head -40
+
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-apple
+          path: '**/build/reports/'
+          if-no-files-found: warn
+
+      - if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: PassManagerKit-xcframework
+          path: ios/framework/build/XCFrameworks/release/
+          if-no-files-found: warn

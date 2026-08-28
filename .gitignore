@@ -1,0 +1,76 @@
+# ── Build output ────────────────────────────────────────────────────────────
+build/
+**/build/
+.gradle/
+**/.gradle/
+.kotlin/
+out/
+bin/
+gen/
+
+*.apk
+*.aab
+*.aar
+*.ap_
+*.dex
+*.class
+
+# Gradle 8.8+ writes this from `updateDaemonJvm`; it fights the IDE's own JDK choice.
+gradle/gradle-daemon-jvm.properties
+
+# ── Machine-specific configuration ──────────────────────────────────────────
+# The Android SDK path. AGP reads sdk.dir from here BEFORE consulting ANDROID_HOME
+# and takes the first hit, so a committed copy would override every other machine's
+# correct setting rather than losing to it.
+local.properties
+
+# ── Secrets ─────────────────────────────────────────────────────────────────
+.env
+.env.*
+*.env
+secrets.properties
+**/secrets.properties
+keystore.properties
+serviceAccount*.json
+google-services.json
+*.pem
+*.p12
+*.jks
+*.keystore
+
+# ── Apple ───────────────────────────────────────────────────────────────────
+# The Xcode project is generated from project.yml; only the generator input is
+# tracked. Package.resolved deliberately IS tracked — an unpinned dependency graph
+# is not reproducible, and this app has cryptographic dependencies.
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+.swiftpm/
+ios/**/.build/
+
+# ── IDE and editor ──────────────────────────────────────────────────────────
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.cursor/
+.windsurf/
+.claude/
+
+# ── OS ──────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Diagnostics and scratch ─────────────────────────────────────────────────
+*.hprof
+*.log
+*.tmp
+*.swp
+*~
+captures/
+
+# A stray Gradle distribution unpacked next to the wrapper shadows it silently.
+gradle-*.zip
+gradle-[0-9]*/
