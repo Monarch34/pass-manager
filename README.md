@@ -26,9 +26,14 @@ core/domain            the item model
 
 Everything above the cryptographic primitives is one Kotlin implementation shared by every platform: how a container is framed, what its additional authenticated data covers, the order keys are wrapped in, how an import merges, how entropy is counted.
 
-The primitives themselves are not shared. AES-GCM, X25519, HKDF and the CSPRNG come from the generator each platform already maintains and patches — the JCA provider on Android and the JVM, CryptoKit and Security.framework on Apple. Bundling one portable implementation of those would be less code and strictly worse: it would put a password manager's cryptography on something this project maintains alone, on three platforms, rather than on three that are audited and updated by their vendors.
+The primitives themselves are not shared. AES, HMAC-SHA-256 and the CSPRNG come from the implementation each platform already maintains and patches — the JCA provider on Android and the JVM, Security.framework and CommonCrypto on Apple. Bundling a portable AES would be less code and strictly worse: it would put a password manager's block cipher on something this project maintains alone, on three platforms, rather than on three that are audited and updated by their vendors.
 
-Argon2id is the exception, because neither platform ships it. There is exactly one vendored copy of the reference implementation, built for every target.
+Two things sit above that line because no platform offers them, and both are pinned by published test vectors that run on all three targets:
+
+- **Argon2id**, and the BLAKE2b it is defined in terms of. There is no Argon2 in the JCA, none in CommonCrypto and none in CryptoKit. The alternative to one shared implementation was three different ones — a JNI binding on Android, a pure-Java one on the desktop, vendored C on Apple — that would have to agree byte for byte forever, on a vault that a phone writes and a desktop opens.
+- **GCM's authenticator, on Apple only.** CryptoKit has AES-GCM whole and is Swift-only, which Kotlin/Native cannot bind; CommonCrypto's GCM entry points are not in the iOS SDK's public headers. So on Apple the mode is assembled from Apple's AES and a GHASH implemented here. The block cipher — the part that is genuinely dangerous to write in software — stays the platform's everywhere.
+
+Running the same vectors on every target is also what proves the three agree with each other, which is the property a vault moving between them depends on.
 
 ## Building
 
