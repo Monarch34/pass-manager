@@ -27,10 +27,15 @@ import org.junit.runner.RunWith
  * the one iOS derives from the same passphrase — and the only symptom would be users unable
  * to open their own vaults after switching platforms, with a correct passphrase.
  *
- * This runs on a device because that is the only place the library loads. The chain it
- * closes: RFC 9106 pins BouncyCastle here (test 1); BouncyCastle pins argon2kt at the app's
- * production cost (test 2); and test 3 pins the answer as a literal, so the two cannot drift
- * together without saying so.
+ * This runs on a device because that is the only place the library loads.
+ *
+ * Test 1 is the real known-answer test: a vector from the Argon2 reference implementation's
+ * own suite, run straight through the shipping provider with nothing in between. The app's
+ * production cost has no published vector — the reference suite's Argon2id cases stop at
+ * p=2, and RFC 9106 uses a secret and associated data that this API cannot express — so
+ * tests 2 and 3 reach it indirectly, pinning BouncyCastle to RFC 9106 and then asserting
+ * argon2kt agrees with it at m=65536/t=3/p=4. Test 4 pins that answer so the two cannot
+ * drift together without saying so.
  */
 @RunWith(AndroidJUnit4::class)
 class Argon2KdfProviderKatTest {
@@ -44,7 +49,39 @@ class Argon2KdfProviderKatTest {
     private val passphrase = "CrossPlatform-Fixture-2026".toByteArray(Charsets.UTF_8)
     private val salt = ByteArray(16) { (it * 7 + 1).toByte() }
 
-    // ── 1. The reference implementation used for the cross-check is itself correct ──
+    // ── 1. A published vector, straight through the shipping provider ──
+
+    /**
+     * The strongest form this can take: a third-party vector run through the exact code path
+     * production uses, with no reference implementation in the middle.
+     *
+     * From the Argon2 reference implementation's own test suite
+     * (P-H-C/phc-winner-argon2, `src/test.c`). Its Argon2id cases use only password and
+     * salt — no secret, no associated data — which is the subset `Argon2Kt.hash` can
+     * actually express. The published encoded form is
+     * `$argon2id$v=19$m=65536,t=2,p=1$c29tZXNhbHQ$CTFhFdXPJO1aFaMaO6Mm5c8y7cJHAph8ArZWb2GRPPc`,
+     * and the `v=19` in that string is what pins the Argon2 version independently of the
+     * raw tag below.
+     *
+     * p=1 rather than the app's p=4 because the reference suite's Argon2id vectors do not
+     * go above p=2. The production cost has no published vector at all, which is what the
+     * cross-check below exists for.
+     */
+    @Test
+    fun argon2kt_reproduces_the_reference_implementation_vector() {
+        val derived = provider.deriveKey(
+            passphrase = "password".toByteArray(Charsets.UTF_8),
+            salt = "somesalt".toByteArray(Charsets.UTF_8),
+            params = KdfParams(memory = 65536, iterations = 2, parallelism = 1, hashLength = 32)
+        )
+        assertEquals(
+            "the shipping KDF disagrees with the Argon2 reference test suite",
+            "09316115d5cf24ed5a15a31a3ba326e5cf32edc24702987c02b6566f61913cf7",
+            derived.toHex()
+        )
+    }
+
+    // ── 2. The reference implementation used for the cross-check is itself correct ──
 
     @Test
     fun bouncycastle_reproduces_the_rfc_9106_vector() {
@@ -69,7 +106,7 @@ class Argon2KdfProviderKatTest {
         )
     }
 
-    // ── 2. The shipping KDF agrees with it, at the cost real vaults use ──
+    // ── 3. The shipping KDF agrees with it at the cost real vaults use ──
 
     @Test
     fun argon2kt_agrees_with_the_reference_at_production_cost() {
@@ -93,7 +130,7 @@ class Argon2KdfProviderKatTest {
         )
     }
 
-    // ── 3. And the answer is pinned, so they cannot drift together ──
+    // ── 4. And that answer is pinned, so the two cannot drift together ──
 
     @Test
     fun argon2kt_matches_the_pinned_answer() {
@@ -105,7 +142,7 @@ class Argon2KdfProviderKatTest {
         )
     }
 
-    // ── 4. Sanity properties a stub would fail ──
+    // ── 5. Sanity properties a stub would pass but a real KDF must not ──
 
     @Test
     fun hash_length_is_honoured_and_output_is_salt_dependent() {

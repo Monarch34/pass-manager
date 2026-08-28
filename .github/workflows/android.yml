@@ -38,8 +38,20 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      # No local.properties on a runner: AGP falls back to ANDROID_HOME, which the image
-      # sets. And no keystore.properties: the release-signing guard is bound to
+      # AGP checks `sdk.dir` in local.properties BEFORE ANDROID_HOME, and takes the first
+      # hit. So a local.properties restored from a cache or baked into an image does not
+      # lose to a correct ANDROID_HOME — it wins, and the build fails on a path from
+      # somebody else's laptop. The file is gitignored and must not exist here.
+      - name: Assert no local.properties shadows ANDROID_HOME
+        run: |
+          if [ -f local.properties ]; then
+            echo "::error::local.properties exists and overrides ANDROID_HOME:"
+            cat local.properties
+            exit 1
+          fi
+          echo "ANDROID_HOME=${ANDROID_HOME:-<unset>}"
+
+      # No keystore.properties either: the release-signing guard is bound to
       # `packageRelease`/`packageReleaseBundle` by exact task name and fires at execution
       # time, so nothing below is affected by its absence.
       - name: Assemble

@@ -64,7 +64,9 @@ On Windows, use `.\gradlew.bat` instead of `./gradlew`.
 
 **Debug:** `app/build.gradle.kts` — `isMinifyEnabled` is false.
 
-**Release:** `isMinifyEnabled` and `isShrinkResources` are true; ProGuard/R8 uses `proguard-rules.pro`. Signing is defined in `app/build.gradle.kts`: if `keystore.properties` exists in the repo root, release uses `signingConfigs.release`; otherwise release uses the debug signing config.
+**Release:** `isMinifyEnabled` and `isShrinkResources` are true; ProGuard/R8 uses `proguard-rules.pro`. Signing is defined in `app/build.gradle.kts`: if `keystore.properties` exists in the repo root, release uses `signingConfigs.release`.
+
+If it does not exist, **the release build fails.** It does not fall back to the debug signing config, and this is deliberate — the debug keystore is identical on every machine, so a debug-signed "release" APK is both unpublishable and indistinguishable from a real one. `packageRelease` and `packageReleaseBundle` stop with a message naming the missing file. Debug builds are unaffected: the check is bound to those two tasks by exact name and runs at execution time, so `assembleDebug`, the unit tests, lint and IDE sync all work on a machine with no keystore.
 
 Release APK output (default AGP layout):
 
