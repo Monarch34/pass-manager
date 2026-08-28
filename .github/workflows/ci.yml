@@ -105,8 +105,25 @@ jobs:
       - name: Assemble the XCFramework
         run: ./gradlew --no-daemon assemblePassManagerKitXCFramework
 
-      - name: Show what was produced
-        run: find ios/framework/build/XCFrameworks -maxdepth 3 | head -40
+      # Asserted, not printed. The first version of this step piped `find` into `head`,
+      # which handed the pipeline `head`'s exit status and reported success while the
+      # directory did not exist at all — the framework task had quietly done nothing
+      # because the umbrella module had no sources. A verification step that cannot fail
+      # verifies nothing.
+      - name: Verify the XCFramework was produced
+        run: |
+          set -euo pipefail
+          xcf="ios/framework/build/XCFrameworks/release/PassManagerKit.xcframework"
+          if [ ! -d "$xcf" ]; then
+            echo "::error::$xcf was not produced."
+            echo "what does exist under ios/framework/build:"
+            find ios/framework/build -maxdepth 3 -type d || true
+            exit 1
+          fi
+          find "$xcf" -maxdepth 2
+          # A framework carrying only one architecture slice links on a simulator and
+          # fails on a device, which is the most expensive time to find out.
+          test -d "$xcf/ios-arm64" || { echo "::error::no device slice"; exit 1; }
 
       - if: always()
         uses: actions/upload-artifact@v7
