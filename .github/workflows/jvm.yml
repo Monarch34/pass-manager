@@ -1,0 +1,60 @@
+name: Desktop and protocol
+
+# The two Gradle builds that are not the phone app.
+#
+# `protocol/` has no wrapper and no test source set of its own — it is consumed by
+# composite build from both the Android root and `desktop/`. Building desktop therefore
+# builds it, and this workflow is where the shared pairing contract gets compiled on a
+# clean machine at all. Its 30 desktop tests include the pairing server's authentication
+# matrix, which is the only place the wire protocol's rejection reasons are asserted.
+
+on:
+  push:
+    branches: [main, release-hardening, android-hardening, android-site-icons]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: jvm-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    name: Desktop build and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # `build` covers compile + test for this project. Packaging (`packageMsi`) is
+      # deliberately not run: it needs a full JDK with jpackage and a Windows host, which
+      # is why desktop/gradle.properties.example exists. Nothing here needs it.
+      - name: Build and test
+        working-directory: desktop
+        run: ./gradlew --no-daemon build
+
+      - name: Fail if the build mutated tracked files
+        run: |
+          if ! git diff --quiet; then
+            echo "::error::the build modified tracked files:"
+            git --no-pager diff --stat
+            exit 1
+          fi
+
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-reports
+          path: |
+            desktop/build/reports/
+            desktop/build/test-results/
+          if-no-files-found: warn
