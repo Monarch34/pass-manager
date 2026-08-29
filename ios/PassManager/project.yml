@@ -27,6 +27,11 @@ targets:
       path: Generated-Info.plist
       properties:
         CFBundleDisplayName: PassManager
+        # Listed explicitly. A custom `info.properties` block replaces XcodeGen's defaults
+        # rather than adding to them, so MARKETING_VERSION does not reach the bundle on its
+        # own — the first build shipped a v2 app announcing itself as 1.0.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
