@@ -11,7 +11,7 @@ enum VaultKit {
     /// What happened when a file was opened. Mirrors the Kotlin outcomes rather than
     /// collapsing them, because the whole point of the container's design is that most
     /// failures are knowable *without* a key and must not be reported as a bad passphrase.
-    enum OpenFailure: Equatable {
+    enum OpenFailure: Error, Equatable {
         /// The passphrase was wrong, or someone edited the file. Genuinely indistinguishable.
         case unopenable
         /// Provably broken, proved without a key.
