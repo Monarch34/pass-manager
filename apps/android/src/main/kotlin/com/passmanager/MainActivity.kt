@@ -62,7 +62,10 @@ class MainActivity : FragmentActivity() {
      */
     override fun onStop() {
         super.onStop()
-        model.lock()
+        // Except when the thing in front is a system screen this app asked for. The document
+        // picker stops the activity, so locking here unconditionally would make attaching a
+        // file impossible: the picker would return to a vault that had locked itself.
+        if (!model.awaitingPicker) model.lock()
     }
 }
 

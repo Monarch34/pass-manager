@@ -48,6 +48,29 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
 
     var query by mutableStateOf("")
 
+    /**
+     * Set while a system screen this app asked for is in front — the file picker.
+     *
+     * Leaving the app locks it, and launching the document picker stops the activity, so
+     * without this the vault would lock the instant "Add attachment" was tapped and the file
+     * would come back to a session that no longer exists. Attaching would have been
+     * impossible rather than merely awkward.
+     *
+     * It is a real, narrow carve-out: if the user walks away while the picker is open, the
+     * vault stays unlocked behind it. Cleared the moment the result arrives, so the window is
+     * one file choice long.
+     */
+    var awaitingPicker by mutableStateOf(false)
+        private set
+
+    fun pickerOpened() {
+        awaitingPicker = true
+    }
+
+    fun pickerClosed() {
+        awaitingPicker = false
+    }
+
     val visibleItems: List<VaultItem>
         get() = session?.takeIf { !it.isLocked }?.search(query) ?: emptyList()
 

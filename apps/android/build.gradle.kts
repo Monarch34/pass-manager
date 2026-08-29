@@ -52,4 +52,7 @@ dependencies {
     // Brings androidx.fragment with it, which is why MainActivity is a FragmentActivity:
     // BiometricPrompt needs one and ComponentActivity is not.
     implementation(libs.androidx.biometric)
+    // Ahead of what biometric 1.1.0 would otherwise pull in. See the catalog: the old
+    // FragmentActivity crashes on any Activity Result launch.
+    implementation(libs.androidx.fragment)
 }

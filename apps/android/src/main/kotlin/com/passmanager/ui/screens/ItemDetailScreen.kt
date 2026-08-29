@@ -66,6 +66,7 @@ fun ItemDetailScreen(
     }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        model.pickerClosed()
         if (uri != null) {
             model.attach(item, uri)
             attachments.clear()
@@ -139,7 +140,10 @@ fun ItemDetailScreen(
         }
 
         if (attachments.size < VaultSession.MaxAttachmentsPerItem) {
-            TextButton({ picker.launch("*/*") }) { Text("Add attachment") }
+            TextButton({
+                model.pickerOpened()
+                picker.launch("*/*")
+            }) { Text("Add attachment") }
         } else {
             SectionFootnote(
                 "An item holds at most ${VaultSession.MaxAttachmentsPerItem} attachments."

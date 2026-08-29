@@ -50,6 +50,13 @@ coreKtx = "1.19.0"
 # change its behaviour, and this one's behaviour is the security property.
 biometric = "1.1.0"
 
+# Pinned explicitly, and not because anything here uses Fragment directly. androidx.biometric
+# 1.1.0 brings fragment 1.2.5 with it, whose FragmentActivity still rejects any request code
+# that does not fit in 16 bits — while the Activity Result API generates 32-bit ones. The
+# result is a crash the moment a file picker is launched from a FragmentActivity, which is
+# what this application became in order to show a biometric prompt at all.
+fragment = "1.9.0"
+
 [libraries]
 # Dependencies arrive with the code that needs them, so this never lists something nothing
 # imports.
@@ -76,6 +83,7 @@ androidx-activity-compose = { module = "androidx.activity:activity-compose", ver
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
+androidx-fragment = { module = "androidx.fragment:fragment-ktx", version.ref = "fragment" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
