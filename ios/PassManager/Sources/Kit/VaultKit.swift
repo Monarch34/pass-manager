@@ -55,7 +55,7 @@ enum VaultKit {
             return .failure(.notAVault)
         }
 
-        let secret = Secret.companion.copyOfUtf8(text: passphrase)
+        let secret = Secret.companion.ofUtf8(text: passphrase)
         defer { secret.destroy() }
 
         guard let opened = sealed.openWithPassphrase(passphrase: secret, pepper: nil) as? VaultOpenOpened else {
@@ -66,7 +66,7 @@ enum VaultKit {
 
     /// Creates a brand new vault file from a passphrase.
     static func create(items: [VaultItem], passphrase: String) -> Data {
-        let secret = Secret.companion.copyOfUtf8(text: passphrase)
+        let secret = Secret.companion.ofUtf8(text: passphrase)
         defer { secret.destroy() }
         let bytes = PmVault.shared.create(
             contents: VaultContents(items: items, deletions: []),

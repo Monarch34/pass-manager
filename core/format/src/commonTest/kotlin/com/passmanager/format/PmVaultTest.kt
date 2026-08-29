@@ -60,7 +60,7 @@ class PmVaultTest {
         contents: VaultContents = sampleContents(),
         passphrase: String = "open sesame",
     ): Pair<ByteArray, VaultParse.Sealed> {
-        val bytes = PmVault.create(contents, Secret.copyOfUtf8(passphrase), cheap)
+        val bytes = PmVault.create(contents, Secret.ofUtf8(passphrase), cheap)
         return bytes to assertIs<VaultParse.Sealed>(PmVault.parse(bytes))
     }
 
@@ -68,7 +68,7 @@ class PmVaultTest {
     fun `a vault round trips through the container`() {
         val (_, sealed) = sealAndParse()
         val opened = assertIs<VaultOpen.Opened>(
-            sealed.openWithPassphrase(Secret.copyOfUtf8("open sesame"))
+            sealed.openWithPassphrase(Secret.ofUtf8("open sesame"))
         )
 
         assertEquals(2, opened.contents.items.size)
@@ -116,7 +116,7 @@ class PmVaultTest {
     @Test
     fun `the wrong passphrase is unopenable`() {
         val (_, sealed) = sealAndParse()
-        assertIs<VaultOpen.Unopenable>(sealed.openWithPassphrase(Secret.copyOfUtf8("wrong")))
+        assertIs<VaultOpen.Unopenable>(sealed.openWithPassphrase(Secret.ofUtf8("wrong")))
     }
 
     /**
@@ -152,7 +152,7 @@ class PmVaultTest {
             val parse = PmVault.parse(altered)
             if (parse is VaultParse.Sealed) {
                 assertIs<VaultOpen.Unopenable>(
-                    parse.openWithPassphrase(Secret.copyOfUtf8("open sesame")),
+                    parse.openWithPassphrase(Secret.ofUtf8("open sesame")),
                     "editing byte $index went undetected",
                 )
             }
@@ -161,7 +161,7 @@ class PmVaultTest {
         val altered = bytes.copyOf()
         altered[bytes.size - 20] = (altered[bytes.size - 20].toInt() xor 1).toByte()
         val parse = assertIs<VaultParse.Sealed>(PmVault.parse(altered))
-        assertIs<VaultOpen.Unopenable>(parse.openWithPassphrase(Secret.copyOfUtf8("open sesame")))
+        assertIs<VaultOpen.Unopenable>(parse.openWithPassphrase(Secret.ofUtf8("open sesame")))
     }
 
     /** Changing the recorded cost changes the derived key, so it cannot be quietly lowered. */
@@ -172,7 +172,7 @@ class PmVaultTest {
         altered.putU32(11, VaultDescriptor.MinMemoryKib.toLong())
         val parse = PmVault.parse(altered)
         if (parse is VaultParse.Sealed) {
-            assertIs<VaultOpen.Unopenable>(parse.openWithPassphrase(Secret.copyOfUtf8("open sesame")))
+            assertIs<VaultOpen.Unopenable>(parse.openWithPassphrase(Secret.ofUtf8("open sesame")))
         }
     }
 
@@ -212,14 +212,14 @@ class PmVaultTest {
         // into opening a file whose declared meaning was changed.
         val parse = assertIs<VaultParse.Sealed>(PmVault.parse(newer))
         assertEquals(VaultDescriptor.Schema + 5, parse.descriptor.schema)
-        assertIs<VaultOpen.Unopenable>(parse.openWithPassphrase(Secret.copyOfUtf8("open sesame")))
+        assertIs<VaultOpen.Unopenable>(parse.openWithPassphrase(Secret.ofUtf8("open sesame")))
     }
 
     /** Two vaults of the same contents must differ: fresh salt, fresh key, fresh nonces. */
     @Test
     fun `two vaults of the same contents share no bytes past the magic`() {
-        val first = PmVault.create(sampleContents(), Secret.copyOfUtf8("same"), cheap)
-        val second = PmVault.create(sampleContents(), Secret.copyOfUtf8("same"), cheap)
+        val first = PmVault.create(sampleContents(), Secret.ofUtf8("same"), cheap)
+        val second = PmVault.create(sampleContents(), Secret.ofUtf8("same"), cheap)
         assertEquals(first.size, second.size)
         assertNotEquals(
             first.copyOfRange(9, first.size).toList(),
@@ -235,7 +235,7 @@ class PmVaultTest {
     fun `the vault key opens the body on its own`() {
         val (_, sealed) = sealAndParse()
         val opened = assertIs<VaultOpen.Opened>(
-            sealed.openWithPassphrase(Secret.copyOfUtf8("open sesame"))
+            sealed.openWithPassphrase(Secret.ofUtf8("open sesame"))
         )
         val again = sealed.openWithVaultKey(opened.vaultKey)
         assertEquals(2, again?.items?.size)
@@ -244,9 +244,9 @@ class PmVaultTest {
 
     @Test
     fun `an empty vault is a valid vault`() {
-        val bytes = PmVault.create(VaultContents(), Secret.copyOfUtf8("p"), cheap)
+        val bytes = PmVault.create(VaultContents(), Secret.ofUtf8("p"), cheap)
         val sealed = assertIs<VaultParse.Sealed>(PmVault.parse(bytes))
-        val opened = assertIs<VaultOpen.Opened>(sealed.openWithPassphrase(Secret.copyOfUtf8("p")))
+        val opened = assertIs<VaultOpen.Opened>(sealed.openWithPassphrase(Secret.ofUtf8("p")))
         assertEquals(0, opened.contents.items.size)
     }
 }

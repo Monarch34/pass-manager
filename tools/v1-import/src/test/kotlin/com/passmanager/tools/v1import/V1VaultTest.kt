@@ -30,7 +30,7 @@ class V1VaultTest {
             .use { it.readBytes() }
 
     private fun import(name: String): List<VaultItem> =
-        Secret.copyOfUtf8(passphrase).use { V1Vault.read(fixture(name), it) }.getOrThrow()
+        Secret.ofUtf8(passphrase).use { V1Vault.read(fixture(name), it) }.getOrThrow()
 
     @Test
     fun `reads the Android fixture`() {
@@ -116,13 +116,13 @@ class V1VaultTest {
     @Test
     fun `an imported vault writes and reopens as a v2 container`() {
         val imported = import("android-export-v1.pmvault")
-        val written = Secret.copyOfUtf8("a new passphrase").use {
+        val written = Secret.ofUtf8("a new passphrase").use {
             PmVault.create(VaultContents(items = imported), it)
         }
 
         val sealed = assertIs<VaultParse.Sealed>(PmVault.parse(written))
         val opened = assertIs<VaultOpen.Opened>(
-            sealed.openWithPassphrase(Secret.copyOfUtf8("a new passphrase"))
+            sealed.openWithPassphrase(Secret.ofUtf8("a new passphrase"))
         )
 
         assertEquals(imported.size, opened.contents.items.size)
@@ -131,12 +131,12 @@ class V1VaultTest {
         }
 
         // And the old passphrase must not open the new file.
-        assertIs<VaultOpen.Unopenable>(sealed.openWithPassphrase(Secret.copyOfUtf8(passphrase)))
+        assertIs<VaultOpen.Unopenable>(sealed.openWithPassphrase(Secret.ofUtf8(passphrase)))
     }
 
     @Test
     fun `a wrong passphrase fails rather than returning nothing`() {
-        val result = Secret.copyOfUtf8("not the passphrase").use {
+        val result = Secret.ofUtf8("not the passphrase").use {
             V1Vault.read(fixture("android-export-v1.pmvault"), it)
         }
         assertTrue(result.isFailure, "a wrong passphrase produced a result")
@@ -144,7 +144,7 @@ class V1VaultTest {
 
     @Test
     fun `something that is not a v1 vault is refused`() {
-        Secret.copyOfUtf8(passphrase).use { key ->
+        Secret.ofUtf8(passphrase).use { key ->
             assertTrue(V1Vault.read("not a vault".encodeToByteArray(), key).isFailure)
             assertTrue(V1Vault.read(ByteArray(0), key).isFailure)
             // A v2 file is not a v1 file, and must not be read as one.

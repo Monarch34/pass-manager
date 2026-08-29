@@ -67,12 +67,12 @@ class SecretText private constructor(private val secret: Secret) {
     override fun hashCode(): Int = secret.hashCode()
 
     companion object {
-        fun of(text: String): SecretText = SecretText(Secret.copyOfUtf8(text))
+        fun of(text: String): SecretText = SecretText(Secret.ofUtf8(text))
 
         /** Takes ownership of [secret]; the caller must not destroy it afterwards. */
         fun adopt(secret: Secret): SecretText = SecretText(secret)
 
-        val Empty: SecretText get() = SecretText(Secret.copyOfUtf8(""))
+        val Empty: SecretText get() = SecretText(Secret.ofUtf8(""))
     }
 }
 

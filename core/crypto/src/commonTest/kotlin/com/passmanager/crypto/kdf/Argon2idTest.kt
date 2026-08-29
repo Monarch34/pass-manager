@@ -32,16 +32,16 @@ class Argon2idTest {
     @Test
     fun `RFC 9106 Argon2id vector`() {
         val tag = argon2id(
-            password = Secret.copyOf(repeatedByte(0x01, 32)),
+            password = Secret.of(repeatedByte(0x01, 32)),
             salt = repeatedByte(0x02, 16),
             parameters = Argon2Parameters(memoryKib = 32, iterations = 3, parallelism = 4),
             tagLength = 32,
-            pepper = Secret.copyOf(repeatedByte(0x03, 8)),
+            pepper = Secret.of(repeatedByte(0x03, 8)),
             associatedData = repeatedByte(0x04, 12),
         )
         assertEquals(
             "0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659",
-            tag.copyBytes().toHex(),
+            tag.toByteArray().toHex(),
         )
     }
 
@@ -59,13 +59,13 @@ class Argon2idTest {
     @Test
     fun `reference implementation vector at production cost`() {
         val tag = argon2id(
-            password = Secret.copyOfUtf8("password"),
+            password = Secret.ofUtf8("password"),
             salt = "somesalt".encodeToByteArray(),
             parameters = Argon2Parameters(memoryKib = 65536, iterations = 2, parallelism = 1),
         )
         assertEquals(
             "09316115d5cf24ed5a15a31a3ba326e5cf32edc24702987c02b6566f61913cf7",
-            tag.copyBytes().toHex(),
+            tag.toByteArray().toHex(),
         )
     }
 
@@ -76,36 +76,36 @@ class Argon2idTest {
      */
     @Test
     fun `every input changes the tag`() {
-        val password = Secret.copyOfUtf8("correct horse battery staple")
+        val password = Secret.ofUtf8("correct horse battery staple")
         val salt = repeatedByte(0x11, 16)
         val parameters = Argon2Parameters(memoryKib = 64, iterations = 2, parallelism = 2)
-        val baseline = argon2id(password, salt, parameters).copyBytes().toHex()
+        val baseline = argon2id(password, salt, parameters).toByteArray().toHex()
 
-        assertNotEquals(baseline, argon2id(Secret.adopt(password.copyBytes() + 0x21.toByte()), salt, parameters).copyBytes().toHex(), "password")
-        assertNotEquals(baseline, argon2id(password, repeatedByte(0x12, 16), parameters).copyBytes().toHex(), "salt")
+        assertNotEquals(baseline, argon2id(Secret.adopt(password.toByteArray() + 0x21.toByte()), salt, parameters).toByteArray().toHex(), "password")
+        assertNotEquals(baseline, argon2id(password, repeatedByte(0x12, 16), parameters).toByteArray().toHex(), "salt")
         assertNotEquals(
             baseline,
-            argon2id(password, salt, parameters.copy(memoryKib = 128)).copyBytes().toHex(),
+            argon2id(password, salt, parameters.copy(memoryKib = 128)).toByteArray().toHex(),
             "memory",
         )
         assertNotEquals(
             baseline,
-            argon2id(password, salt, parameters.copy(iterations = 3)).copyBytes().toHex(),
+            argon2id(password, salt, parameters.copy(iterations = 3)).toByteArray().toHex(),
             "iterations",
         )
         assertNotEquals(
             baseline,
-            argon2id(password, salt, parameters.copy(parallelism = 1)).copyBytes().toHex(),
+            argon2id(password, salt, parameters.copy(parallelism = 1)).toByteArray().toHex(),
             "parallelism",
         )
         assertNotEquals(
             baseline,
-            argon2id(password, salt, parameters, pepper = Secret.copyOf(repeatedByte(0x33, 8))).copyBytes().toHex(),
+            argon2id(password, salt, parameters, pepper = Secret.of(repeatedByte(0x33, 8))).toByteArray().toHex(),
             "pepper",
         )
         assertNotEquals(
             baseline,
-            argon2id(password, salt, parameters, associatedData = repeatedByte(0x44, 4)).copyBytes().toHex(),
+            argon2id(password, salt, parameters, associatedData = repeatedByte(0x44, 4)).toByteArray().toHex(),
             "associated data",
         )
     }
@@ -121,7 +121,7 @@ class Argon2idTest {
         val parameters = Argon2Parameters(memoryKib = 32, iterations = 1, parallelism = 1)
         for (length in intArrayOf(4, 16, 32, 63, 64, 65, 96, 128, 1024)) {
             val tag = argon2id(
-                password = Secret.copyOfUtf8("p"),
+                password = Secret.ofUtf8("p"),
                 salt = repeatedByte(0x55, 16),
                 parameters = parameters,
                 tagLength = length,
@@ -139,11 +139,11 @@ class Argon2idTest {
      */
     @Test
     fun `the requested memory is bound into the hash rather than the rounded value`() {
-        val password = Secret.copyOfUtf8("p")
+        val password = Secret.ofUtf8("p")
         val salt = repeatedByte(0x66, 16)
-        val eight = argon2id(password, salt, Argon2Parameters(8, 1, 1)).copyBytes().toHex()
-        val nine = argon2id(password, salt, Argon2Parameters(9, 1, 1)).copyBytes().toHex()
-        val ten = argon2id(password, salt, Argon2Parameters(10, 1, 1)).copyBytes().toHex()
+        val eight = argon2id(password, salt, Argon2Parameters(8, 1, 1)).toByteArray().toHex()
+        val nine = argon2id(password, salt, Argon2Parameters(9, 1, 1)).toByteArray().toHex()
+        val ten = argon2id(password, salt, Argon2Parameters(10, 1, 1)).toByteArray().toHex()
         assertNotEquals(eight, nine)
         assertNotEquals(nine, ten)
     }
@@ -160,7 +160,7 @@ class Argon2idTest {
     fun `rejects a salt shorter than the specification allows`() {
         val parameters = Argon2Parameters(8, 1, 1)
         assertFailsWith<IllegalArgumentException> {
-            argon2id(Secret.copyOfUtf8("p"), repeatedByte(0, 7), parameters)
+            argon2id(Secret.ofUtf8("p"), repeatedByte(0, 7), parameters)
         }
     }
 

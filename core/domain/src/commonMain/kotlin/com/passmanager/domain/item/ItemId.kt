@@ -8,7 +8,6 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlin.jvm.JvmInline
 
 /**
  * What makes two items the same item.
@@ -25,10 +24,18 @@ import kotlin.jvm.JvmInline
  * in, which costs one line and closes that permanently.
  */
 @Serializable(with = ItemIdSerializer::class)
-@JvmInline
-value class ItemId internal constructor(val value: String) {
+class ItemId internal constructor(val value: String) {
+
+    // An ordinary class, not a `value class`. The zero-cost wrapper would be better on
+    // every target but one: Kotlin/Native cannot export an inline class to Objective-C, so
+    // Swift would receive `Any` where an identifier was meant and could not name the type
+    // at all. An allocation per item is not worth an iOS application that cannot compile.
 
     override fun toString(): String = value
+
+    override fun equals(other: Any?): Boolean = other is ItemId && other.value == value
+
+    override fun hashCode(): Int = value.hashCode()
 
     companion object {
         /**

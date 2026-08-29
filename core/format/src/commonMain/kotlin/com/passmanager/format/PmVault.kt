@@ -194,7 +194,7 @@ object PmVault {
         parameters: Argon2Parameters = Argon2Parameters.Default,
         pepper: Secret? = null,
     ): ByteArray {
-        val salt = VaultKeys.newSalt()
+        val salt = VaultKeys.generateSalt()
         val descriptor = VaultDescriptor(
             container = VaultDescriptor.Container,
             schema = VaultDescriptor.Schema,
@@ -202,7 +202,7 @@ object PmVault {
             kdf = parameters,
             salt = salt,
         )
-        return VaultKeys.newVaultKey().use { vaultKey ->
+        return VaultKeys.generateVaultKey().use { vaultKey ->
             val wrapped = VaultKeys.deriveKeyEncryptionKey(passphrase, salt, parameters, pepper)
                 .use { kek -> VaultKeys.wrap(kek, vaultKey) }
             write(descriptor, listOf(WrapSlot.passphrase(wrapped)), contents, vaultKey)

@@ -37,7 +37,7 @@ import com.passmanager.crypto.random.secureRandomBytes
  *
  * Nothing in this module destroys a secret it was passed. A function that receives a
  * `Secret` borrows it; whoever created it erases it. [adopt] transfers ownership of an array
- * and the caller must not touch it afterwards; [copyOf] takes a copy and leaves the original
+ * and the caller must not touch it afterwards; [of] takes a copy and leaves the original
  * the caller's problem.
  */
 class Secret private constructor(private val bytes: ByteArray) : AutoCloseable {
@@ -64,8 +64,14 @@ class Secret private constructor(private val bytes: ByteArray) : AutoCloseable {
     /**
      * A copy the caller owns and must erase. For the cases where a borrowed array genuinely
      * cannot work — a platform API that keeps a reference, for instance.
+     *
+     * Named `toByteArray` rather than `copyBytes`, and the factories `of`/`ofUtf8` rather
+     * than `copyOf`/`copyOfUtf8`, because Objective-C treats a leading `copy` as a
+     * memory-management family: Kotlin/Native renames such methods on the way across, and
+     * the Swift name then no longer resembles the Kotlin one. Same reason `VaultKeys` says
+     * `generate…` and not `new…`.
      */
-    fun copyBytes(): ByteArray = reveal { it.copyOf() }
+    fun toByteArray(): ByteArray = reveal { it.copyOf() }
 
     /** Overwrites the bytes. Idempotent, and the only thing [close] does. */
     fun destroy() {
@@ -114,7 +120,7 @@ class Secret private constructor(private val bytes: ByteArray) : AutoCloseable {
         fun adopt(bytes: ByteArray): Secret = Secret(bytes)
 
         /** Copies [bytes], leaving the original the caller's to erase. */
-        fun copyOf(bytes: ByteArray): Secret = Secret(bytes.copyOf())
+        fun of(bytes: ByteArray): Secret = Secret(bytes.copyOf())
 
         /**
          * A passphrase, encoded as UTF-8.
@@ -124,7 +130,7 @@ class Secret private constructor(private val bytes: ByteArray) : AutoCloseable {
          * spreading: everything derived from here on is erasable. Keep the string's lifetime
          * as short as the platform's text field allows.
          */
-        fun copyOfUtf8(text: String): Secret = Secret(text.encodeToByteArray())
+        fun ofUtf8(text: String): Secret = Secret(text.encodeToByteArray())
     }
 }
 

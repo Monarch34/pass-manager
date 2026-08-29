@@ -48,10 +48,10 @@ object VaultKeys {
      * A fresh vault key. Drawn, never derived — its strength is 256 bits of entropy
      * regardless of what the user chose as a passphrase.
      */
-    fun newVaultKey(): Secret = Secret.random(VaultKeySize)
+    fun generateVaultKey(): Secret = Secret.random(VaultKeySize)
 
     /** Not a secret: the salt is stored in the clear beside the thing it salts. */
-    fun newSalt(): ByteArray = secureRandomBytes(SaltSize)
+    fun generateSalt(): ByteArray = secureRandomBytes(SaltSize)
 
     /**
      * Turns a passphrase into the key that wraps the vault key.

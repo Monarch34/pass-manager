@@ -16,7 +16,7 @@ class SecretTest {
      */
     @Test
     fun `never prints its contents`() {
-        val secret = Secret.copyOf(hex("00112233445566778899aabbccddeeff"))
+        val secret = Secret.of(hex("00112233445566778899aabbccddeeff"))
         assertEquals("Secret(16 bytes)", secret.toString())
         assertEquals("key is Secret(16 bytes)", "key is $secret")
 
@@ -27,24 +27,24 @@ class SecretTest {
     @Test
     fun `reveals the bytes it was given`() {
         val bytes = hex("cafebabe")
-        assertEquals("cafebabe", Secret.copyOf(bytes).reveal { it.toHex() })
-        assertEquals("cafebabe", Secret.adopt(bytes.copyOf()).copyBytes().toHex())
-        assertEquals("passphrase", Secret.copyOfUtf8("passphrase").reveal { it.decodeToString() })
+        assertEquals("cafebabe", Secret.of(bytes).reveal { it.toHex() })
+        assertEquals("cafebabe", Secret.adopt(bytes.copyOf()).toByteArray().toHex())
+        assertEquals("passphrase", Secret.ofUtf8("passphrase").reveal { it.decodeToString() })
         assertEquals(32, Secret.random(32).size)
     }
 
     /**
-     * `copyOf` leaves the caller's array alone; `adopt` takes it over. Getting these the
+     * `of` leaves the caller's array alone; `adopt` takes it over. Getting these the
      * wrong way round would either erase an array somebody else still holds, or leave a copy
      * nothing erases.
      */
     @Test
-    fun `copyOf copies and adopt takes ownership`() {
+    fun `of copies and adopt takes ownership`() {
         val source = hex("0102030405")
 
-        val copied = Secret.copyOf(source)
+        val copied = Secret.of(source)
         copied.destroy()
-        assertEquals("0102030405", source.toHex(), "copyOf erased the caller's array")
+        assertEquals("0102030405", source.toHex(), "of erased the caller's array")
 
         val adopted = Secret.adopt(source)
         adopted.destroy()
@@ -70,7 +70,7 @@ class SecretTest {
         val secret = Secret.random(16)
         secret.destroy()
         assertFailsWith<IllegalStateException> { secret.reveal { it.size } }
-        assertFailsWith<IllegalStateException> { secret.copyBytes() }
+        assertFailsWith<IllegalStateException> { secret.toByteArray() }
     }
 
     /**
@@ -92,9 +92,9 @@ class SecretTest {
 
     @Test
     fun `equal contents compare equal`() {
-        assertTrue(Secret.copyOf(hex("00ff10")) == Secret.copyOf(hex("00ff10")))
-        assertNotEquals(Secret.copyOf(hex("00ff10")), Secret.copyOf(hex("00ff11")))
-        assertNotEquals(Secret.copyOf(hex("0011")), Secret.copyOf(hex("001122")))
+        assertTrue(Secret.of(hex("00ff10")) == Secret.of(hex("00ff10")))
+        assertNotEquals(Secret.of(hex("00ff10")), Secret.of(hex("00ff11")))
+        assertNotEquals(Secret.of(hex("0011")), Secret.of(hex("001122")))
         assertFalse(Secret.random(16).equals("not a secret"))
     }
 
@@ -105,8 +105,8 @@ class SecretTest {
      */
     @Test
     fun `a destroyed secret equals nothing`() {
-        val secret = Secret.copyOf(hex("00ff10"))
-        val same = Secret.copyOf(hex("00ff10"))
+        val secret = Secret.of(hex("00ff10"))
+        val same = Secret.of(hex("00ff10"))
         assertTrue(secret == same)
 
         secret.destroy()

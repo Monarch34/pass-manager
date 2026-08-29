@@ -61,13 +61,13 @@ fun main(args: Array<String>) {
         exitProcess(2)
     }
 
-    val items = Secret.copyOfUtf8(v1Passphrase).use { V1Vault.read(source.readBytes(), it) }
+    val items = Secret.ofUtf8(v1Passphrase).use { V1Vault.read(source.readBytes(), it) }
         .getOrElse {
             System.err.println("could not read ${source.path}: ${it.message}")
             exitProcess(1)
         }
 
-    val written = Secret.copyOfUtf8(v2Passphrase).use {
+    val written = Secret.ofUtf8(v2Passphrase).use {
         PmVault.create(VaultContents(items = items), it)
     }
     destination.writeBytes(written)
