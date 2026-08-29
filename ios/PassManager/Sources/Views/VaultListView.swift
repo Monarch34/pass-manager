@@ -6,6 +6,7 @@ struct VaultListView: View {
     @State private var search = ""
     @State private var filter: ItemCategory?
     @State private var adding = false
+    @State private var showingSettings = false
 
     private var visible: [VaultItem] {
         session.items.filter { item in
@@ -55,12 +56,18 @@ struct VaultListView: View {
             .navigationTitle("Vault")
             .searchable(text: $search, prompt: "Search")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showingSettings = true } label: { Image(systemName: "gearshape") }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { session.lock() } label: { Image(systemName: "lock.fill") }
                 }
             }
             .sheet(isPresented: $adding) {
                 AddEditItemView(existing: nil)
+            }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView()
             }
         }
     }

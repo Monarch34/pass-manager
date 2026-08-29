@@ -93,6 +93,8 @@ struct LockView: View {
     @EnvironmentObject private var session: AppSession
     @State private var passphrase = ""
     @State private var confirmingReset = false
+    /// Prompted once when the screen first appears, and not again on every redraw.
+    @State private var promptedOnce = false
 
     var body: some View {
         ScrollView {
@@ -112,6 +114,21 @@ struct LockView: View {
                     passphrase = ""
                 }
 
+                if session.biometricsEnabled {
+                    Button {
+                        session.unlockWithBiometrics()
+                    } label: {
+                        Label("Unlock with \(session.biometricName)", systemImage: "faceid")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                    }
+                    .foregroundStyle(Palette.primary)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Metrics.pill, style: .continuous)
+                            .stroke(Palette.primary, lineWidth: 1)
+                    )
+                }
+
                 if let failure = session.failure {
                     Text(failure).font(.footnote).foregroundStyle(Palette.error)
                 }
@@ -123,6 +140,14 @@ struct LockView: View {
             .padding(20)
         }
         .background(Palette.background.ignoresSafeArea())
+        .onAppear {
+            // Offered immediately, because the whole point is not having to type a long
+            // passphrase. Once only: re-prompting after a cancel would trap someone who
+            // wants to type it instead.
+            guard !promptedOnce, session.biometricsEnabled else { return }
+            promptedOnce = true
+            session.unlockWithBiometrics()
+        }
         .alert("Delete this vault?", isPresented: $confirmingReset) {
             Button("Delete", role: .destructive) { session.startOver() }
             Button("Cancel", role: .cancel) {}

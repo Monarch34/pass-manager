@@ -26,6 +26,13 @@ final class AppSession: ObservableObject {
     /// Held only while unlocked. Destroying it is what locking means.
     private var vaultKey: Secret?
 
+    /// Whether a second way in exists. Read from a plain flag rather than by probing the
+    /// Keychain, because probing a biometry-protected item would prompt for a face just to
+    /// decide whether to draw a button.
+    var biometricsEnabled: Bool { BiometricVaultKey.isEnabled }
+    var biometricsAvailable: Bool { BiometricVaultKey.isAvailable }
+    var biometricName: String { BiometricVaultKey.name }
+
     init() {
         phase = VaultStore.exists ? .locked : .empty
     }
@@ -62,6 +69,54 @@ final class AppSession: ObservableObject {
         }
     }
 
+    /// Opens the vault with the key the Keychain holds, without a passphrase.
+    ///
+    /// The file is still parsed and its body still authenticated — this replaces only the
+    /// derivation, not the verification. A tampered vault fails here exactly as it would on
+    /// the passphrase path.
+    func unlockWithBiometrics() {
+        switch BiometricVaultKey.load() {
+        case .success(let key):
+            do {
+                let file = try VaultStore.read()
+                guard let sealed = PmVault.shared.parse(bytes: file.kotlinBytes) as? VaultParseSealed,
+                      let contents = sealed.openWithVaultKey(vaultKey: key) else {
+                    key.destroy()
+                    // The stored key no longer opens this vault, so it is worse than
+                    // useless: it would fail on every future attempt while looking like an
+                    // option. This happens if the vault was replaced behind the app's back.
+                    BiometricVaultKey.remove()
+                    failure = "The saved key does not open this vault. Use your passphrase."
+                    return
+                }
+                vaultKey?.destroy()
+                vaultKey = key
+                items = contents.items
+                failure = nil
+                phase = .unlocked
+            } catch {
+                key.destroy()
+                failure = error.localizedDescription
+            }
+        case .failure(let reason):
+            // A cancelled prompt is not a failure worth reporting; the user closed it.
+            if reason != .cancelled { failure = reason.message }
+        }
+    }
+
+    /// Stores the open vault's key behind biometry. Only reachable while unlocked, because
+    /// there is nothing to store otherwise.
+    func enableBiometrics() {
+        guard let key = vaultKey else { return }
+        if case .failure(let reason) = BiometricVaultKey.store(key) {
+            failure = reason.message
+        }
+    }
+
+    func disableBiometrics() {
+        BiometricVaultKey.remove()
+    }
+
     func lock() {
         vaultKey?.destroy()
         vaultKey = nil
@@ -78,6 +133,9 @@ final class AppSession: ObservableObject {
         vaultKey = nil
         items = []
         VaultStore.destroy()
+        // The stored key would otherwise outlive the vault it opens — a copy of a key to a
+        // door that no longer exists, sitting in the Keychain until something reused it.
+        BiometricVaultKey.remove()
         failure = nil
         phase = .empty
     }
