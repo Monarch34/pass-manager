@@ -22,11 +22,15 @@ kotlin {
 
     jvm()
 
-    // iosArm64 and iosSimulatorArm64 are Kotlin/Native tier 1. iosX64 is tier 3 and buys
-    // nothing here: every macOS runner in this project's CI is arm64, so an Intel
-    // simulator slice would be built and never executed.
+    // Three Apple targets, not two. An earlier version of this file left iosX64 out
+    // because "every macOS runner in this project's CI is arm64" — which was true and
+    // beside the point. `xcodebuild -destination 'generic/platform=iOS Simulator'` builds
+    // both simulator architectures, and hosted simulator services are not all Apple
+    // Silicon, so an arm64-only framework fails to link for anyone who is not on the
+    // machine that built it. The slice is cheap; discovering it is missing is not.
     iosArm64()
     iosSimulatorArm64()
+    iosX64()
 
     sourceSets {
         commonMain.dependencies {

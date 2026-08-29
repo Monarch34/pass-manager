@@ -124,6 +124,11 @@ jobs:
           # A framework carrying only one architecture slice links on a simulator and
           # fails on a device, which is the most expensive time to find out.
           test -d "$xcf/ios-arm64" || { echo "::error::no device slice"; exit 1; }
+          # The simulator slice must carry BOTH architectures. An arm64-only framework
+          # links on the machine that built it and nowhere else, which is exactly how the
+          # first app build failed.
+          ls -d "$xcf"/ios-arm64_x86_64-simulator >/dev/null 2>&1 || {
+            echo "::error::no universal simulator slice; found:"; ls "$xcf"; exit 1; }
 
       - if: always()
         uses: actions/upload-artifact@v7

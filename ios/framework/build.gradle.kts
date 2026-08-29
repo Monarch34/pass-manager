@@ -22,7 +22,11 @@ kotlin {
     val frameworkName = "PassManagerKit"
     val xcf = XCFramework(frameworkName)
 
-    listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
+    // Both simulator targets go into the same XCFramework, which makes its simulator
+    // slice a fat binary (`ios-arm64_x86_64-simulator`) rather than two rival ones. That is
+    // what lets one artifact link on an Apple Silicon Mac, on an Intel Mac, and on a hosted
+    // simulator, without anyone choosing a build.
+    listOf(iosArm64(), iosSimulatorArm64(), iosX64()).forEach { target ->
         target.binaries.framework {
             baseName = frameworkName
 
