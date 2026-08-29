@@ -238,20 +238,41 @@ object PmVault {
         val length = plain.u32(0)
         if (length > (plain.size - 4).toLong()) return null
         val decoded = VaultBodyCodec.decode(plain.decodeToString(4, 4 + length.toInt()))
-        return VaultContents(decoded.body.items, decoded.body.deletions, decoded.preserved)
+        return VaultContents.of(decoded.body.items, decoded.body.deletions, decoded.preserved)
     }
 }
 
-/** What a vault holds once it is open. */
-class VaultContents(
-    val items: List<VaultItem> = emptyList(),
-    val deletions: List<VaultBody.Deletion> = emptyList(),
-    /**
-     * Members a newer writer added that this version does not understand, carried through
-     * untouched so re-saving on an older client does not destroy them.
-     */
-    internal val preserved: JsonObject = JsonObject(emptyMap()),
-)
+/**
+ * What a vault holds once it is open.
+ *
+ * The preserved members are not a constructor parameter. They are a `JsonObject`, which
+ * belongs to the serialisation library rather than to this module's surface, and a public
+ * constructor mentioning it would drag that library into the Swift framework's public API —
+ * where it would appear as a type Swift can neither build nor read. A caller constructs
+ * contents from items; carrying unknown members forward is this module's business.
+ */
+class VaultContents private constructor(
+    val items: List<VaultItem>,
+    val deletions: List<VaultBody.Deletion>,
+    internal val preserved: JsonObject,
+) {
+    constructor(
+        items: List<VaultItem> = emptyList(),
+        deletions: List<VaultBody.Deletion> = emptyList(),
+    ) : this(items, deletions, JsonObject(emptyMap()))
+
+    /** Keeps [preserved] across an edit, so re-saving does not drop a newer writer's fields. */
+    fun withItems(items: List<VaultItem>): VaultContents =
+        VaultContents(items, deletions, preserved)
+
+    internal companion object {
+        fun of(
+            items: List<VaultItem>,
+            deletions: List<VaultBody.Deletion>,
+            preserved: JsonObject,
+        ) = VaultContents(items, deletions, preserved)
+    }
+}
 
 /** The outcome of reading a file's structure, before any key is involved. */
 sealed interface VaultParse {

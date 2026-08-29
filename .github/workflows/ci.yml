@@ -138,3 +138,60 @@ jobs:
           name: PassManagerKit-xcframework
           path: ios/framework/build/XCFrameworks/release/
           if-no-files-found: warn
+
+      # ── The application ───────────────────────────────────────────────────
+      # Everything below needs the XCFramework above, which is why it lives in this job
+      # rather than a separate one: a second job would have to download the artifact and
+      # could silently build against a stale copy.
+
+      - name: Install XcodeGen
+        env:
+          XCODEGEN_VERSION: "2.45.4"
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/xcodegen.zip             "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
+          BIN="$(find /tmp/xcodegen -type f -name xcodegen -perm +111 | head -1)"
+          echo "XCODEGEN=$BIN" >> "$GITHUB_ENV"
+          "$BIN" --version
+
+      - name: Generate the Xcode project
+        working-directory: ios/PassManager
+        run: "$XCODEGEN" generate
+
+      - name: Build the app for the simulator
+        run: |
+          set -euo pipefail
+          xcodebuild build             -project ios/PassManager/PassManager.xcodeproj             -scheme PassManager             -configuration Debug             -destination 'generic/platform=iOS Simulator'             -derivedDataPath build/DerivedData             2>&1 | tee xcodebuild.log | tail -60
+
+      # Packaged the way Appetize wants it: the .app at the top level of the archive.
+      # `ditto` rather than `zip`, because it preserves the symlinks and resource forks a
+      # bundle needs and `zip` flattens them.
+      - name: Package the simulator app
+        run: |
+          set -euo pipefail
+          APP="build/DerivedData/Build/Products/Debug-iphonesimulator/PassManager.app"
+          if [ ! -d "$APP" ]; then
+            echo "::error::$APP was not produced"
+            find build/DerivedData/Build/Products -maxdepth 2 || true
+            exit 1
+          fi
+          # A bundle with no executable links and installs and then dies on launch, which
+          # is the most expensive moment to find out.
+          test -f "$APP/PassManager" || { echo "::error::no executable in the bundle"; exit 1; }
+          ditto -c -k --sequesterRsrc --keepParent "$APP" PassManager-v2-simulator.zip
+          ls -l PassManager-v2-simulator.zip
+
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log
+          if-no-files-found: warn
+
+      - if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: PassManager-v2-simulator
+          path: PassManager-v2-simulator.zip
+          if-no-files-found: error

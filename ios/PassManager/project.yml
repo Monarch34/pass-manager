@@ -1,0 +1,79 @@
+name: PassManager
+
+options:
+  bundleIdPrefix: com.passmanager
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+targets:
+
+  PassManager:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Sources
+    dependencies:
+      # The Kotlin core, assembled by `./gradlew assemblePassManagerKitXCFramework`
+      # before this project is built. It is a STATIC framework, so it is linked and not
+      # embedded — embedding a static framework produces a bundle the loader will not
+      # accept.
+      - framework: ../framework/build/XCFrameworks/release/PassManagerKit.xcframework
+        embed: false
+        link: true
+    info:
+      path: Generated-Info.plist
+      properties:
+        CFBundleDisplayName: PassManager
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # The app defines the format rather than merely reading it, so the type is
+        # exported rather than imported. Without this the Files picker greys out every
+        # vault the app itself wrote.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.passmanager.pmvault
+            UTTypeDescription: PassManager encrypted vault
+            UTTypeConformsTo:
+              - public.data
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - pmvault
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.passmanager.ios
+        PRODUCT_NAME: PassManager
+        MARKETING_VERSION: "2.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1"
+        # AD-HOC SIGNED, DELIBERATELY — this is what gives the app a Keychain.
+        #
+        # `CODE_SIGNING_ALLOWED: NO` also skips ProcessProductPackaging, so the
+        # entitlements never reach the binary, the app runs with no
+        # `application-identifier`, and therefore has no keychain access group. A
+        # `SecItemAdd` then has nowhere to put the item whatever protection class it asks
+        # for — and an app that cannot write to the Keychain cannot create a vault.
+        #
+        # `-` is the ad-hoc identity: no certificate, no team, no provisioning profile,
+        # and a simulator checks none of the three. Signing is not REQUIRED, so a machine
+        # with no unlocked identity still builds; it is merely ALLOWED, which is all it
+        # takes for the entitlements to be embedded. A device build needs real settings.
+        CODE_SIGNING_ALLOWED: YES
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGN_ENTITLEMENTS: PassManager.entitlements
+
+schemes:
+  PassManager:
+    build:
+      targets:
+        PassManager: all
+    run:
+      config: Debug

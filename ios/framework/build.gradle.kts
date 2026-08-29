@@ -43,6 +43,15 @@ kotlin {
             // size and starts exposing types nobody meant to publish.
             //
             // A module can only be exported if it is an `api` dependency below.
+            // `core:crypto` is exported, which reverses an earlier decision and is worth
+            // saying why. The intent was that Swift should never touch raw cryptography.
+            // But `PmVault.create` and `openWithPassphrase` take a `Secret`, so the type is
+            // already in the surface Swift must call; leaving it unexported would not hide
+            // it, only make it opaque — Swift would hold something it could neither
+            // construct nor read. Exporting it is the honest version of the same boundary:
+            // the app builds a Secret from the passphrase field and hands it straight back,
+            // and no primitive is reachable from there.
+            export(project(":core:crypto"))
             export(project(":core:domain"))
             export(project(":core:format"))
             export(project(":core:vault"))
@@ -53,6 +62,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            api(project(":core:crypto"))
             api(project(":core:domain"))
             api(project(":core:format"))
             api(project(":core:vault"))

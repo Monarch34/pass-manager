@@ -35,11 +35,11 @@ kotlin {
             api(project(":core:domain"))
             // How the container is sealed is format's business alone.
             implementation(project(":core:crypto"))
-            // `api`, reluctantly. VaultContents carries the members a newer writer added
-            // that this version does not understand, and arbitrary JSON cannot be held
-            // without naming its type. The alternative is this module owning a second JSON
-            // model purely to hide the first.
-            api(libs.kotlinx.serialization.json)
+            // `implementation`, not `api`. Nothing public here names a JSON type: the
+            // preserved members are held behind an internal property. That keeps the
+            // serialisation library out of the Swift framework's exported surface, where it
+            // would show up as types Swift could neither construct nor read.
+            implementation(libs.kotlinx.serialization.json)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

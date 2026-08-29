@@ -74,3 +74,6 @@ captures/
 # A stray Gradle distribution unpacked next to the wrapper shadows it silently.
 gradle-*.zip
 gradle-[0-9]*/
+
+# XcodeGen writes this during generation; it is not committed.
+Generated-Info.plist

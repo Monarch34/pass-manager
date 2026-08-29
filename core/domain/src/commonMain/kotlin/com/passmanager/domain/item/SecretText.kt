@@ -47,6 +47,16 @@ class SecretText private constructor(private val secret: Secret) {
      */
     fun <R> reveal(block: (String) -> R): R = secret.reveal { block(it.decodeToString()) }
 
+    /**
+     * The text, for the instant it is displayed or copied.
+     *
+     * [reveal] is the better shape and the one Kotlin callers should use, because the value
+     * cannot outlive the block. This exists because Swift cannot use it: a generic return
+     * crosses the Objective-C bridge as `Any?`, so every call site would be a cast. The
+     * result must not be stored — assign it to a view and let it go.
+     */
+    fun revealed(): String = reveal { it }
+
     fun destroy() = secret.destroy()
 
     /** Never the contents. This is the property that survives a careless log statement. */
