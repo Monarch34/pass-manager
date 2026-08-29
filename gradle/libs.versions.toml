@@ -37,6 +37,14 @@ foojay = "1.0.0"
 # Kotlin version); only the runtime library is versioned separately.
 kotlinxSerialization = "1.9.0"
 
+# Android UI. Stable releases only, and taken from Google's Maven metadata rather than
+# guessed: a version that does not exist fails at resolution, and one that exists but is an
+# alpha fails later and less clearly.
+composeBom = "2026.08.00"
+activityCompose = "1.13.0"
+lifecycle = "2.11.0"
+coreKtx = "1.19.0"
+
 [libraries]
 # Dependencies arrive with the code that needs them, so this never lists something nothing
 # imports.
@@ -52,6 +60,17 @@ kotlinxSerialization = "1.9.0"
 kotlinx-serialization-core = { module = "org.jetbrains.kotlinx:kotlinx-serialization-core", version.ref = "kotlinxSerialization" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
+# One bill of materials decides every Compose artifact's version, so the UI, the graphics
+# layer and Material cannot drift apart into a combination nobody has tested.
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -62,3 +81,6 @@ android-kmp-library = { id = "com.android.kotlin.multiplatform.library", version
 # Versioned by `kotlin`, not independently: the compiler plugin and the compiler are one
 # release, and a mismatch fails at compile time rather than at runtime.
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+# Versioned by `kotlin` for the same reason as serialization: from Kotlin 2.0 the Compose
+# compiler ships with the compiler itself, so the two cannot be chosen independently.
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

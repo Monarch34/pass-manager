@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      A bare no-action-bar theme, and nothing more. Every colour and shape the application
+      uses is decided in Compose, so an XML theme carrying its own palette would be a second
+      source of truth that only shows itself in the split second before the first frame.
+    -->
+    <style name="Theme.PassManager" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

@@ -1,8 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Nothing is declared yet. The application, its activity and its security posture
-         (allowBackup, data extraction rules, FLAG_SECURE) arrive with the UI, so that
-         each one lands in the same change as the code it protects. -->
+    <application
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.PassManager">
+
+        <!--
+          allowBackup is false and the extraction rules exclude everything, which is three
+          statements of one decision: the vault must not leave this device by a route the
+          user did not choose. Auto Backup would otherwise copy it to Google's servers, and
+          device-to-device transfer would copy it to a new phone, in both cases without the
+          passphrase and without asking. Export exists for the case where someone actually
+          wants a copy.
+        -->
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
 
 </manifest>

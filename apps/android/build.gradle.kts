@@ -4,6 +4,7 @@ plugins {
     // plugins are mutually exclusive, and an application entry point has no reason to be
     // multiplatform anyway — everything shared lives under core/.
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -18,6 +19,10 @@ android {
         versionName = "2.0.0"
     }
 
+    buildFeatures {
+        compose = true
+    }
+
     compileOptions {
         val java = JavaVersion.toVersion(libs.versions.jvmToolchain.get())
         sourceCompatibility = java
@@ -26,9 +31,22 @@ android {
 }
 
 dependencies {
+    // Only :core:vault is used directly; the rest come through it as `api` dependencies.
+    // They are named anyway so that a module this application compiles against is visible
+    // here rather than arriving invisibly through somebody else's transitive graph.
     implementation(project(":core:crypto"))
     implementation(project(":core:domain"))
     implementation(project(":core:format"))
     implementation(project(":core:vault"))
-    implementation(project(":protocol"))
+
+    // One bill of materials fixes every Compose artifact, so they cannot drift into a
+    // combination nobody has tested together.
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.ui.tooling.preview)
+    debugImplementation(libs.compose.ui.tooling)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.core.ktx)
 }

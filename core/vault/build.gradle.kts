@@ -34,8 +34,12 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            // All three are part of this module's surface, not implementation details: a
+            // caller hands a session a Secret to open a vault and gets VaultItems back, and
+            // an unlock failure is reported in the container's own vocabulary.
             api(project(":core:domain"))
-            implementation(project(":core:crypto"))
+            api(project(":core:crypto"))
+            api(project(":core:format"))
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
