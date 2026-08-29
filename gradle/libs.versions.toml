@@ -33,10 +33,24 @@ jvmToolchain = "17"
 # checkout builds without anyone editing JAVA_HOME.
 foojay = "1.0.0"
 
+# The vault body's encoding. Bundled with the Kotlin plugin (the plugin version IS the
+# Kotlin version); only the runtime library is versioned separately.
+kotlinxSerialization = "1.9.0"
+
 [libraries]
-# Deliberately empty. Phase 1 is the skeleton; every module below depends only on the
-# Kotlin standard library and kotlin.test. Dependencies arrive with the code that needs
-# them, so the catalog never lists something nothing imports.
+# Dependencies arrive with the code that needs them, so this never lists something nothing
+# imports.
+#
+# JSON rather than a hand-rolled binary body, and rather than CBOR. The body sits inside an
+# authentication tag, so a parser is safe there; what matters is that the encoding is stable
+# forever and identical on three platforms. kotlinx-serialization emits members in
+# declaration order deterministically, which is exactly the property Foundation's
+# `.sortedKeys` failed to provide when its collation changed between Xcode releases. CBOR
+# would encode straight to bytes and avoid an intermediate string, but its kotlinx
+# implementation is still marked experimental, and an on-disk format for a password manager
+# is the wrong place to depend on output that may be allowed to change.
+kotlinx-serialization-core = { module = "org.jetbrains.kotlinx:kotlinx-serialization-core", version.ref = "kotlinxSerialization" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
@@ -45,3 +59,6 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 # longer compatible with `com.android.library` in the same module, so a shared module uses
 # this one and configures Android inside `kotlin { android { } }`.
 android-kmp-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+# Versioned by `kotlin`, not independently: the compiler plugin and the compiler are one
+# release, and a mismatch fails at compile time rather than at runtime.
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

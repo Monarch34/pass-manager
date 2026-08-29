@@ -62,6 +62,13 @@ include(":protocol")
 // plugin and `com.android.application` cannot coexist in one Gradle project.
 include(":apps:android")
 
+// ── Tools ───────────────────────────────────────────────────────────────────
+// Not part of either application and not on any path that reaches one. This carries a
+// version 1 vault forward exactly once, on a desk; users of version 2 have never heard of
+// version 1 and there is no import screen. Delete this line and the directory when it has
+// done its job.
+include(":tools:v1-import")
+
 // The umbrella that becomes PassManagerKit.xcframework. It holds no code — it exists so
 // that which modules Swift can see is one decision in one file, and so the core modules
 // never learn that an Apple platform exists.

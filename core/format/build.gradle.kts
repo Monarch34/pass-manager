@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kmp.library)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -34,6 +35,11 @@ kotlin {
             api(project(":core:domain"))
             // How the container is sealed is format's business alone.
             implementation(project(":core:crypto"))
+            // `api`, reluctantly. VaultContents carries the members a newer writer added
+            // that this version does not understand, and arbitrary JSON cannot be held
+            // without naming its type. The alternative is this module owning a second JSON
+            // model purely to hide the first.
+            api(libs.kotlinx.serialization.json)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

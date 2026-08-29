@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kmp.library)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -29,8 +30,17 @@ kotlin {
     iosSimulatorArm64()
 
     sourceSets {
+        commonMain.dependencies {
+            // `api`, not `implementation`: Secret and SecretText appear in this module's own
+            // public types, so anything holding a VaultItem needs to see them. Note the
+            // arrow still points downward — crypto knows nothing about items, and this is
+            // the item model admitting that some of its fields are key material.
+            api(project(":core:crypto"))
+            api(libs.kotlinx.serialization.core)
+        }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.serialization.json)
         }
     }
 }
