@@ -12,7 +12,7 @@ One Gradle build. The dependency arrows only point downward, and each module is 
 apps/android          Compose UI
 ios/framework   ──┐   assembles PassManagerKit.xcframework for the SwiftUI app
                   │
-core/vault    ────┤    storage: envelopes, search, merge
+core/vault    ────┤    the open vault: search, merge, the blob store
 core/format   ────┤    the .pmvault container
 protocol      ────┤    the desktop pairing wire contract
                   │

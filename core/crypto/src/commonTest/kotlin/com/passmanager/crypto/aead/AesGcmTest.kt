@@ -1,5 +1,6 @@
 package com.passmanager.crypto.aead
 
+import com.passmanager.crypto.Secret
 import com.passmanager.crypto.hex
 import com.passmanager.crypto.random.secureRandomBytes
 import com.passmanager.crypto.toHex
@@ -25,11 +26,11 @@ import kotlin.test.assertNull
  */
 class AesGcmTest {
 
-    private val zeroKey = hex(
-        "0000000000000000000000000000000000000000000000000000000000000000"
+    private val zeroKey = Secret.copyOf(
+        hex("0000000000000000000000000000000000000000000000000000000000000000")
     )
-    private val vectorKey = hex(
-        "feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308"
+    private val vectorKey = Secret.copyOf(
+        hex("feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308")
     )
 
     /** Test case 13: no plaintext and no associated data — the tag alone. */
@@ -37,7 +38,7 @@ class AesGcmTest {
     fun `vector 13 - an empty message`() {
         assertEquals(
             "530f8afbc74536b9a963b4f1c4cb738b",
-            AesGcm.seal(zeroKey, hex("000000000000000000000000"), ByteArray(0)).toHex(),
+            AesGcm.seal(zeroKey, hex("000000000000000000000000"), Secret.copyOf(ByteArray(0))).toHex(),
         )
     }
 
@@ -46,7 +47,7 @@ class AesGcmTest {
     fun `vector 14 - exactly one block`() {
         assertEquals(
             "cea7403d4d606b6e074ec5d3baf39d18d0d1c8a799996bf0265b98b5d48ab919",
-            AesGcm.seal(zeroKey, hex("000000000000000000000000"), hex(SixteenZeroBytes)).toHex(),
+            AesGcm.seal(zeroKey, hex("000000000000000000000000"), Secret.copyOf(hex(SixteenZeroBytes))).toHex(),
         )
     }
 
@@ -64,7 +65,7 @@ class AesGcmTest {
             AesGcm.seal(
                 vectorKey,
                 hex(VectorNonce),
-                hex(VectorPlaintext),
+                Secret.copyOf(hex(VectorPlaintext)),
                 hex("feedfacedeadbeeffeedfacedeadbeefabaddad2"),
             ).toHex(),
         )
@@ -84,10 +85,10 @@ class AesGcmTest {
         val withAad = AesGcm.seal(
             vectorKey,
             hex(VectorNonce),
-            hex(VectorPlaintext),
+            Secret.copyOf(hex(VectorPlaintext)),
             hex("feedfacedeadbeeffeedfacedeadbeefabaddad2"),
         ).toHex()
-        val withoutAad = AesGcm.seal(vectorKey, hex(VectorNonce), hex(VectorPlaintext)).toHex()
+        val withoutAad = AesGcm.seal(vectorKey, hex(VectorNonce), Secret.copyOf(hex(VectorPlaintext))).toHex()
 
         val ciphertextLength = VectorCiphertext.length
         assertEquals(withoutAad.substring(0, ciphertextLength), withAad.substring(0, ciphertextLength))
@@ -102,20 +103,20 @@ class AesGcmTest {
      */
     @Test
     fun `round trips at every boundary length`() {
-        val key = secureRandomBytes(AesGcm.KeySize)
+        val key = Secret.random(AesGcm.KeySize)
         val nonce = secureRandomBytes(AesGcm.NonceSize)
         for (messageSize in intArrayOf(0, 1, 15, 16, 17, 31, 32, 33, 127, 128, 129, 1000)) {
             for (aadSize in intArrayOf(0, 1, 16, 17, 64)) {
                 val plaintext = ByteArray(messageSize) { (it * 7 and 0xff).toByte() }
                 val aad = ByteArray(aadSize) { (it * 13 and 0xff).toByte() }
-                val sealed = AesGcm.seal(key, nonce, plaintext, aad)
+                val sealed = AesGcm.seal(key, nonce, Secret.copyOf(plaintext), aad)
                 assertEquals(messageSize + AesGcm.TagSize, sealed.size)
                 assertEquals(
                     plaintext.toHex(),
                     assertNotNull(
                         AesGcm.open(key, nonce, sealed, aad),
                         "message $messageSize, associated data $aadSize",
-                    ).toHex(),
+                    ).copyBytes().toHex(),
                 )
             }
         }
@@ -128,10 +129,10 @@ class AesGcmTest {
      */
     @Test
     fun `rejects anything that was altered`() {
-        val key = secureRandomBytes(AesGcm.KeySize)
+        val key = Secret.random(AesGcm.KeySize)
         val nonce = secureRandomBytes(AesGcm.NonceSize)
         val aad = "version=2".encodeToByteArray()
-        val sealed = AesGcm.seal(key, nonce, "the secret".encodeToByteArray(), aad)
+        val sealed = AesGcm.seal(key, nonce, Secret.copyOfUtf8("the secret"), aad)
 
         for (index in sealed.indices) {
             val altered = sealed.copyOf()
@@ -140,13 +141,13 @@ class AesGcmTest {
         }
         assertNull(AesGcm.open(key, nonce, sealed, "version=3".encodeToByteArray()), "associated data")
         assertNull(AesGcm.open(key, secureRandomBytes(AesGcm.NonceSize), sealed, aad), "nonce")
-        assertNull(AesGcm.open(secureRandomBytes(AesGcm.KeySize), nonce, sealed, aad), "key")
+        assertNull(AesGcm.open(Secret.random(AesGcm.KeySize), nonce, sealed, aad), "key")
     }
 
     /** Shorter than a tag is malformed, not merely unauthentic, and must not throw. */
     @Test
     fun `rejects input too short to contain a tag`() {
-        val key = secureRandomBytes(AesGcm.KeySize)
+        val key = Secret.random(AesGcm.KeySize)
         val nonce = secureRandomBytes(AesGcm.NonceSize)
         for (size in 0 until AesGcm.TagSize) {
             assertNull(AesGcm.open(key, nonce, ByteArray(size)), "$size bytes")
@@ -161,10 +162,10 @@ class AesGcmTest {
     fun `rejects key and nonce sizes other than the fixed ones`() {
         val nonce = secureRandomBytes(AesGcm.NonceSize)
         assertFailsWith<IllegalArgumentException> {
-            AesGcm.seal(secureRandomBytes(16), nonce, ByteArray(1))
+            AesGcm.seal(Secret.random(16), nonce, Secret.random(1))
         }
         assertFailsWith<IllegalArgumentException> {
-            AesGcm.seal(secureRandomBytes(AesGcm.KeySize), secureRandomBytes(16), ByteArray(1))
+            AesGcm.seal(Secret.random(AesGcm.KeySize), secureRandomBytes(16), Secret.random(1))
         }
     }
 

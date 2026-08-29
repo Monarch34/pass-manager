@@ -1,5 +1,7 @@
 package com.passmanager.crypto.aead
 
+import com.passmanager.crypto.Secret
+
 /**
  * AES-256 in Galois/Counter Mode: the only cipher this project uses.
  *
@@ -12,6 +14,14 @@ package com.passmanager.crypto.aead
  * of this application wrote AES-GCM, and the importer that reads those vaults has to run on
  * every platform version 2 supports. Choosing anything else would not replace AES-GCM here,
  * it would only add a second cipher beside it.
+ *
+ * ### The types are asymmetric on purpose
+ *
+ * [seal] takes a [Secret] and returns a `ByteArray`; [open] takes a `ByteArray` and returns
+ * a [Secret]. That is exactly what encryption does — it turns something that must not be
+ * disclosed into something that may be — and expressing it in the signatures means the
+ * compiler tracks which side of that line a given array is on. A caller cannot log the
+ * plaintext by accident, and cannot forget that what came out of [open] has to be erased.
  *
  * ### Nonces
  *
@@ -41,16 +51,23 @@ object AesGcm {
      *
      * `associatedData` is authenticated but not encrypted: it is for the parts of a
      * container that have to stay readable before anything is decrypted — a version number,
-     * a key derivation's parameters — while still being impossible to edit.
+     * a key derivation's parameters — while still being impossible to edit. It is a plain
+     * `ByteArray` because it is, by definition, not a secret.
+     *
+     * Neither `key` nor `plaintext` is destroyed here. They belong to the caller.
      */
     fun seal(
-        key: ByteArray,
+        key: Secret,
         nonce: ByteArray,
-        plaintext: ByteArray,
+        plaintext: Secret,
         associatedData: ByteArray = EmptyAssociatedData,
     ): ByteArray {
         requireKeyAndNonce(key, nonce)
-        return platformAesGcmSeal(key, nonce, plaintext, associatedData)
+        return key.reveal { keyBytes ->
+            plaintext.reveal { plaintextBytes ->
+                platformAesGcmSeal(keyBytes, nonce, plaintextBytes, associatedData)
+            }
+        }
     }
 
     /**
@@ -63,19 +80,21 @@ object AesGcm {
      * distinguish them either, and pretending otherwise is how a decryption oracle starts.
      */
     fun open(
-        key: ByteArray,
+        key: Secret,
         nonce: ByteArray,
         sealed: ByteArray,
         associatedData: ByteArray = EmptyAssociatedData,
-    ): ByteArray? {
+    ): Secret? {
         requireKeyAndNonce(key, nonce)
         // Shorter than a tag is not a failed authentication but a malformed input, and it
         // is rejected before any platform call so that every target behaves alike.
         if (sealed.size < TagSize) return null
-        return platformAesGcmOpen(key, nonce, sealed, associatedData)
+        return key.reveal { keyBytes ->
+            platformAesGcmOpen(keyBytes, nonce, sealed, associatedData)?.let(Secret::adopt)
+        }
     }
 
-    private fun requireKeyAndNonce(key: ByteArray, nonce: ByteArray) {
+    private fun requireKeyAndNonce(key: Secret, nonce: ByteArray) {
         require(key.size == KeySize) { "key is ${key.size} bytes; AES-256-GCM needs $KeySize" }
         require(nonce.size == NonceSize) {
             "nonce is ${nonce.size} bytes; this uses $NonceSize-byte nonces only"
@@ -88,6 +107,10 @@ object AesGcm {
 /**
  * The platform's AES-GCM. Never called directly: [AesGcm] is the only entry point, so the
  * size checks hold on every target rather than on whichever one the caller happened to test.
+ *
+ * These take raw arrays rather than [Secret] because they are the inside of the boundary —
+ * the point at which bytes are handed to a C function or a JCA `Cipher`, both of which want
+ * an array. Wrapping and unwrapping is [AesGcm]'s job precisely so it happens in one place.
  */
 internal expect fun platformAesGcmSeal(
     key: ByteArray,

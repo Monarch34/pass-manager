@@ -3,8 +3,8 @@ package com.passmanager.domain.item
 /**
  * What kind of thing a vault entry is.
  *
- * [key] is a storage and interchange value: it appears in the database's plaintext
- * `category` column and in every exported container, and both are read by more than one
+ * [key] is a storage and interchange value: it appears inside every sealed container this
+ * project writes, and is read by more than one
  * implementation. It is therefore written out explicitly rather than derived from [name] —
  * a rename or a reorder of this enum must not be able to change what is already on disk.
  *

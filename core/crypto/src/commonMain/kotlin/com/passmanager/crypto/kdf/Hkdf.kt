@@ -1,5 +1,6 @@
 package com.passmanager.crypto.kdf
 
+import com.passmanager.crypto.Secret
 import com.passmanager.crypto.mac.platformHmacSha256
 import com.passmanager.crypto.wipe
 
@@ -19,19 +20,21 @@ import com.passmanager.crypto.wipe
  * @param salt optional and not secret. RFC 5869 substitutes a block of zeros when it is
  *   absent, which is what happens here, so callers must not read an empty salt as a way to
  *   skip the extract step.
+ * @return the derived key, which the caller owns and must erase.
  */
 fun hkdfSha256(
-    inputKeyMaterial: ByteArray,
+    inputKeyMaterial: Secret,
     salt: ByteArray,
     info: ByteArray,
     length: Int,
-): ByteArray {
+): Secret {
     require(length in 1..MaxOutputLength) {
         "requested $length bytes; HKDF-SHA-256 produces 1..$MaxOutputLength"
     }
 
-    val pseudoRandomKey =
-        platformHmacSha256(if (salt.isEmpty()) ByteArray(HashLength) else salt, inputKeyMaterial)
+    val pseudoRandomKey = inputKeyMaterial.reveal { ikm ->
+        platformHmacSha256(if (salt.isEmpty()) ByteArray(HashLength) else salt, ikm)
+    }
 
     val out = ByteArray(length)
     var previous = ByteArray(0)
@@ -57,7 +60,7 @@ fun hkdfSha256(
 
     previous.wipe()
     pseudoRandomKey.wipe()
-    return out
+    return Secret.adopt(out)
 }
 
 private const val HashLength = 32

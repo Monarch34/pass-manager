@@ -1,5 +1,6 @@
 package com.passmanager.crypto.kdf
 
+import com.passmanager.crypto.Secret
 import com.passmanager.crypto.hash.Blake2b
 import com.passmanager.crypto.wipe
 
@@ -71,21 +72,23 @@ data class Argon2Parameters(
  * that *is* data-dependent is data-dependent by design, exactly as the reference
  * implementation has it.
  *
- * @param password the secret. Not erased here — the caller owns it and may still need it.
- * @param salt at least 8 bytes, 16 recommended. Unique per vault, and not secret.
- * @param secret an optional key ("pepper") mixed into the hash. Held somewhere the vault
- *   file is not, such as the platform keystore, so that a stolen file alone cannot be
- *   attacked offline.
+ * @param password the passphrase. Borrowed, not erased — the caller owns it.
+ * @param salt at least 8 bytes, 16 recommended. Unique per vault, and not secret, which is
+ *   why it is a plain array.
+ * @param pepper RFC 9106's optional secret value K. Held somewhere the vault file is not —
+ *   the platform keystore — so that a stolen file alone cannot be attacked offline, because
+ *   the attacker is missing an input to the hash rather than merely facing a slow one.
  * @param associatedData optional non-secret data bound into the hash.
+ * @return the derived key, which the caller owns and must erase.
  */
 fun argon2id(
-    password: ByteArray,
+    password: Secret,
     salt: ByteArray,
     parameters: Argon2Parameters,
     tagLength: Int = 32,
-    secret: ByteArray = EmptyBytes,
+    pepper: Secret? = null,
     associatedData: ByteArray = EmptyBytes,
-): ByteArray {
+): Secret {
     require(salt.size >= MinSaltSize) {
         "salt is ${salt.size} bytes; Argon2 requires at least $MinSaltSize"
     }
@@ -94,7 +97,12 @@ fun argon2id(
     }
     val argon2 = Argon2(parameters, tagLength)
     return try {
-        argon2.derive(password, salt, secret, associatedData)
+        password.reveal { passwordBytes ->
+            val derive = { pepperBytes: ByteArray ->
+                Secret.adopt(argon2.derive(passwordBytes, salt, pepperBytes, associatedData))
+            }
+            if (pepper == null) derive(EmptyBytes) else pepper.reveal(derive)
+        }
     } finally {
         argon2.erase()
     }

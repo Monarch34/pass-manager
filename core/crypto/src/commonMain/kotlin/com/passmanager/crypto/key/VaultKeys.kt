@@ -1,10 +1,10 @@
 package com.passmanager.crypto.key
 
+import com.passmanager.crypto.Secret
 import com.passmanager.crypto.aead.AesGcm
 import com.passmanager.crypto.kdf.Argon2Parameters
 import com.passmanager.crypto.kdf.argon2id
 import com.passmanager.crypto.random.secureRandomBytes
-import com.passmanager.crypto.wipe
 
 /**
  * The two-key model: a random vault key that encrypts the contents, and a key-encryption
@@ -19,15 +19,16 @@ import com.passmanager.crypto.wipe
  * - **A second way in costs one more wrapped copy.** Unlocking with biometrics is the same
  *   vault key wrapped again under a key the platform keystore holds and the passphrase
  *   never touches. Both unlock paths reach the same vault key; neither can derive the
- *   other's.
+ *   other's. The same shape gives a written-down recovery code its own slot.
  * - **A stolen key expires.** The vault key can be replaced and the contents re-encrypted
  *   without the user choosing a new passphrase, and the passphrase can be changed without
  *   touching the contents. Under one key those two are the same operation and neither can
  *   happen alone.
  *
- * How the wrapped key, the salt and the derivation parameters are stored is not decided
- * here. This module produces and consumes opaque byte arrays; the container is the format
- * module's business.
+ * Every key here is a [Secret]; only the salt and the wrapped blob are plain arrays, because
+ * only those two are safe to write to a file. How they are stored is not decided here — this
+ * module produces and consumes opaque bytes, and the container is the format module's
+ * business.
  */
 object VaultKeys {
 
@@ -47,28 +48,31 @@ object VaultKeys {
      * A fresh vault key. Drawn, never derived — its strength is 256 bits of entropy
      * regardless of what the user chose as a passphrase.
      */
-    fun newVaultKey(): ByteArray = secureRandomBytes(VaultKeySize)
+    fun newVaultKey(): Secret = Secret.random(VaultKeySize)
 
+    /** Not a secret: the salt is stored in the clear beside the thing it salts. */
     fun newSalt(): ByteArray = secureRandomBytes(SaltSize)
 
     /**
      * Turns a passphrase into the key that wraps the vault key.
      *
-     * @param secret an optional value held outside the vault file — a keystore-backed key,
+     * @param pepper an optional value held outside the vault file — a keystore-backed key,
      *   for instance. Including one means a copy of the file is not enough to attack the
-     *   passphrase offline, because the attacker is missing an input to the hash.
+     *   passphrase offline, because the attacker is missing an input to the hash rather than
+     *   merely facing a slow one. It also means the vault cannot be opened on another
+     *   device, which is why anything that turns it on must offer a way back in.
      */
     fun deriveKeyEncryptionKey(
-        passphrase: ByteArray,
+        passphrase: Secret,
         salt: ByteArray,
         parameters: Argon2Parameters,
-        secret: ByteArray = ByteArray(0),
-    ): ByteArray = argon2id(
+        pepper: Secret? = null,
+    ): Secret = argon2id(
         password = passphrase,
         salt = salt,
         parameters = parameters,
         tagLength = AesGcm.KeySize,
-        secret = secret,
+        pepper = pepper,
     )
 
     /**
@@ -77,13 +81,12 @@ object VaultKeys {
      * The nonce is fresh for every call and stored with the ciphertext, so rewrapping the
      * same vault key after a passphrase change never reuses one.
      */
-    fun wrap(keyEncryptionKey: ByteArray, vaultKey: ByteArray): ByteArray {
+    fun wrap(keyEncryptionKey: Secret, vaultKey: Secret): ByteArray {
         require(vaultKey.size == VaultKeySize) {
             "vault key is ${vaultKey.size} bytes; expected $VaultKeySize"
         }
         val nonce = secureRandomBytes(AesGcm.NonceSize)
-        val sealed = AesGcm.seal(keyEncryptionKey, nonce, vaultKey, WrapContext)
-        return nonce + sealed
+        return nonce + AesGcm.seal(keyEncryptionKey, nonce, vaultKey, WrapContext)
     }
 
     /**
@@ -91,13 +94,11 @@ object VaultKeys {
      * damaged, or someone edited it. Those are indistinguishable, and treating them as one
      * outcome is the point.
      */
-    fun unwrap(keyEncryptionKey: ByteArray, wrapped: ByteArray): ByteArray? {
+    fun unwrap(keyEncryptionKey: Secret, wrapped: ByteArray): Secret? {
         if (wrapped.size != WrappedSize) return null
         val nonce = wrapped.copyOfRange(0, AesGcm.NonceSize)
         val sealed = wrapped.copyOfRange(AesGcm.NonceSize, wrapped.size)
-        val vaultKey = AesGcm.open(keyEncryptionKey, nonce, sealed, WrapContext)
-        sealed.wipe()
-        return vaultKey
+        return AesGcm.open(keyEncryptionKey, nonce, sealed, WrapContext)
     }
 
     /**

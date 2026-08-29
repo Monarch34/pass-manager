@@ -1,5 +1,6 @@
 package com.passmanager.crypto.key
 
+import com.passmanager.crypto.Secret
 import com.passmanager.crypto.aead.AesGcm
 import com.passmanager.crypto.kdf.Argon2Parameters
 import com.passmanager.crypto.toHex
@@ -22,22 +23,22 @@ class VaultKeysTest {
     @Test
     fun `a wrapped key comes back`() {
         val salt = VaultKeys.newSalt()
-        val kek = VaultKeys.deriveKeyEncryptionKey("open sesame".encodeToByteArray(), salt, cheap)
+        val kek = VaultKeys.deriveKeyEncryptionKey(Secret.copyOfUtf8("open sesame"), salt, cheap)
         val vaultKey = VaultKeys.newVaultKey()
 
         val wrapped = VaultKeys.wrap(kek, vaultKey)
         assertEquals(VaultKeys.WrappedSize, wrapped.size)
-        assertEquals(vaultKey.toHex(), VaultKeys.unwrap(kek, wrapped)?.toHex())
+        assertEquals(vaultKey.copyBytes().toHex(), VaultKeys.unwrap(kek, wrapped)?.copyBytes()?.toHex())
     }
 
     @Test
     fun `the wrong passphrase yields nothing`() {
         val salt = VaultKeys.newSalt()
         val wrapped = VaultKeys.wrap(
-            VaultKeys.deriveKeyEncryptionKey("right".encodeToByteArray(), salt, cheap),
+            VaultKeys.deriveKeyEncryptionKey(Secret.copyOfUtf8("right"), salt, cheap),
             VaultKeys.newVaultKey(),
         )
-        val wrong = VaultKeys.deriveKeyEncryptionKey("wrong".encodeToByteArray(), salt, cheap)
+        val wrong = VaultKeys.deriveKeyEncryptionKey(Secret.copyOfUtf8("wrong"), salt, cheap)
         assertNull(VaultKeys.unwrap(wrong, wrapped))
     }
 
@@ -48,10 +49,10 @@ class VaultKeysTest {
      */
     @Test
     fun `the same passphrase under a different salt is a different key`() {
-        val passphrase = "open sesame".encodeToByteArray()
+        val passphrase = Secret.copyOfUtf8("open sesame")
         val first = VaultKeys.deriveKeyEncryptionKey(passphrase, VaultKeys.newSalt(), cheap)
         val second = VaultKeys.deriveKeyEncryptionKey(passphrase, VaultKeys.newSalt(), cheap)
-        assertNotEquals(first.toHex(), second.toHex())
+        assertNotEquals(first.copyBytes().toHex(), second.copyBytes().toHex())
     }
 
     /**
@@ -63,17 +64,17 @@ class VaultKeysTest {
     fun `rewrapping the same key never repeats a nonce`() {
         val vaultKey = VaultKeys.newVaultKey()
         val salt = VaultKeys.newSalt()
-        val old = VaultKeys.deriveKeyEncryptionKey("first".encodeToByteArray(), salt, cheap)
-        val new = VaultKeys.deriveKeyEncryptionKey("second".encodeToByteArray(), salt, cheap)
+        val old = VaultKeys.deriveKeyEncryptionKey(Secret.copyOfUtf8("first"), salt, cheap)
+        val new = VaultKeys.deriveKeyEncryptionKey(Secret.copyOfUtf8("second"), salt, cheap)
 
         val underOld = VaultKeys.wrap(old, vaultKey)
         val underNew = VaultKeys.wrap(new, vaultKey)
         val againUnderOld = VaultKeys.wrap(old, vaultKey)
 
         assertNotEquals(underOld.toHex(), againUnderOld.toHex(), "same key wrapped twice")
-        assertEquals(vaultKey.toHex(), VaultKeys.unwrap(old, underOld)?.toHex())
-        assertEquals(vaultKey.toHex(), VaultKeys.unwrap(new, underNew)?.toHex())
-        assertEquals(vaultKey.toHex(), VaultKeys.unwrap(old, againUnderOld)?.toHex())
+        assertEquals(vaultKey.copyBytes().toHex(), VaultKeys.unwrap(old, underOld)?.copyBytes()?.toHex())
+        assertEquals(vaultKey.copyBytes().toHex(), VaultKeys.unwrap(new, underNew)?.copyBytes()?.toHex())
+        assertEquals(vaultKey.copyBytes().toHex(), VaultKeys.unwrap(old, againUnderOld)?.copyBytes()?.toHex())
         assertNull(VaultKeys.unwrap(new, underOld), "the old wrapping under the new key")
     }
 
@@ -85,13 +86,13 @@ class VaultKeysTest {
     fun `one vault key can be wrapped under two independent keys`() {
         val vaultKey = VaultKeys.newVaultKey()
         val fromPassphrase =
-            VaultKeys.deriveKeyEncryptionKey("passphrase".encodeToByteArray(), VaultKeys.newSalt(), cheap)
+            VaultKeys.deriveKeyEncryptionKey(Secret.copyOfUtf8("passphrase"), VaultKeys.newSalt(), cheap)
         val fromKeystore = VaultKeys.newVaultKey()
 
         val a = VaultKeys.wrap(fromPassphrase, vaultKey)
         val b = VaultKeys.wrap(fromKeystore, vaultKey)
-        assertEquals(vaultKey.toHex(), VaultKeys.unwrap(fromPassphrase, a)?.toHex())
-        assertEquals(vaultKey.toHex(), VaultKeys.unwrap(fromKeystore, b)?.toHex())
+        assertEquals(vaultKey.copyBytes().toHex(), VaultKeys.unwrap(fromPassphrase, a)?.copyBytes()?.toHex())
+        assertEquals(vaultKey.copyBytes().toHex(), VaultKeys.unwrap(fromKeystore, b)?.copyBytes()?.toHex())
         assertNull(VaultKeys.unwrap(fromPassphrase, b), "one path unwrapping the other's blob")
     }
 

@@ -1,5 +1,6 @@
 package com.passmanager.crypto.kdf
 
+import com.passmanager.crypto.Secret
 import com.passmanager.crypto.hex
 import com.passmanager.crypto.toHex
 import kotlin.test.Test
@@ -20,11 +21,11 @@ class HkdfTest {
             "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf" +
                 "34007208d5b887185865",
             hkdfSha256(
-                inputKeyMaterial = hex("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"),
+                inputKeyMaterial = Secret.copyOf(hex("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b")),
                 salt = hex("000102030405060708090a0b0c"),
                 info = hex("f0f1f2f3f4f5f6f7f8f9"),
                 length = 42,
-            ).toHex(),
+            ).copyBytes().toHex(),
         )
     }
 
@@ -40,11 +41,11 @@ class HkdfTest {
             "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d" +
                 "9d201395faa4b61a96c8",
             hkdfSha256(
-                inputKeyMaterial = hex("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"),
+                inputKeyMaterial = Secret.copyOf(hex("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b")),
                 salt = ByteArray(0),
                 info = ByteArray(0),
                 length = 42,
-            ).toHex(),
+            ).copyBytes().toHex(),
         )
     }
 
@@ -54,10 +55,10 @@ class HkdfTest {
      */
     @Test
     fun `different info produces unrelated output`() {
-        val secret = hex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+        val secret = Secret.copyOf(hex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"))
         val salt = hex("a1a2a3a4")
-        val content = hkdfSha256(secret, salt, "content".encodeToByteArray(), 32).toHex()
-        val index = hkdfSha256(secret, salt, "index".encodeToByteArray(), 32).toHex()
+        val content = hkdfSha256(secret, salt, "content".encodeToByteArray(), 32).copyBytes().toHex()
+        val index = hkdfSha256(secret, salt, "index".encodeToByteArray(), 32).copyBytes().toHex()
         assertNotEquals(content, index)
     }
 
@@ -68,18 +69,18 @@ class HkdfTest {
      */
     @Test
     fun `lengths across the block boundaries are prefixes of one another`() {
-        val secret = hex("00112233445566778899aabbccddeeff")
-        val longest = hkdfSha256(secret, ByteArray(0), ByteArray(0), 255 * 32).toHex()
+        val secret = Secret.copyOf(hex("00112233445566778899aabbccddeeff"))
+        val longest = hkdfSha256(secret, ByteArray(0), ByteArray(0), 255 * 32).copyBytes().toHex()
         for (length in intArrayOf(1, 31, 32, 33, 64, 65, 255 * 32)) {
             val derived = hkdfSha256(secret, ByteArray(0), ByteArray(0), length)
             assertEquals(length, derived.size)
-            assertEquals(longest.substring(0, length * 2), derived.toHex(), "length $length")
+            assertEquals(longest.substring(0, length * 2), derived.copyBytes().toHex(), "length $length")
         }
     }
 
     @Test
     fun `rejects lengths outside the specified range`() {
-        val secret = hex("00112233")
+        val secret = Secret.copyOf(hex("00112233"))
         assertFailsWith<IllegalArgumentException> {
             hkdfSha256(secret, ByteArray(0), ByteArray(0), 0)
         }
