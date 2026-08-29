@@ -66,6 +66,21 @@ class VaultSession internal constructor(
         return contents.items.filter { it.searchText().contains(needle) }
     }
 
+    /**
+     * Hands the vault key to a second unlock path so it can be stored behind a keystore or
+     * a biometric gate.
+     *
+     * This is the only way out of the session for the key, and it is scoped rather than
+     * returned: whatever registers a new way in gets the key for the length of a call and
+     * cannot keep it. Adding an unlock path is exactly what the two-key model is for, so
+     * refusing to expose the key at all would not make the design safer, only make the
+     * second path impossible.
+     */
+    fun <R> useVaultKey(block: (Secret) -> R): R {
+        requireOpen()
+        return block(vaultKey)
+    }
+
     /** Destroys the key. The session is spent afterwards and every method throws. */
     fun lock() {
         if (!isLocked) {
@@ -129,6 +144,32 @@ object Vault {
         return when (val result = unlock(store, passphrase)) {
             is UnlockResult.Unlocked -> result.session
             else -> error("a vault written here could not be reopened: $result")
+        }
+    }
+
+    /**
+     * Opens a vault with the key itself, for the unlock paths where no passphrase was ever
+     * typed — a keystore or a biometric gate holding a copy of it.
+     *
+     * The file is still parsed and its body still authenticated. This replaces the
+     * derivation, not the verification, so a damaged or edited vault fails here exactly as
+     * it does on the passphrase path. On success the session takes ownership of [vaultKey].
+     */
+    fun unlockWithVaultKey(store: VaultFileStore, vaultKey: Secret): UnlockResult {
+        if (!store.exists()) return UnlockResult.NoVault
+        return when (val parsed = PmVault.parse(store.read())) {
+            is VaultParse.Sealed -> {
+                val contents = parsed.openWithVaultKey(vaultKey)
+                if (contents == null) {
+                    UnlockResult.WrongPassphrase
+                } else {
+                    UnlockResult.Unlocked(VaultSession(store, vaultKey, contents))
+                }
+            }
+            is VaultParse.Damaged -> UnlockResult.Damaged(parsed.what, parsed.offset)
+            is VaultParse.Unsupported ->
+                UnlockResult.Unsupported(parsed.container, parsed.schema, parsed.minSchema)
+            VaultParse.NotAVault -> UnlockResult.NotAVault
         }
     }
 

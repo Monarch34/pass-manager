@@ -45,6 +45,7 @@ fun VaultListScreen(
     model: VaultViewModel,
     onOpen: (VaultItem) -> Unit,
     onAdd: () -> Unit,
+    onSettings: () -> Unit,
 ) {
     var filter by remember { mutableStateOf<ItemCategory?>(null) }
     val visible = model.visibleItems.filter { filter == null || it.category == filter }
@@ -67,7 +68,10 @@ fun VaultListScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("Vault", style = MaterialTheme.typography.headlineMedium)
-                    TextButton({ model.lock() }) { Text("Lock") }
+                    Row {
+                        TextButton(onSettings) { Text("Settings") }
+                        TextButton({ model.lock() }) { Text("Lock") }
+                    }
                 }
             }
 

@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.passmanager.crypto.Secret
 import com.passmanager.data.AndroidVaultFileStore
+import com.passmanager.data.BiometricVaultKey
+import javax.crypto.Cipher
 import com.passmanager.domain.item.ItemId
 import com.passmanager.domain.item.VaultItem
 import com.passmanager.vault.UnlockResult
@@ -25,7 +27,11 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
     enum class Phase { Empty, Locked, Unlocked }
 
     private val store = AndroidVaultFileStore(application)
+    private val biometrics = BiometricVaultKey(application)
     private var session: VaultSession? = null
+
+    val biometricAvailability get() = biometrics.availability()
+    val biometricsEnabled: Boolean get() = biometrics.isEnabled()
 
     var phase by mutableStateOf(if (store.exists()) Phase.Locked else Phase.Empty)
         private set
@@ -43,14 +49,14 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
 
     fun create(passphrase: String) = guard {
         session = Secret.ofUtf8(passphrase).use { Vault.create(store, it) }
-        adopt()
+        onOpened()
     }
 
     fun unlock(passphrase: String) = guard {
         when (val result = Secret.ofUtf8(passphrase).use { Vault.unlock(store, it) }) {
             is UnlockResult.Unlocked -> {
                 session = result.session
-                adopt()
+                onOpened()
             }
             // Wrong passphrase and a tampered file are one outcome, and saying so is the
             // point: claiming to know which would tell an attacker whether their forgery
@@ -63,6 +69,53 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
             UnlockResult.NotAVault -> failure = "That file is not a PassManager vault."
             UnlockResult.NoVault -> phase = Phase.Empty
         }
+    }
+
+    /**
+     * A cipher to authenticate before storing the vault key, or null if there is no open
+     * vault to store. The caller shows the prompt and returns the authenticated cipher to
+     * [completeEnableBiometrics].
+     */
+    fun cipherToEnableBiometrics(): Cipher? =
+        if (session == null) null else runCatching { biometrics.cipherForStoring() }.getOrNull()
+
+    fun completeEnableBiometrics(cipher: Cipher) = guard {
+        val open = session ?: error("the vault is locked")
+        open.useVaultKey { key -> biometrics.store(cipher, key.toByteArray()) }
+    }
+
+    /** A cipher to authenticate before reading the vault key back. */
+    fun cipherToUnlock(): Cipher? = biometrics.cipherForLoading().getOrElse {
+        // An invalidated key has already removed itself; say why rather than silently
+        // dropping the option the user just tapped.
+        failure = "Fingerprint or face enrolment changed, so the saved key was discarded. " +
+            "Unlock with your passphrase to set it up again."
+        null
+    }
+
+    fun completeUnlockWithBiometrics(cipher: Cipher) = guard {
+        val key = Secret.adopt(biometrics.load(cipher))
+        when (val result = Vault.unlockWithVaultKey(store, key)) {
+            is UnlockResult.Unlocked -> {
+                session = result.session
+                onOpened()
+            }
+            else -> {
+                key.destroy()
+                // A stored key that no longer opens this vault fails every future attempt
+                // while still looking like an option, so it is removed rather than kept.
+                biometrics.remove()
+                failure = "The saved key does not open this vault. Use your passphrase."
+            }
+        }
+    }
+
+    fun disableBiometrics() {
+        biometrics.remove()
+    }
+
+    fun biometricFailed(message: String?) {
+        if (message != null) failure = message
     }
 
     fun lock() {
@@ -103,7 +156,7 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
         failure = null
     }
 
-    private fun adopt() {
+    private fun onOpened() {
         items = session?.items.orEmpty()
         failure = null
         phase = Phase.Unlocked

@@ -45,6 +45,11 @@ activityCompose = "1.13.0"
 lifecycle = "2.11.0"
 coreKtx = "1.19.0"
 
+# The last STABLE release. The line has been in alpha since, and the component that stands
+# between a stolen phone and a vault is the wrong place to take a pre-release: an alpha may
+# change its behaviour, and this one's behaviour is the security property.
+biometric = "1.1.0"
+
 [libraries]
 # Dependencies arrive with the code that needs them, so this never lists something nothing
 # imports.
@@ -70,6 +75,7 @@ compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview"
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

@@ -2,7 +2,6 @@ package com.passmanager
 
 import android.os.Bundle
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -20,11 +19,15 @@ import com.passmanager.ui.VaultViewModel
 import com.passmanager.ui.screens.AddEditItemScreen
 import com.passmanager.ui.screens.CreateVaultScreen
 import com.passmanager.ui.screens.ItemDetailScreen
+import androidx.fragment.app.FragmentActivity
 import com.passmanager.ui.screens.LockScreen
+import com.passmanager.ui.screens.SettingsScreen
 import com.passmanager.ui.screens.VaultListScreen
 import com.passmanager.ui.theme.PassManagerTheme
 
-class MainActivity : ComponentActivity() {
+// FragmentActivity, not ComponentActivity: BiometricPrompt requires one, and it is the only
+// reason this is not the plainer base class.
+class MainActivity : FragmentActivity() {
 
     private val model: VaultViewModel by lazy {
         androidx.lifecycle.ViewModelProvider(this)[VaultViewModel::class.java]
@@ -69,6 +72,7 @@ private fun Root() {
     var editing by remember { mutableStateOf<String?>(null) }
     var viewing by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var settings by remember { mutableStateOf(false) }
 
     when (model.phase) {
         VaultViewModel.Phase.Empty -> CreateVaultScreen(model)
@@ -77,6 +81,7 @@ private fun Root() {
             val open = viewing?.let(model::item)
             val edited = editing?.let(model::item)
             when {
+                settings -> SettingsScreen(model) { settings = false }
                 adding || edited != null -> AddEditItemScreen(
                     model = model,
                     existing = edited,
@@ -92,6 +97,7 @@ private fun Root() {
                     model = model,
                     onOpen = { viewing = it.id.value },
                     onAdd = { adding = true },
+                    onSettings = { settings = true },
                 )
             }
         }

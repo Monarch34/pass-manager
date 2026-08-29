@@ -49,4 +49,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.core.ktx)
+    // Brings androidx.fragment with it, which is why MainActivity is a FragmentActivity:
+    // BiometricPrompt needs one and ComponentActivity is not.
+    implementation(libs.androidx.biometric)
 }

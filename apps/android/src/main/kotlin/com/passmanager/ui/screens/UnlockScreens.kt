@@ -3,6 +3,7 @@ package com.passmanager.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -11,16 +12,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.LocalActivity
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import com.passmanager.ui.VaultViewModel
 import com.passmanager.ui.components.PanelField
 import com.passmanager.ui.components.PillButton
 import com.passmanager.ui.components.SectionFootnote
+import com.passmanager.ui.promptForCipher
+import com.passmanager.ui.theme.PillShape
 
 @Composable
 fun CreateVaultScreen(model: VaultViewModel) {
@@ -77,6 +84,28 @@ fun CreateVaultScreen(model: VaultViewModel) {
 fun LockScreen(model: VaultViewModel) {
     var passphrase by remember { mutableStateOf("") }
     var confirmingReset by remember { mutableStateOf(false) }
+    val activity = LocalActivity.current as? FragmentActivity
+
+    fun unlockWithBiometrics() {
+        val cipher = model.cipherToUnlock() ?: return
+        activity?.promptForCipher(
+            cipher = cipher,
+            title = "Unlock your vault",
+            subtitle = "",
+            onSuccess = model::completeUnlockWithBiometrics,
+            onFailure = model::biometricFailed,
+        )
+    }
+
+    // In an effect, not in the composition. Composition runs whenever Compose decides it
+    // needs to and may run more than once, so showing a system dialog from inside it would
+    // put the prompt up an unpredictable number of times. Keyed on Unit, so it fires once
+    // for as long as this screen is on show.
+    LaunchedEffect(Unit) {
+        // Offered immediately, because not typing a long passphrase is the entire point.
+        // Once only: re-prompting after a cancel would trap someone who wants to type it.
+        if (model.biometricsEnabled && activity != null) unlockWithBiometrics()
+    }
 
     Column(
         Modifier
@@ -98,6 +127,14 @@ fun LockScreen(model: VaultViewModel) {
             },
             enabled = passphrase.isNotEmpty(),
         )
+
+        if (model.biometricsEnabled) {
+            OutlinedButton(
+                onClick = { unlockWithBiometrics() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = PillShape,
+            ) { Text("Unlock with biometrics") }
+        }
 
         model.failure?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
