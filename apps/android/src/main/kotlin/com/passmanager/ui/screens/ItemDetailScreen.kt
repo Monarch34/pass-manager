@@ -6,6 +6,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
 import android.os.PersistableBundle
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,8 +21,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -34,6 +38,9 @@ import com.passmanager.ui.VaultViewModel
 import com.passmanager.ui.components.PanelCard
 import com.passmanager.ui.components.PanelRow
 import com.passmanager.ui.components.PanelRowDivider
+import com.passmanager.ui.components.SectionFootnote
+import com.passmanager.vault.Attachment
+import com.passmanager.vault.VaultSession
 import com.passmanager.ui.label
 
 private class DetailField(val label: String, val value: String, val secret: Boolean)
@@ -47,6 +54,24 @@ fun ItemDetailScreen(
 ) {
     var confirmingDelete by remember { mutableStateOf(false) }
     val fields = remember(item) { item.detailFields() }
+    val attachments = remember(item.id) { mutableStateListOf<Attachment>() }
+
+    // Loaded once per item. Every attachment on the device has its header read to find the
+    // ones that belong here, which is the cost of an attachment naming its item rather than
+    // the other way round — and the reason an item's attachments cannot be orphaned by an
+    // edit to the item.
+    LaunchedEffect(item.id) {
+        attachments.clear()
+        attachments.addAll(model.attachments(item))
+    }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            model.attach(item, uri)
+            attachments.clear()
+            attachments.addAll(model.attachments(item))
+        }
+    }
 
     Column(
         Modifier
@@ -77,6 +102,48 @@ fun ItemDetailScreen(
                 DetailRow(field)
                 if (index < fields.size - 1) PanelRowDivider()
             }
+        }
+
+        Text("Attachments", style = MaterialTheme.typography.titleSmall)
+        PanelCard {
+            if (attachments.isEmpty()) {
+                Text(
+                    "Nothing attached yet.",
+                    Modifier.padding(14.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                attachments.forEachIndexed { index, attachment ->
+                    PanelRow {
+                        Column(Modifier.fillMaxWidth(0.72f)) {
+                            Text(
+                                attachment.filename.ifEmpty { "Attachment" },
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            Text(
+                                readableSize(attachment.size),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        TextButton({
+                            model.deleteAttachment(attachment.id)
+                            attachments.clear()
+                            attachments.addAll(model.attachments(item))
+                        }) { Text("Remove") }
+                    }
+                    if (index < attachments.size - 1) PanelRowDivider()
+                }
+            }
+        }
+
+        if (attachments.size < VaultSession.MaxAttachmentsPerItem) {
+            TextButton({ picker.launch("*/*") }) { Text("Add attachment") }
+        } else {
+            SectionFootnote(
+                "An item holds at most ${VaultSession.MaxAttachmentsPerItem} attachments."
+            )
         }
 
         TextButton({ confirmingDelete = true }) {
@@ -143,6 +210,13 @@ private fun Context.copySensitive(label: String, value: String, secret: Boolean)
         }
     }
     clipboard.setPrimaryClip(clip)
+}
+
+/** Sizes as a person reads them, not as a machine stores them. */
+private fun readableSize(bytes: Long): String = when {
+    bytes < 1024 -> "$bytes bytes"
+    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+    else -> "${(bytes * 10 / (1024 * 1024)).toDouble() / 10} MB"
 }
 
 /** Only the fields this kind actually has, and only the ones that are filled in. */

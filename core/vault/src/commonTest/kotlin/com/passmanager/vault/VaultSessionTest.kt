@@ -12,22 +12,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/** A store that keeps the vault in memory, so the session can be tested on every target. */
-private class InMemoryStore : VaultFileStore {
-    var bytes: ByteArray? = null
-    var writes = 0
-
-    override fun exists() = bytes != null
-    override fun read() = bytes ?: error("no vault")
-    override fun write(bytes: ByteArray) {
-        this.bytes = bytes
-        writes++
-    }
-    override fun delete() {
-        bytes = null
-    }
-}
-
 class VaultSessionTest {
 
     private val cheap = Argon2Parameters(memoryKib = 8192, iterations = 1, parallelism = 1)
@@ -43,9 +27,9 @@ class VaultSessionTest {
         ),
     )
 
-    private fun open(): Pair<InMemoryStore, VaultSession> {
-        val store = InMemoryStore()
-        val session = Secret.ofUtf8("open sesame").use { Vault.create(store, it, cheap) }
+    private fun open(): Pair<InMemoryVaultStore, VaultSession> {
+        val store = InMemoryVaultStore()
+        val session = Secret.ofUtf8("open sesame").use { Vault.create(store, InMemoryBlobs(), it, cheap) }
         return store to session
     }
 
@@ -55,7 +39,7 @@ class VaultSessionTest {
         session.save(login("GitHub", username = "octocat", password = "hunter2"))
         session.lock()
 
-        val reopened = Secret.ofUtf8("open sesame").use { Vault.unlock(store, it) }
+        val reopened = Secret.ofUtf8("open sesame").use { Vault.unlock(store, InMemoryBlobs(), it) }
         val items = assertIs<UnlockResult.Unlocked>(reopened).session.items
         assertEquals(1, items.size)
         assertEquals("GitHub", items.single().payload.title)
@@ -64,7 +48,7 @@ class VaultSessionTest {
     @Test
     fun `the wrong passphrase is reported as such and not as damage`() {
         val (store, _) = open()
-        val result = Secret.ofUtf8("wrong").use { Vault.unlock(store, it) }
+        val result = Secret.ofUtf8("wrong").use { Vault.unlock(store, InMemoryBlobs(), it) }
         assertIs<UnlockResult.WrongPassphrase>(result)
     }
 
@@ -72,13 +56,13 @@ class VaultSessionTest {
     fun `a truncated vault is damaged rather than a wrong passphrase`() {
         val (store, _) = open()
         store.bytes = store.bytes!!.copyOf(store.bytes!!.size / 2)
-        val result = Secret.ofUtf8("open sesame").use { Vault.unlock(store, it) }
+        val result = Secret.ofUtf8("open sesame").use { Vault.unlock(store, InMemoryBlobs(), it) }
         assertIs<UnlockResult.Damaged>(result)
     }
 
     @Test
     fun `an absent vault is reported before a passphrase is asked for`() {
-        val result = Secret.ofUtf8("anything").use { Vault.unlock(InMemoryStore(), it) }
+        val result = Secret.ofUtf8("anything").use { Vault.unlock(InMemoryVaultStore(), InMemoryBlobs(), it) }
         assertIs<UnlockResult.NoVault>(result)
     }
 

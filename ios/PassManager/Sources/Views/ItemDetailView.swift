@@ -2,6 +2,7 @@ import PassManagerKit
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import UniformTypeIdentifiers
 
 struct ItemDetailView: View {
     let item: VaultItem
@@ -9,6 +10,8 @@ struct ItemDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var editing = false
     @State private var confirmingDelete = false
+    @State private var attachments: [Attachment] = []
+    @State private var picking = false
 
     var body: some View {
         ScrollView {
@@ -20,6 +23,8 @@ struct ItemDetailView: View {
                         if index < fields.count - 1 { Divider().padding(.leading, 14) }
                     }
                 }
+                attachmentSection
+
                 Button(role: .destructive) { confirmingDelete = true } label: {
                     Text("Delete").frame(maxWidth: .infinity).padding(.vertical, 14)
                 }
@@ -37,6 +42,13 @@ struct ItemDetailView: View {
             }
         }
         .sheet(isPresented: $editing) { AddEditItemView(existing: item) }
+        .fileImporter(isPresented: $picking, allowedContentTypes: [.data]) { result in
+            if case .success(let url) = result {
+                session.attach(url, to: item)
+                attachments = session.attachments(of: item)
+            }
+        }
+        .onAppear { attachments = session.attachments(of: item) }
         .alert("Delete this entry?", isPresented: $confirmingDelete) {
             Button("Delete", role: .destructive) {
                 session.delete(item)
@@ -44,6 +56,59 @@ struct ItemDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+    }
+
+    private var attachmentSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Attachments")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Palette.onSurfaceVariant)
+
+            PanelCard {
+                if attachments.isEmpty {
+                    Text("Nothing attached yet.")
+                        .font(.subheadline)
+                        .foregroundStyle(Palette.onSurfaceVariant)
+                        .padding(14)
+                } else {
+                    ForEach(Array(attachments.enumerated()), id: \.element.id) { index, attachment in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(attachment.filename.isEmpty ? "Attachment" : attachment.filename)
+                                Text(readableSize(attachment.size))
+                                    .font(.footnote)
+                                    .foregroundStyle(Palette.onSurfaceVariant)
+                            }
+                            Spacer()
+                            Button("Remove") {
+                                session.deleteAttachment(attachment.id)
+                                attachments = session.attachments(of: item)
+                            }
+                            .foregroundStyle(Palette.error)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        if index < attachments.count - 1 { Divider().padding(.leading, 14) }
+                    }
+                }
+            }
+
+            if attachments.count < Int(VaultSession.companion.MaxAttachmentsPerItem) {
+                Button("Add attachment") { picking = true }
+                    .font(.subheadline)
+            } else {
+                Text("An item holds at most \(VaultSession.companion.MaxAttachmentsPerItem) attachments.")
+                    .font(.footnote)
+                    .foregroundStyle(Palette.onSurfaceVariant)
+            }
+        }
+    }
+
+    /// Sizes as a person reads them, not as a machine stores them.
+    private func readableSize(_ bytes: Int64) -> String {
+        if bytes < 1024 { return "\(bytes) bytes" }
+        if bytes < 1024 * 1024 { return "\(bytes / 1024) KB" }
+        return String(format: "%.1f MB", Double(bytes) / (1024 * 1024))
     }
 
     private var hero: some View {

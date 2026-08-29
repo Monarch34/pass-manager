@@ -4,6 +4,11 @@ import com.passmanager.crypto.Secret
 import com.passmanager.crypto.kdf.Argon2Parameters
 import com.passmanager.domain.item.ItemId
 import com.passmanager.domain.item.VaultItem
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
+import com.passmanager.format.BlobHeader
+import com.passmanager.format.BlobId
+import com.passmanager.format.PmBlob
 import com.passmanager.format.PmVault
 import com.passmanager.format.VaultContents
 import com.passmanager.format.VaultOpen
@@ -20,8 +25,10 @@ import com.passmanager.format.VaultParse
  * Everything here is shared. Android and iOS differ only in where the bytes are kept, which
  * is [VaultFileStore]'s business.
  */
+@OptIn(ExperimentalEncodingApi::class)
 class VaultSession internal constructor(
     private val store: VaultFileStore,
+    private val blobs: BlobFileStore,
     private val vaultKey: Secret,
     private var contents: VaultContents,
 ) {
@@ -48,7 +55,12 @@ class VaultSession internal constructor(
 
     fun delete(id: ItemId) {
         requireOpen()
+        val doomed = attachments(id)
+        // The vault first, the attachments second. A crash between the two leaves files
+        // nothing points at, which the next unlock sweeps up; the other order would delete
+        // an attachment and then fail to remove the item that still claims it.
         persist(contents.items.filterNot { it.id == id })
+        for (attachment in doomed) blobs.delete(attachment.id)
     }
 
     /**
@@ -64,6 +76,98 @@ class VaultSession internal constructor(
         val needle = query.trim().foldForSearch()
         if (needle.isEmpty()) return contents.items
         return contents.items.filter { it.searchText().contains(needle) }
+    }
+
+    // -- Attachments ---------------------------------------------------------
+
+    /**
+     * The attachments belonging to an item.
+     *
+     * Every attachment names its item rather than the item listing its attachments, so this
+     * reads each one's header and keeps the ones that match. That is a real cost — a few
+     * kilobytes per attachment on the device, not per item — and it is the price of the
+     * direction the pointer runs in: an attachment cannot be orphaned by an edit to the item
+     * it belongs to, because the item does not know about it.
+     */
+    fun attachments(itemId: ItemId): List<Attachment> {
+        requireOpen()
+        return blobs.list().mapNotNull { id ->
+            val header = headerOf(id) ?: return@mapNotNull null
+            if (header.itemId != itemId) null else header.toAttachment(id)
+        }.sortedBy { it.createdAt }
+    }
+
+    /**
+     * Seals [content] as a new attachment on [itemId].
+     *
+     * The vault itself is not touched. Attaching a file to an entry rewrites no passwords
+     * and cannot corrupt the vault, which is the whole reason attachments are their own
+     * files.
+     */
+    fun attach(
+        itemId: ItemId,
+        filename: String,
+        mimeType: String,
+        content: Secret,
+        createdAt: Long,
+        thumbnail: String? = null,
+    ): Attachment {
+        requireOpen()
+        require(contents.items.any { it.id == itemId }) { "no such item" }
+        require(content.size <= PmBlob.MaxContentSize) {
+            "an attachment is " + content.size + " bytes; the limit is " + PmBlob.MaxContentSize
+        }
+        require(attachments(itemId).size < MaxAttachmentsPerItem) {
+            "an item may have at most " + MaxAttachmentsPerItem + " attachments"
+        }
+
+        val id = BlobId.random()
+        val header = BlobHeader(
+            itemId = itemId,
+            filename = filename,
+            mimeType = mimeType,
+            size = content.size.toLong(),
+            createdAt = createdAt,
+            thumbnail = thumbnail,
+        )
+        blobs.write(id.hex, PmBlob.create(vaultKey, id, header, content))
+        return header.toAttachment(id.hex)
+    }
+
+    /** Decrypts an attachment. The caller owns the result and must destroy it. */
+    fun openAttachment(id: String): Secret? {
+        requireOpen()
+        val bytes = runCatching { blobs.read(id) }.getOrNull() ?: return null
+        return PmBlob.readContent(vaultKey, bytes)
+    }
+
+    fun deleteAttachment(id: String) {
+        requireOpen()
+        blobs.delete(id)
+    }
+
+    /**
+     * Removes attachments whose item no longer exists.
+     *
+     * Deleting an item rewrites the vault first and unlinks its attachments second, so a
+     * crash in between leaves files nobody points at. That order is deliberate — the reverse
+     * would lose an attachment the user still owns — and this is the other half of it: inert
+     * leftovers are swept up on the next unlock, never during one.
+     */
+    fun sweepOrphanedAttachments() {
+        requireOpen()
+        val live = contents.items.map { it.id }.toHashSet()
+        for (id in blobs.list()) {
+            val header = headerOf(id) ?: continue
+            if (header.itemId !in live) blobs.delete(id)
+        }
+    }
+
+    /** Reads only as much of an attachment as its details need. */
+    private fun headerOf(id: String): BlobHeader? {
+        val prefix = runCatching { blobs.readPrefix(id, PmBlob.HeaderPrefixSize) }.getOrNull()
+            ?: return null
+        return PmBlob.readHeader(vaultKey, prefix)
     }
 
     /**
@@ -106,7 +210,28 @@ class VaultSession internal constructor(
     private fun requireOpen() {
         check(!isLocked) { "this vault session was locked" }
     }
+
+    companion object {
+        /**
+         * Eight. A cap, not a judgement about how many scans an account needs: it bounds
+         * what opening one item can cost, and an item with hundreds of attachments is a
+         * folder wearing a password entry's clothes.
+         */
+        const val MaxAttachmentsPerItem = 8
+    }
 }
+
+@OptIn(ExperimentalEncodingApi::class)
+private fun BlobHeader.toAttachment(id: String) = Attachment(
+    id = id,
+    filename = filename,
+    mimeType = mimeType,
+    size = size,
+    createdAt = createdAt,
+    // The header is JSON, so a thumbnail travels as text and is turned back into an image's
+    // bytes here rather than in each platform's UI.
+    thumbnail = thumbnail?.let { runCatching { Base64.decode(it) }.getOrNull() },
+)
 
 /** How opening a vault turned out. Mirrors the container's own outcomes rather than flattening them. */
 sealed interface UnlockResult {
@@ -134,6 +259,7 @@ object Vault {
     /** Creates a vault and leaves it open. */
     fun create(
         store: VaultFileStore,
+        blobs: BlobFileStore,
         passphrase: Secret,
         parameters: Argon2Parameters = Argon2Parameters.Default,
     ): VaultSession {
@@ -141,7 +267,7 @@ object Vault {
         // Opened by reading back what was just written rather than by assuming. This is the
         // only place the writer and the reader are checked against each other on a real
         // device, and a vault that cannot be reopened is worth finding out about now.
-        return when (val result = unlock(store, passphrase)) {
+        return when (val result = unlock(store, blobs, passphrase)) {
             is UnlockResult.Unlocked -> result.session
             else -> error("a vault written here could not be reopened: $result")
         }
@@ -155,7 +281,11 @@ object Vault {
      * derivation, not the verification, so a damaged or edited vault fails here exactly as
      * it does on the passphrase path. On success the session takes ownership of [vaultKey].
      */
-    fun unlockWithVaultKey(store: VaultFileStore, vaultKey: Secret): UnlockResult {
+    fun unlockWithVaultKey(
+        store: VaultFileStore,
+        blobs: BlobFileStore,
+        vaultKey: Secret,
+    ): UnlockResult {
         if (!store.exists()) return UnlockResult.NoVault
         return when (val parsed = PmVault.parse(store.read())) {
             is VaultParse.Sealed -> {
@@ -163,7 +293,7 @@ object Vault {
                 if (contents == null) {
                     UnlockResult.WrongPassphrase
                 } else {
-                    UnlockResult.Unlocked(VaultSession(store, vaultKey, contents))
+                    UnlockResult.Unlocked(VaultSession(store, blobs, vaultKey, contents))
                 }
             }
             is VaultParse.Damaged -> UnlockResult.Damaged(parsed.what, parsed.offset)
@@ -173,12 +303,17 @@ object Vault {
         }
     }
 
-    fun unlock(store: VaultFileStore, passphrase: Secret): UnlockResult {
+    fun unlock(
+        store: VaultFileStore,
+        blobs: BlobFileStore,
+        passphrase: Secret,
+    ): UnlockResult {
         if (!store.exists()) return UnlockResult.NoVault
         return when (val parsed = PmVault.parse(store.read())) {
             is VaultParse.Sealed -> when (val opened = parsed.openWithPassphrase(passphrase)) {
-                is VaultOpen.Opened ->
-                    UnlockResult.Unlocked(VaultSession(store, opened.vaultKey, opened.contents))
+                is VaultOpen.Opened -> UnlockResult.Unlocked(
+                    VaultSession(store, blobs, opened.vaultKey, opened.contents)
+                )
                 VaultOpen.Unopenable -> UnlockResult.WrongPassphrase
             }
             is VaultParse.Damaged -> UnlockResult.Damaged(parsed.what, parsed.offset)
