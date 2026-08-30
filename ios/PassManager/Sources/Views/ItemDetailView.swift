@@ -2,7 +2,6 @@ import PassManagerKit
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
-import UniformTypeIdentifiers
 
 struct ItemDetailView: View {
     let item: VaultItem
@@ -12,6 +11,7 @@ struct ItemDetailView: View {
     @State private var confirmingDelete = false
     @State private var attachments: [Attachment] = []
     @State private var picking = false
+    @State private var viewing: Viewed?
 
     var body: some View {
         ScrollView {
@@ -42,6 +42,7 @@ struct ItemDetailView: View {
             }
         }
         .sheet(isPresented: $editing) { AddEditItemView(existing: item) }
+        .fullScreenCover(item: $viewing) { AttachmentView(attachment: $0.attachment) }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.data]) { result in
             if case .success(let url) = result {
                 session.attach(url, to: item)
@@ -75,6 +76,10 @@ struct ItemDetailView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(attachment.filename.isEmpty ? "Attachment" : attachment.filename)
+                                    // Coloured because the row opens it. Nothing else on this
+                                    // screen is tappable in the same way, so the affordance
+                                    // has to come from somewhere.
+                                    .foregroundStyle(Palette.primary)
                                 Text(readableSize(attachment.size))
                                     .font(.footnote)
                                     .foregroundStyle(Palette.onSurfaceVariant)
@@ -88,6 +93,8 @@ struct ItemDetailView: View {
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                        .onTapGesture { viewing = Viewed(attachment: attachment) }
                         if index < attachments.count - 1 { Divider().padding(.leading, 14) }
                     }
                 }
@@ -154,6 +161,12 @@ struct ItemDetailView: View {
         out.append(Field("Notes", item.payload.notes))
         return out.filter { !$0.isEmpty }
     }
+}
+
+/// What `fullScreenCover(item:)` needs and a Kotlin class cannot be: identifiable.
+private struct Viewed: Identifiable {
+    let attachment: Attachment
+    var id: String { attachment.id }
 }
 
 /// A field, and whether it is the kind that should be hidden until asked for.

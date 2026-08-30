@@ -1,6 +1,7 @@
 import Foundation
 import PassManagerKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The app's state, which is almost entirely `core:vault`'s state.
 ///
@@ -157,11 +158,41 @@ final class AppSession: ObservableObject {
         session.attach(
             itemId: item.id,
             filename: url.lastPathComponent,
-            mimeType: "application/octet-stream",
+            mimeType: Self.mimeType(of: url),
             content: content,
             createdAt: Int64(Date().timeIntervalSince1970 * 1000),
             thumbnail: nil
         )
+    }
+
+    /// Decrypts an attachment so it can be drawn.
+    ///
+    /// The result is `Data` because every decoder on this platform takes `Data` and nothing
+    /// takes a `Secret`. The secret is destroyed the moment its bytes have been copied out,
+    /// so what remains is the one copy the viewer is showing — and it is never written down:
+    /// no temporary file, no cache, no handing the document to another application.
+    func openAttachment(_ id: String) -> Data? {
+        guard let session, let secret = session.openAttachment(id: id) else { return nil }
+        defer { secret.destroy() }
+        var data: Data?
+        // reveal borrows the live array rather than copying it, which for a five-megabyte
+        // scan is the difference between one copy and three.
+        _ = secret.reveal { bytes in
+            data = bytes.swiftData
+            return nil
+        }
+        return data
+    }
+
+    /// What the file actually is, as far as the system will say.
+    ///
+    /// The first version of this recorded `application/octet-stream` for everything, which
+    /// made every attachment it stored unviewable by type. Those are still readable — the
+    /// shared classifier looks at the bytes first — but recording the truth costs one line.
+    private static func mimeType(of url: URL) -> String {
+        let type = (try? url.resourceValues(forKeys: [.contentTypeKey]).contentType)
+            ?? UTType(filenameExtension: url.pathExtension)
+        return type?.preferredMIMEType ?? "application/octet-stream"
     }
 
     func deleteAttachment(_ id: String) {

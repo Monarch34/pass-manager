@@ -57,6 +57,12 @@ biometric = "1.1.0"
 # what this application became in order to show a biometric prompt at all.
 fragment = "1.9.0"
 
+# Already on the classpath — Compose's runtime is built on it — and named here anyway,
+# because the attachment viewer calls it directly. A module should compile against what it
+# imports, not against whatever happened to arrive through somebody else's graph. The
+# version is the one Compose 2026.08.00 already resolves to, so naming it moves nothing.
+coroutines = "1.9.0"
+
 [libraries]
 # Dependencies arrive with the code that needs them, so this never lists something nothing
 # imports.
@@ -84,6 +90,7 @@ androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
 androidx-fragment = { module = "androidx.fragment:fragment-ktx", version.ref = "fragment" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

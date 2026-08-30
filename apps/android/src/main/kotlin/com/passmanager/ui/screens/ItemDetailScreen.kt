@@ -53,6 +53,7 @@ fun ItemDetailScreen(
     onBack: () -> Unit,
 ) {
     var confirmingDelete by remember { mutableStateOf(false) }
+    var viewing by remember(item.id) { mutableStateOf<Attachment?>(null) }
     val fields = remember(item) { item.detailFields() }
     val attachments = remember(item.id) { mutableStateListOf<Attachment>() }
 
@@ -72,6 +73,13 @@ fun ItemDetailScreen(
             attachments.clear()
             attachments.addAll(model.attachments(item))
         }
+    }
+
+    // Full screen and inside this activity's window, so the attachment is covered by the
+    // same FLAG_SECURE as everything else. A dialog would be its own window and would not be.
+    viewing?.let { open ->
+        AttachmentViewerScreen(model, open) { viewing = null }
+        return
     }
 
     Column(
@@ -116,11 +124,15 @@ fun ItemDetailScreen(
                 )
             } else {
                 attachments.forEachIndexed { index, attachment ->
-                    PanelRow {
+                    PanelRow(onClick = { viewing = attachment }) {
                         Column(Modifier.fillMaxWidth(0.72f)) {
                             Text(
                                 attachment.filename.ifEmpty { "Attachment" },
                                 style = MaterialTheme.typography.bodyLarge,
+                                // Coloured because the row opens it. Nothing else in this
+                                // screen is tappable in the same way, so the affordance has
+                                // to come from somewhere.
+                                color = MaterialTheme.colorScheme.primary,
                             )
                             Text(
                                 readableSize(attachment.size),
@@ -217,7 +229,7 @@ private fun Context.copySensitive(label: String, value: String, secret: Boolean)
 }
 
 /** Sizes as a person reads them, not as a machine stores them. */
-private fun readableSize(bytes: Long): String = when {
+internal fun readableSize(bytes: Long): String = when {
     bytes < 1024 -> "$bytes bytes"
     bytes < 1024 * 1024 -> "${bytes / 1024} KB"
     else -> "${(bytes * 10 / (1024 * 1024)).toDouble() / 10} MB"

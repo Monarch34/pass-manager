@@ -55,4 +55,7 @@ dependencies {
     // Ahead of what biometric 1.1.0 would otherwise pull in. See the catalog: the old
     // FragmentActivity crashes on any Activity Result launch.
     implementation(libs.androidx.fragment)
+    // The attachment viewer renders a PDF page off the main thread and serialises access to
+    // the renderer, which is a coroutine API used directly rather than through Compose.
+    implementation(libs.kotlinx.coroutines.android)
 }

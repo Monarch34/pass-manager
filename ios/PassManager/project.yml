@@ -23,6 +23,11 @@ targets:
       - framework: ../framework/build/XCFrameworks/release/PassManagerKit.xcframework
         embed: false
         link: true
+      # The attachment viewer draws a PDF straight from memory with PDFDocument(data:),
+      # which is the whole reason no decrypted document is ever written to disk. Swift
+      # autolinks system frameworks, so this is belt and braces — and cheap insurance
+      # against a toolchain that decides otherwise.
+      - sdk: PDFKit.framework
     info:
       path: Generated-Info.plist
       properties:
