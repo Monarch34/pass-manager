@@ -54,7 +54,7 @@ struct AddEditItemView: View {
                     case .bank:
                         PanelField(label: "Bank", text: $bankName)
                         PanelField(label: "Account", text: $accountNumber, secure: true)
-                        PanelField(label: "Password", text: $password, secure: true)
+                        PasswordField(label: "Password", text: $password)
                         cardLinks
                     case .identity:
                         PanelField(label: "First name", text: $firstName)
@@ -68,7 +68,7 @@ struct AddEditItemView: View {
                     default:
                         PanelField(label: "Username", text: $username)
                         PanelField(label: "Address", text: $address)
-                        PanelField(label: "Password", text: $password, secure: true)
+                        PasswordField(label: "Password", text: $password)
                     }
 
                     PanelField(label: "Notes", text: $notes)

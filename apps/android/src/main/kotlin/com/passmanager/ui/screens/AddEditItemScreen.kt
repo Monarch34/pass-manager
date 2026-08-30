@@ -32,6 +32,7 @@ import com.passmanager.ui.components.PanelCard
 import com.passmanager.ui.components.PanelField
 import com.passmanager.ui.components.PanelRow
 import com.passmanager.ui.components.PanelRowDivider
+import com.passmanager.ui.components.PasswordField
 import com.passmanager.ui.components.PillButton
 import com.passmanager.ui.components.SectionFootnote
 import com.passmanager.ui.label
@@ -94,7 +95,7 @@ fun AddEditItemScreen(
             ItemCategory.LOGIN -> {
                 PanelField("Username", fields.username, { fields.username = it })
                 PanelField("Address", fields.address, { fields.address = it })
-                PanelField("Password", fields.password, { fields.password = it }, secret = true)
+                PasswordField("Password", fields.password, { fields.password = it })
             }
             ItemCategory.CARD -> {
                 PanelField("Cardholder", fields.cardholderName, { fields.cardholderName = it })
@@ -105,7 +106,7 @@ fun AddEditItemScreen(
             ItemCategory.BANK -> {
                 PanelField("Bank", fields.bankName, { fields.bankName = it })
                 PanelField("Account", fields.accountNumber, { fields.accountNumber = it }, secret = true)
-                PanelField("Password", fields.password, { fields.password = it }, secret = true)
+                PasswordField("Password", fields.password, { fields.password = it })
                 CardLinks(model, fields)
             }
             ItemCategory.IDENTITY -> {
