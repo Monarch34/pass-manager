@@ -158,6 +158,34 @@ object PmBlob {
         }
     }
 
+    /**
+     * The same attachment, opened by a different vault key.
+     *
+     * Sixty bytes change and the attachment itself is not touched. That is the whole payoff
+     * of wrapping the blob's key rather than deriving it: moving a five-megabyte scan into an
+     * export costs one AES block, not a re-encryption, and the header and content stay
+     * sealed under the key they were sealed under when they were written.
+     *
+     * The identifier is preserved deliberately. It is the associated data of both records, so
+     * changing it would invalidate them — and it is what lets an import recognise an
+     * attachment it already has rather than storing a second copy.
+     *
+     * Null when [fromVaultKey] does not open this attachment, which is the same answer as
+     * for a file that has been tampered with.
+     */
+    fun rewrap(fromVaultKey: Secret, toVaultKey: Secret, bytes: ByteArray): ByteArray? {
+        val id = identify(bytes) ?: return null
+        return blobKey(fromVaultKey, bytes, id)?.use { blobKey ->
+            val wrapped = wrappingKey(toVaultKey, id).use { wrapper ->
+                val nonce = secureRandomBytes(AesGcm.NonceSize)
+                nonce + AesGcm.seal(wrapper, nonce, blobKey, KeyContext + id.bytes)
+            }
+            val out = bytes.copyOf()
+            wrapped.copyInto(out, 4 + 1 + IdSize)
+            out
+        }
+    }
+
     /** The identifier, readable without any key — it is the filename. */
     fun identify(bytes: ByteArray): BlobId? {
         if (!bytes.has(0, FixedPrefix)) return null

@@ -206,6 +206,71 @@ class VaultSession internal constructor(
         return PmBlob.readHeader(vaultKey, prefix)
     }
 
+    // -- Leaving the device, and coming back ---------------------------------
+
+    /**
+     * The whole vault as one file, sealed under [passphrase] and nothing else.
+     *
+     * The key inside is drawn for this file alone. Nothing about the export can open the
+     * vault it came from, and nothing about the vault can open the export — which is the
+     * point: an export is a snapshot, not a spare key, so losing one costs what was in it
+     * and no more.
+     *
+     * Attachments travel with it. Each is moved by rewrapping sixty bytes rather than by
+     * re-encrypting it, so an export of a vault full of scans costs one AES block per scan
+     * plus the copy.
+     */
+    fun export(
+        passphrase: Secret,
+        parameters: Argon2Parameters = Argon2Parameters.Export,
+    ): ByteArray {
+        requireOpen()
+        return PmVault.create(contents, passphrase, parameters) { exportKey ->
+            blobs.list().mapNotNull { id ->
+                runCatching { PmBlob.rewrap(vaultKey, exportKey, blobs.read(id)) }.getOrNull()
+            }
+        }
+    }
+
+    /**
+     * Reads a file and says what importing it would do, without doing any of it.
+     *
+     * [now] is the clock the file's timestamps are clamped against. A file cannot be trusted
+     * about when its own contents were written, and one claiming next century would otherwise
+     * win every comparison it ever took part in.
+     */
+    fun read(file: ByteArray, passphrase: Secret, now: Long): ImportRead {
+        requireOpen()
+        return Transfer.read(this, file, passphrase, now)
+    }
+
+    internal fun contentsForMerge(): VaultContents = contents
+
+    internal fun blobIds(): Set<String> = blobs.list().toHashSet()
+
+    /**
+     * Writes the merged vault, then moves in the attachments that came with the file.
+     *
+     * The vault first, exactly as [delete] does it and for the same reason: a crash between
+     * the two leaves attachments nothing points at, which the next unlock sweeps up. The
+     * other order would leave the vault claiming attachments that are not there.
+     */
+    internal fun applyMerge(
+        merged: MergeResult,
+        fileKey: Secret,
+        incoming: List<Pair<String, ByteArray>>,
+    ) {
+        requireOpen()
+        persistContents(merged.contents)
+        for ((id, record) in incoming) {
+            val moved = PmBlob.rewrap(fileKey, vaultKey, record) ?: continue
+            blobs.write(id, moved)
+        }
+        // An import brings tombstones with it, and one of them may name an item this device
+        // still had. Its attachments are now orphans.
+        sweepOrphanedAttachments()
+    }
+
     /**
      * Hands the vault key to a second unlock path so it can be stored behind a keystore or
      * a biometric gate.
@@ -232,11 +297,12 @@ class VaultSession internal constructor(
     private fun persist(
         updated: List<VaultItem>,
         deletions: List<VaultBody.Deletion> = contents.deletions,
-    ) {
         // `with`, not a fresh VaultContents: the members a newer writer added and this
         // version does not understand have to survive an edit made here, or saving on an
         // older client silently destroys them.
-        val next = contents.with(updated, deletions)
+    ) = persistContents(contents.with(updated, deletions))
+
+    private fun persistContents(next: VaultContents) {
         val current = store.read()
         val sealed = PmVault.parse(current) as? VaultParse.Sealed
             ?: error("the vault on disk is no longer readable")

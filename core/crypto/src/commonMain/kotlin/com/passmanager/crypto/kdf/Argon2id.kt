@@ -51,6 +51,23 @@ data class Argon2Parameters(
          * path with the user waiting.
          */
         val Default = Argon2Parameters(memoryKib = 64 * 1024, iterations = 3, parallelism = 1)
+
+        /**
+         * For a file that leaves the device: 128 MiB and four passes.
+         *
+         * [Default] is chosen against the smallest supported phone, on the unlock path, with
+         * the user waiting — and the vault it protects sits behind a lock screen, in an
+         * application's private storage, excluded from backup. None of that follows an
+         * export. An export is a file in a mail account or a cloud drive, where it may sit
+         * for years and where the only thing between it and an attacker who takes a copy is
+         * the passphrase the owner typed into the export sheet.
+         *
+         * So the two files are defended differently on purpose. This is roughly four times
+         * the work of [Default], which is several seconds on a phone — acceptable exactly
+         * once, when a person deliberately chose to make the file, and not acceptable every
+         * time they open the app.
+         */
+        val Export = Argon2Parameters(memoryKib = 128 * 1024, iterations = 4, parallelism = 1)
     }
 }
 

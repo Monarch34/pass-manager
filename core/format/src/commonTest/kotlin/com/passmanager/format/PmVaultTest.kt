@@ -10,6 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -248,5 +249,74 @@ class PmVaultTest {
         val sealed = assertIs<VaultParse.Sealed>(PmVault.parse(bytes))
         val opened = assertIs<VaultOpen.Opened>(sealed.openWithPassphrase(Secret.ofUtf8("p")))
         assertEquals(0, opened.contents.items.size)
+    }
+}
+
+class PmBlobRewrapTest {
+
+    private fun header(itemId: ItemId) = BlobHeader(
+        itemId = itemId,
+        filename = "scan.png",
+        mimeType = "image/png",
+        size = 128,
+        createdAt = 1_700_000_000_000,
+    )
+
+    @Test
+    fun `an attachment opens under its new key and not its old one`() {
+        val from = Secret.random(32)
+        val to = Secret.random(32)
+        val id = BlobId.random()
+        val content = ByteArray(128) { (it * 3 and 0xff).toByte() }
+
+        val original = Secret.of(content).use { PmBlob.create(from, id, header(ItemId.random()), it) }
+        val moved = assertNotNull(PmBlob.rewrap(from, to, original))
+
+        assertEquals(
+            content.toList(),
+            assertNotNull(PmBlob.readContent(to, moved)).toByteArray().toList(),
+        )
+        // The old key must not open the moved copy, or an export would carry a door back to
+        // the vault it came from.
+        assertNull(PmBlob.readContent(from, moved))
+    }
+
+    @Test
+    fun `only the wrapped key changes`() {
+        val from = Secret.random(32)
+        val to = Secret.random(32)
+        val id = BlobId.random()
+        val original = Secret.of(ByteArray(4096)).use { PmBlob.create(from, id, header(ItemId.random()), it) }
+        val moved = assertNotNull(PmBlob.rewrap(from, to, original))
+
+        assertEquals(original.size, moved.size)
+        // Magic, container and identifier, then sixty bytes of wrapped key, then everything
+        // else byte for byte. Re-encrypting the content instead would be correct and would
+        // cost the whole file.
+        assertEquals(original.copyOfRange(0, 21).toList(), moved.copyOfRange(0, 21).toList())
+        assertEquals(original.copyOfRange(81, original.size).toList(), moved.copyOfRange(81, moved.size).toList())
+    }
+
+    @Test
+    fun `the header survives the move intact`() {
+        val from = Secret.random(32)
+        val to = Secret.random(32)
+        val itemId = ItemId.random()
+        val original = Secret.of(ByteArray(64)).use {
+            PmBlob.create(from, BlobId.random(), header(itemId), it)
+        }
+        val moved = assertNotNull(PmBlob.rewrap(from, to, original))
+
+        val read = assertNotNull(PmBlob.readHeader(to, moved))
+        assertEquals(itemId, read.itemId)
+        assertEquals("scan.png", read.filename)
+    }
+
+    @Test
+    fun `the wrong key moves nothing`() {
+        val original = Secret.of(ByteArray(64)).use {
+            PmBlob.create(Secret.random(32), BlobId.random(), header(ItemId.random()), it)
+        }
+        assertNull(PmBlob.rewrap(Secret.random(32), Secret.random(32), original))
     }
 }

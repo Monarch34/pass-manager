@@ -17,8 +17,13 @@ import kotlinx.serialization.json.JsonObject
  * ```
  * descriptor   31 bytes, plaintext, and verbatim the body's associated data
  * wrap block   slot count, then one length-prefixed slot per way in — not in any tag
- * records      to end of file: type u8 || length u32be || nonce[12] || sealed
+ * records      to end of file: type u8 || length u32be || payload
  * ```
+ *
+ * The payload's shape belongs to the record type. Type 1, the item body, is
+ * `nonce[12] || sealed`. Type 2 is a whole attachment — a `.pmb` file, framed and sealed by
+ * [PmBlob] — carried verbatim, because an export that leaves the attachments behind is not a
+ * copy of the vault.
  *
  * ### Why records rather than one seal over the whole file
  *
@@ -46,6 +51,19 @@ object PmVault {
     /** The one record holding the item body. Exactly one appears in a vault. */
     internal const val RecordItemBody = 1
 
+    /**
+     * An attachment, whole, exactly as [PmBlob] wrote it.
+     *
+     * A vault on a device has none of these — its attachments are separate files, so that
+     * attaching a scan does not rewrite every password. An export has one per attachment,
+     * because a file that has to be carried somewhere cannot be a directory.
+     *
+     * The content is not re-encrypted on the way in. [PmBlob.rewrap] changes only the sixty
+     * bytes that wrap the attachment's own key, which is what wrapping rather than deriving
+     * that key bought.
+     */
+    internal const val RecordAttachment = 2
+
     /** Each record carries its own nonce, so no two are ever sealed under the same one. */
     private const val RecordHeaderSize = 1 + 4
 
@@ -57,6 +75,13 @@ object PmVault {
 
     /** A single record is capped so a corrupt length cannot become a vast allocation. */
     private const val MaxRecordSize = 64 * 1024 * 1024
+
+    /**
+     * And the count is capped for the same reason at one level up: a record header is five
+     * bytes, so without this a crafted file of a few megabytes could ask a reader to hold
+     * millions of entries before any of them is examined.
+     */
+    private const val MaxAttachmentRecords = 4096
 
     // ── Reading ─────────────────────────────────────────────────────────────
 
@@ -96,6 +121,7 @@ object PmVault {
         }
 
         var body: ByteArray? = null
+        val attachments = ArrayList<ByteArray>()
         while (offset < bytes.size) {
             if (!bytes.has(offset, RecordHeaderSize)) {
                 return VaultParse.Damaged("truncated record header", offset)
@@ -120,6 +146,11 @@ object PmVault {
                     return VaultParse.Damaged("item body is too short to be sealed", offset + 1)
                 }
                 body = bytes.copyOfRange(payloadStart, end)
+            } else if (type == RecordAttachment) {
+                if (attachments.size == MaxAttachmentRecords) {
+                    return VaultParse.Damaged("more than $MaxAttachmentRecords attachments", offset)
+                }
+                attachments += bytes.copyOfRange(payloadStart, end)
             }
             // Records of unknown type are stepped over, not rejected: that is what the
             // length prefix is for, and it is how a later version adds one.
@@ -127,7 +158,13 @@ object PmVault {
         }
 
         if (body == null) return VaultParse.Damaged("no item body", bytes.size)
-        return VaultParse.Sealed(descriptor, slots, body, bytes.copyOfRange(0, VaultDescriptor.Size))
+        return VaultParse.Sealed(
+            descriptor,
+            slots,
+            body,
+            bytes.copyOfRange(0, VaultDescriptor.Size),
+            attachments,
+        )
     }
 
     // ── Writing ─────────────────────────────────────────────────────────────
@@ -144,6 +181,11 @@ object PmVault {
         slots: List<WrapSlot>,
         contents: VaultContents,
         vaultKey: Secret,
+        /**
+         * Whole `.pmb` files, already wrapped under [vaultKey]. Empty for a vault on a
+         * device, where attachments are separate files.
+         */
+        attachments: List<ByteArray> = emptyList(),
     ): ByteArray {
         require(slots.isNotEmpty() && slots.size <= WrapSlot.MaxSlots) {
             "a vault carries 1..${WrapSlot.MaxSlots} slots, not ${slots.size}"
@@ -159,7 +201,8 @@ object PmVault {
 
         val recordLength = AesGcm.NonceSize + sealed.size
         val total = descriptorBytes.size + 1 + slots.sumOf { it.encodedSize } +
-            RecordHeaderSize + recordLength
+            RecordHeaderSize + recordLength +
+            attachments.sumOf { RecordHeaderSize + it.size }
         val out = ByteArray(total)
 
         var offset = 0
@@ -175,7 +218,16 @@ object PmVault {
         out.putU32(offset + 1, recordLength.toLong())
         offset += RecordHeaderSize
         nonce.copyInto(out, offset); offset += AesGcm.NonceSize
-        sealed.copyInto(out, offset)
+        sealed.copyInto(out, offset); offset += sealed.size
+
+        // The body first, always. A reader that runs out of file still knows what the vault
+        // held, and an interrupted write loses attachments rather than everything.
+        for (attachment in attachments) {
+            out.putU8(offset, RecordAttachment)
+            out.putU32(offset + 1, attachment.size.toLong())
+            offset += RecordHeaderSize
+            attachment.copyInto(out, offset); offset += attachment.size
+        }
         return out
     }
 
@@ -193,6 +245,15 @@ object PmVault {
         passphrase: Secret,
         parameters: Argon2Parameters = Argon2Parameters.Default,
         pepper: Secret? = null,
+        /**
+         * Given the freshly drawn vault key, the attachments to carry — whole `.pmb` files
+         * re-wrapped under it. A vault on a device supplies none.
+         *
+         * A function rather than a list because the key does not exist until this call, and
+         * an attachment cannot be re-wrapped for a key nobody has yet. The key is borrowed
+         * for the length of the call and destroyed after it; it must not be retained.
+         */
+        attachments: (Secret) -> List<ByteArray> = { emptyList() },
     ): ByteArray {
         val salt = VaultKeys.generateSalt()
         val descriptor = VaultDescriptor(
@@ -205,11 +266,19 @@ object PmVault {
         return VaultKeys.generateVaultKey().use { vaultKey ->
             val wrapped = VaultKeys.deriveKeyEncryptionKey(passphrase, salt, parameters, pepper)
                 .use { kek -> VaultKeys.wrap(kek, vaultKey) }
-            write(descriptor, listOf(WrapSlot.passphrase(wrapped)), contents, vaultKey)
+            val records = attachments(vaultKey)
+            // The manifest is taken from what was actually produced rather than from what
+            // the caller said it would produce. The two cannot then disagree, which matters
+            // because the manifest is the only thing binding the set of attachment records
+            // to the body's tag.
+            val carried = contents.withAttachments(records.mapNotNull { identifyAttachment(it) })
+            write(descriptor, listOf(WrapSlot.passphrase(wrapped)), carried, vaultKey, records)
         }
     }
 
     // ── Internals shared by both directions ─────────────────────────────────
+
+    private fun identifyAttachment(record: ByteArray): String? = PmBlob.identify(record)?.hex
 
     internal fun bodyKey(vaultKey: Secret): Secret =
         hkdfSha256(vaultKey, ByteArray(0), BodyKeyContext, AesGcm.KeySize)
@@ -223,7 +292,11 @@ object PmVault {
      */
     private fun plaintext(contents: VaultContents): Secret {
         val json = VaultBodyCodec.encode(
-            VaultBody(items = contents.items, deletions = contents.deletions),
+            VaultBody(
+                items = contents.items,
+                deletions = contents.deletions,
+                attachments = contents.attachments,
+            ),
             contents.preserved,
         ).encodeToByteArray()
         val out = ByteArray(4 + json.size)
@@ -238,7 +311,12 @@ object PmVault {
         val length = plain.u32(0)
         if (length > (plain.size - 4).toLong()) return null
         val decoded = VaultBodyCodec.decode(plain.decodeToString(4, 4 + length.toInt()))
-        return VaultContents.of(decoded.body.items, decoded.body.deletions, decoded.preserved)
+        return VaultContents.of(
+            decoded.body.items,
+            decoded.body.deletions,
+            decoded.body.attachments,
+            decoded.preserved,
+        )
     }
 }
 
@@ -254,16 +332,19 @@ object PmVault {
 class VaultContents private constructor(
     val items: List<VaultItem>,
     val deletions: List<VaultBody.Deletion>,
+    /** Only ever non-empty in an export. See [VaultBody.attachments]. */
+    val attachments: List<String>,
     internal val preserved: JsonObject,
 ) {
     constructor(
         items: List<VaultItem> = emptyList(),
         deletions: List<VaultBody.Deletion> = emptyList(),
-    ) : this(items, deletions, JsonObject(emptyMap()))
+        attachments: List<String> = emptyList(),
+    ) : this(items, deletions, attachments, JsonObject(emptyMap()))
 
     /** Keeps [preserved] across an edit, so re-saving does not drop a newer writer's fields. */
     fun withItems(items: List<VaultItem>): VaultContents =
-        VaultContents(items, deletions, preserved)
+        VaultContents(items, deletions, attachments, preserved)
 
     /**
      * The same, for an edit that also changes what has been deleted.
@@ -273,14 +354,41 @@ class VaultContents private constructor(
      * must say so.
      */
     fun with(items: List<VaultItem>, deletions: List<VaultBody.Deletion>): VaultContents =
-        VaultContents(items, deletions, preserved)
+        VaultContents(items, deletions, attachments, preserved)
+
+    /**
+     * The same contents, naming the attachments a file carries.
+     *
+     * Used when writing an export and nowhere else: a vault on a device keeps its
+     * attachments as separate files, and a manifest there would be a second copy of a
+     * directory listing that is guaranteed to drift out of step with it.
+     */
+    fun withAttachments(attachments: List<String>): VaultContents =
+        VaultContents(items, deletions, attachments, preserved)
+
+    /**
+     * Takes on the members [other] carries that nothing here understands — but only if there
+     * are none here already.
+     *
+     * All or nothing, deliberately. Merging the two sets key by key would assemble a body
+     * that neither writer produced: the members a future version adds will mean something
+     * together, and half of one writer's set beside half of another's is a combination no
+     * version has ever seen or tested. Keeping one side whole means the body is always
+     * something some writer actually wrote.
+     *
+     * The local set wins when there is one, because this device is the copy that stays.
+     */
+    fun adoptingUnknownMembersOf(other: VaultContents): VaultContents =
+        if (preserved.isNotEmpty()) this
+        else VaultContents(items, deletions, attachments, other.preserved)
 
     internal companion object {
         fun of(
             items: List<VaultItem>,
             deletions: List<VaultBody.Deletion>,
+            attachments: List<String>,
             preserved: JsonObject,
-        ) = VaultContents(items, deletions, preserved)
+        ) = VaultContents(items, deletions, attachments, preserved)
     }
 }
 
@@ -293,6 +401,15 @@ sealed interface VaultParse {
         val slots: List<WrapSlot>,
         private val bodyRecord: ByteArray,
         private val associatedData: ByteArray,
+        /**
+         * The attachments this file carries, whole and still sealed. Empty for a vault on a
+         * device, where they are separate files.
+         *
+         * Readable without a key, because a `.pmb` file's identifier is its first twenty-one
+         * bytes and nothing else about it is. The manifest inside the body is what says
+         * whether this is the set the writer put here.
+         */
+        val attachments: List<ByteArray> = emptyList(),
     ) : VaultParse {
 
         /**

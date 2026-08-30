@@ -34,6 +34,19 @@ data class VaultBody(
      * window, not a format break.
      */
     val deletions: List<Deletion> = emptyList(),
+    /**
+     * The attachments this file claims to carry, by identifier.
+     *
+     * Only an export ever has any: on a device the attachments are separate files and this
+     * list would be a second copy of a directory listing, guaranteed to drift.
+     *
+     * It exists because the attachment records are outside the body's seal. Each is
+     * authenticated on its own, so none can be forged or altered — but the *set* of them is
+     * not bound to anything, and without this list someone could delete a record from an
+     * export and the import would carry on cheerfully, one scan lighter and none the wiser.
+     * Naming them inside the body puts the set under the body's tag.
+     */
+    val attachments: List<String> = emptyList(),
 ) {
     @Serializable
     data class Deletion(val id: ItemId, val deletedAt: Long)
@@ -77,7 +90,7 @@ internal object VaultBodyCodec {
         classDiscriminator = "type"
     }
 
-    private val knownMembers = setOf("items", "deletions")
+    private val knownMembers = setOf("items", "deletions", "attachments")
 
     fun encode(body: VaultBody, preserved: JsonObject): String {
         val encoded = json.encodeToJsonElement(body) as JsonObject
