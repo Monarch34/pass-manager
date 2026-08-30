@@ -237,8 +237,8 @@ final class AppSession: ObservableObject {
             b.destroy()
             Task { @MainActor in
                 self.busy = false
-                if !changed.boolValue { self.failure = "That is not your current passphrase." }
-                onChanged(changed.boolValue)
+                if !changed { self.failure = "That is not your current passphrase." }
+                onChanged(changed)
             }
         }
     }
