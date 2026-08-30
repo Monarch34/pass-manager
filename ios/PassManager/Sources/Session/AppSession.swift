@@ -108,8 +108,7 @@ final class AppSession: ObservableObject {
         session?.lock()
         session = nil
         items = []
-        files.delete()
-        for id in blobs.list() { blobs.delete(id: id) }
+        Vault.shared.destroy(store: files, blobs: blobs)
         // The stored key would otherwise outlive the vault it opens.
         BiometricVaultKey.remove()
         failure = nil

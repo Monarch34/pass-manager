@@ -305,6 +305,24 @@ sealed interface UnlockResult {
 
 object Vault {
 
+    /**
+     * Deletes a vault and everything that belongs to it.
+     *
+     * The only honest answer to a forgotten passphrase, and shared because the two
+     * applications had drifted: iOS erased the attachments and Android did not, so "delete
+     * this vault" left every scan the owner had ever attached sitting on the device — sealed,
+     * unopenable, and permanent, since nothing would ever point at them again to sweep them
+     * up. A deletion that leaves the data behind is not a deletion.
+     *
+     * What each platform still owns is its own second way in: a key in the Android Keystore
+     * or the iOS Keychain is not this module's to reach, and must be removed by the caller,
+     * or it outlives the vault it opens.
+     */
+    fun destroy(store: VaultFileStore, blobs: BlobFileStore) {
+        store.delete()
+        for (id in blobs.list()) blobs.delete(id)
+    }
+
     /** Creates a vault and leaves it open. */
     fun create(
         store: VaultFileStore,

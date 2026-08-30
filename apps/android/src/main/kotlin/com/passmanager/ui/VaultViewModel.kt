@@ -163,7 +163,10 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
         session?.lock()
         session = null
         items = emptyList()
-        store.delete()
+        Vault.destroy(store, blobs)
+        // The stored key would otherwise outlive the vault it opens, and would then fail
+        // against whatever vault is created next while still offering itself as a way in.
+        biometrics.remove()
         failure = null
         phase = Phase.Empty
     }

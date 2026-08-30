@@ -257,3 +257,36 @@ class AttachmentTest {
         )
     }
 }
+
+class DestroyTest {
+
+    private val cheap = Argon2Parameters(memoryKib = 8192, iterations = 1, parallelism = 1)
+
+    @Test
+    fun `deleting a vault deletes its attachments too`() {
+        // Android used to delete only the vault file, so every scan the owner had attached
+        // stayed on the device — sealed, unopenable, and permanent, because nothing would
+        // ever point at it again to sweep it up.
+        val store = InMemoryVaultStore()
+        val blobs = InMemoryBlobs()
+        val session = Secret.ofUtf8("open sesame").use { Vault.create(store, blobs, it, cheap) }
+
+        val item = VaultItem(
+            id = ItemId.random(),
+            createdAt = 1_700_000_000_000,
+            updatedAt = 1_700_000_000_000,
+            payload = ItemPayload.Note(title = "Passport", notes = SecretText.Empty),
+        )
+        session.save(item)
+        Secret.of(ByteArray(64)).use {
+            session.attach(item.id, "scan.png", "image/png", it, createdAt = 1_700_000_005_000)
+        }
+        assertEquals(1, blobs.list().size)
+
+        session.lock()
+        Vault.destroy(store, blobs)
+
+        assertTrue(blobs.list().isEmpty(), "an attachment survived the vault being deleted")
+        assertTrue(!store.exists())
+    }
+}
