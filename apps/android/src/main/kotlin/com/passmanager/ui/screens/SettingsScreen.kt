@@ -352,7 +352,11 @@ private fun PassphrasePrompt(
     var current by remember { mutableStateOf("") }
     var passphrase by remember { mutableStateOf("") }
     var again by remember { mutableStateOf("") }
-    val ready = passphrase.length >= 8 &&
+    // A length rule belongs on a passphrase being *chosen*, never on one being *entered*.
+    // `repeated` is what distinguishes the two, and applying the minimum to both would make
+    // a file whose passphrase is seven characters impossible to open — the file's passphrase
+    // is whatever it already is, and this screen does not get a vote.
+    val ready = (if (repeated) passphrase.length >= 8 else passphrase.isNotEmpty()) &&
         (!repeated || passphrase == again) &&
         (!askCurrent || current.isNotEmpty())
 
