@@ -181,6 +181,8 @@ private fun Transfer(model: VaultViewModel) {
         }
     }
 
+    ChangePassphrase(model)
+
     Text("Backup", style = MaterialTheme.typography.titleSmall)
     PanelCard {
         PanelRow(onClick = { if (!model.busy) exporting = true }) {
@@ -232,7 +234,7 @@ private fun Transfer(model: VaultViewModel) {
                 "exact passphrase, and nothing can recover it.",
             confirm = "Export",
             onDismiss = { exporting = false },
-            onSubmit = { exporting = false; model.export(it) },
+            onSubmit = { _, typed -> exporting = false; model.export(typed) },
         )
     }
 
@@ -243,11 +245,52 @@ private fun Transfer(model: VaultViewModel) {
             confirm = "Open",
             repeated = false,
             onDismiss = { importingFrom = null },
-            onSubmit = { importingFrom = null; model.readImport(uri, it) },
+            onSubmit = { _, typed -> importingFrom = null; model.readImport(uri, typed) },
         )
     }
 
     model.importPreview?.let { ImportPrompt(model, it) }
+}
+
+/**
+ * Replacing the passphrase.
+ *
+ * The current one is asked for even though the vault is already open. An unlocked phone left
+ * on a desk must not be enough to lock its owner out of their own vault.
+ */
+@Composable
+private fun ChangePassphrase(model: VaultViewModel) {
+    var asking by remember { mutableStateOf(false) }
+    var changed by remember { mutableStateOf(false) }
+
+    Text("Passphrase", style = MaterialTheme.typography.titleSmall)
+    PanelCard {
+        PanelRow(onClick = { if (!model.busy) asking = true }) {
+            Column(Modifier.fillMaxWidth()) {
+                Text("Change passphrase", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    if (changed) "Changed. Biometric unlock still works."
+                    else "Every other way in keeps working, and nothing is re-encrypted.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+
+    if (asking) {
+        PassphrasePrompt(
+            title = "Change your passphrase",
+            body = "Exports already taken keep their own passphrases and are not affected.",
+            confirm = "Change",
+            askCurrent = true,
+            onDismiss = { asking = false },
+            onSubmit = { current, next ->
+                asking = false
+                model.changePassphrase(current, next) { changed = it }
+            },
+        )
+    }
 }
 
 /** What agreeing would do, before it is done. */
@@ -302,12 +345,16 @@ private fun PassphrasePrompt(
     body: String,
     confirm: String,
     onDismiss: () -> Unit,
-    onSubmit: (String) -> Unit,
+    onSubmit: (String, String) -> Unit,
     repeated: Boolean = true,
+    askCurrent: Boolean = false,
 ) {
+    var current by remember { mutableStateOf("") }
     var passphrase by remember { mutableStateOf("") }
     var again by remember { mutableStateOf("") }
-    val ready = passphrase.length >= 8 && (!repeated || passphrase == again)
+    val ready = passphrase.length >= 8 &&
+        (!repeated || passphrase == again) &&
+        (!askCurrent || current.isNotEmpty())
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -315,7 +362,15 @@ private fun PassphrasePrompt(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(body, style = MaterialTheme.typography.bodySmall)
-                PanelField("Passphrase", passphrase, { passphrase = it }, secret = true)
+                if (askCurrent) {
+                    PanelField("Current passphrase", current, { current = it }, secret = true)
+                }
+                PanelField(
+                    if (askCurrent) "New passphrase" else "Passphrase",
+                    passphrase,
+                    { passphrase = it },
+                    secret = true,
+                )
                 if (repeated) PanelField("Repeat it", again, { again = it }, secret = true)
                 if (repeated && again.isNotEmpty() && passphrase != again) {
                     Text(
@@ -327,7 +382,7 @@ private fun PassphrasePrompt(
             }
         },
         confirmButton = {
-            TextButton({ onSubmit(passphrase) }, enabled = ready) { Text(confirm) }
+            TextButton({ onSubmit(current, passphrase) }, enabled = ready) { Text(confirm) }
         },
         dismissButton = { TextButton(onDismiss) { Text("Cancel") } },
     )

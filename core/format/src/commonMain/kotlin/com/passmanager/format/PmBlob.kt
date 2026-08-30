@@ -141,8 +141,9 @@ object PmBlob {
      * Reads the details without decrypting the attachment itself.
      *
      * [bytes] may be a prefix of the file — [HeaderPrefixSize] is always enough. This is what
-     * lets a list of an item's attachments cost a few kilobytes each rather than the whole of
-     * every one of them.
+     * lets a list of an item's attachments cost [MaxHeaderSize] each rather than the whole of
+     * every one of them, which is the difference between reading kilobytes to draw a row and
+     * reading megabytes.
      */
     fun readHeader(vaultKey: Secret, bytes: ByteArray): BlobHeader? {
         val id = identify(bytes) ?: return null

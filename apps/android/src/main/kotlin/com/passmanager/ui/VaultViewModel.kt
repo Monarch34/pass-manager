@@ -218,6 +218,30 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
 
     val importPreview: ImportPreview? get() = pendingImport?.preview
 
+    /**
+     * Replaces the passphrase. Reports success so the screen can say so rather than leaving
+     * the user to guess whether several seconds of waiting meant anything.
+     */
+    fun changePassphrase(current: String, next: String, onChanged: (Boolean) -> Unit) {
+        val open = session ?: return
+        busy = true
+        viewModelScope.launch {
+            val changed = runCatching {
+                withContext(Dispatchers.Default) {
+                    Secret.ofUtf8(current).use { a ->
+                        Secret.ofUtf8(next).use { b -> open.changePassphrase(a, b) }
+                    }
+                }
+            }
+            busy = false
+            changed.onFailure { failure = it.message ?: "The passphrase could not be changed." }
+            changed.onSuccess {
+                if (!it) failure = "That is not your current passphrase."
+                onChanged(it)
+            }
+        }
+    }
+
     fun export(passphrase: String) {
         val open = session ?: return
         busy = true

@@ -30,7 +30,8 @@ import kotlinx.serialization.json.JsonObject
  * `AesGcm` takes and returns whole arrays on every target, and no streaming authenticated
  * cipher is reachable from Kotlin on Apple. Sealing an entire export in one call would mean
  * holding it and its ciphertext in memory at once, which fails on a phone as soon as
- * attachments are involved.
+ * attachments are involved — and an export carries every attachment in the vault, so that is
+ * not a hypothetical.
  *
  * Chunking *inside* a record is deliberately refused: it needs an index and an
  * end-of-stream marker inside every chunk's associated data, or an attacker can splice and
@@ -277,6 +278,40 @@ object PmVault {
     }
 
     // ── Internals shared by both directions ─────────────────────────────────
+
+    /**
+     * The same vault, opened by a different passphrase.
+     *
+     * The vault key is untouched, which is the two-key model doing the job it exists for:
+     * every other way in holds a copy of that key, so a biometric slot and a keystore-held
+     * copy keep working across a passphrase change without being re-registered.
+     *
+     * What is *not* free is the body. A fresh salt is drawn — reusing the old one would let
+     * work done against the previous passphrase carry over to the new one — and the salt
+     * lives in the descriptor, which is verbatim the body's associated data. So the body is
+     * re-sealed too: sixty bytes of wrapped key plus tens of kilobytes of items, rather than
+     * the sixty bytes alone that [VaultKeys]' summary implies. Still not the megabytes a
+     * single-key design would re-encrypt, and attachments are not touched at all.
+     */
+    fun rekey(
+        contents: VaultContents,
+        vaultKey: Secret,
+        passphrase: Secret,
+        parameters: Argon2Parameters = Argon2Parameters.Default,
+        pepper: Secret? = null,
+    ): ByteArray {
+        val salt = VaultKeys.generateSalt()
+        val descriptor = VaultDescriptor(
+            container = VaultDescriptor.Container,
+            schema = VaultDescriptor.Schema,
+            minSchema = VaultDescriptor.Schema,
+            kdf = parameters,
+            salt = salt,
+        )
+        val wrapped = VaultKeys.deriveKeyEncryptionKey(passphrase, salt, parameters, pepper)
+            .use { kek -> VaultKeys.wrap(kek, vaultKey) }
+        return write(descriptor, listOf(WrapSlot.passphrase(wrapped)), contents, vaultKey)
+    }
 
     private fun identifyAttachment(record: ByteArray): String? = PmBlob.identify(record)?.hex
 

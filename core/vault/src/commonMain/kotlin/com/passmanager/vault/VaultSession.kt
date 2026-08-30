@@ -94,7 +94,9 @@ class VaultSession internal constructor(
     }
 
     /**
-     * Full-text search across everything an item holds, secrets included.
+     * Full-text search across everything an item holds, secrets included, with the single
+     * exception named in `SearchText`: a card's security code is three digits and would match
+     * a substring of most card and account numbers in the vault.
      *
      * This is not a feature bolted on top of the one-document design; it is what falls out
      * of it. The whole vault is already decrypted, so searching a password or a line of
@@ -114,8 +116,8 @@ class VaultSession internal constructor(
      * The attachments belonging to an item.
      *
      * Every attachment names its item rather than the item listing its attachments, so this
-     * reads each one's header and keeps the ones that match. That is a real cost — a few
-     * kilobytes per attachment on the device, not per item — and it is the price of the
+     * reads each one's header and keeps the ones that match. That is a real cost — bounded by
+     * [PmBlob.MaxHeaderSize] per attachment on the device, not per item — and it is the price of the
      * direction the pointer runs in: an attachment cannot be orphaned by an edit to the item
      * it belongs to, because the item does not know about it.
      */
@@ -230,6 +232,36 @@ class VaultSession internal constructor(
                 runCatching { PmBlob.rewrap(vaultKey, exportKey, blobs.read(id)) }.getOrNull()
             }
         }
+    }
+
+    /**
+     * Replaces the passphrase, keeping every other way in.
+     *
+     * [current] is required even though the vault is already open, and that is the point: an
+     * unlocked phone left on a desk must not be enough to lock its owner out of their own
+     * vault. Verifying it costs a full derivation, which is the same cost as an unlock and is
+     * worth paying once.
+     *
+     * The vault key does not change, so a copy held behind a biometric gate still opens the
+     * vault afterwards and does not have to be registered again. Returns false when [current]
+     * does not open this vault, and changes nothing in that case.
+     */
+    fun changePassphrase(
+        current: Secret,
+        next: Secret,
+        parameters: Argon2Parameters = Argon2Parameters.Default,
+    ): Boolean {
+        requireOpen()
+        val sealed = PmVault.parse(store.read()) as? VaultParse.Sealed
+            ?: error("the vault on disk is no longer readable")
+        when (val opened = sealed.openWithPassphrase(current)) {
+            VaultOpen.Unopenable -> return false
+            // Opening yields a second copy of the key this session already holds. It is not
+            // needed and must not be kept.
+            is VaultOpen.Opened -> opened.vaultKey.destroy()
+        }
+        store.write(PmVault.rekey(contents, vaultKey, next, parameters))
+        return true
     }
 
     /**

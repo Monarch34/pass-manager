@@ -15,15 +15,36 @@ struct TransferSection: View {
     @State private var importing = false
     @State private var passphraseFor: Purpose?
     @State private var incoming: Data?
+    @State private var changed = false
 
     private enum Purpose: Identifiable {
         case export
         case openFile
-        var id: Int { self == .export ? 0 : 1 }
+        case change
+        var id: Int {
+            switch self {
+            case .export: return 0
+            case .openFile: return 1
+            case .change: return 2
+            }
+        }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Text("Passphrase")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Palette.onSurfaceVariant)
+
+            PanelCard {
+                row(
+                    "Change passphrase",
+                    changed
+                        ? "Changed. Face ID still works."
+                        : "Every other way in keeps working, and nothing is re-encrypted."
+                ) { passphraseFor = .change }
+            }
+
             Text("Backup")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Palette.onSurfaceVariant)
@@ -77,19 +98,23 @@ struct TransferSection: View {
         }
         .sheet(item: $passphraseFor) { purpose in
             PassphrasePrompt(
-                title: purpose == .export ? "Passphrase for this export" : "Passphrase for this file",
-                message: purpose == .export
-                    ? "Not your vault passphrase unless you choose it to be. Restoring needs this exact passphrase, and nothing can recover it."
-                    : "The passphrase that was set when this file was exported.",
-                confirm: purpose == .export ? "Export" : "Open",
-                repeated: purpose == .export
-            ) { typed in
+                title: title(for: purpose),
+                message: message(for: purpose),
+                confirm: confirm(for: purpose),
+                repeated: purpose != .openFile,
+                askCurrent: purpose == .change
+            ) { current, typed in
                 passphraseFor = nil
-                if purpose == .export {
+                switch purpose {
+                case .export:
                     session.export(passphrase: typed)
-                } else if let data = incoming {
-                    incoming = nil
-                    session.readImport(data, passphrase: typed)
+                case .change:
+                    session.changePassphrase(current: current, next: typed) { changed = $0 }
+                case .openFile:
+                    if let data = incoming {
+                        incoming = nil
+                        session.readImport(data, passphrase: typed)
+                    }
                 }
             }
         }
@@ -107,6 +132,33 @@ struct TransferSection: View {
             }
         } message: { preview in
             Text(describe(preview))
+        }
+    }
+
+    private func title(for purpose: Purpose) -> String {
+        switch purpose {
+        case .export: return "Passphrase for this export"
+        case .openFile: return "Passphrase for this file"
+        case .change: return "Change your passphrase"
+        }
+    }
+
+    private func message(for purpose: Purpose) -> String {
+        switch purpose {
+        case .export:
+            return "Not your vault passphrase unless you choose it to be. Restoring needs this exact passphrase, and nothing can recover it."
+        case .openFile:
+            return "The passphrase that was set when this file was exported."
+        case .change:
+            return "Exports already taken keep their own passphrases and are not affected."
+        }
+    }
+
+    private func confirm(for purpose: Purpose) -> String {
+        switch purpose {
+        case .export: return "Export"
+        case .openFile: return "Open"
+        case .change: return "Change"
         }
     }
 
@@ -174,14 +226,18 @@ struct PassphrasePrompt: View {
     let message: String
     let confirm: String
     var repeated: Bool = true
-    let onSubmit: (String) -> Void
+    var askCurrent: Bool = false
+    let onSubmit: (String, String) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var current = ""
     @State private var passphrase = ""
     @State private var again = ""
 
     private var ready: Bool {
-        passphrase.count >= 8 && (!repeated || passphrase == again)
+        passphrase.count >= 8 &&
+            (!repeated || passphrase == again) &&
+            (!askCurrent || !current.isEmpty)
     }
 
     var body: some View {
@@ -190,7 +246,14 @@ struct PassphrasePrompt: View {
                 Text(message)
                     .font(.footnote)
                     .foregroundStyle(Palette.onSurfaceVariant)
-                PanelField(label: "Passphrase", text: $passphrase, secure: true)
+                if askCurrent {
+                    PanelField(label: "Current passphrase", text: $current, secure: true)
+                }
+                PanelField(
+                    label: askCurrent ? "New passphrase" : "Passphrase",
+                    text: $passphrase,
+                    secure: true
+                )
                 if repeated {
                     PanelField(label: "Repeat it", text: $again, secure: true)
                     if !again.isEmpty && passphrase != again {
@@ -199,7 +262,7 @@ struct PassphrasePrompt: View {
                             .foregroundStyle(Palette.error)
                     }
                 }
-                PillButton(title: confirm, enabled: ready) { onSubmit(passphrase) }
+                PillButton(title: confirm, enabled: ready) { onSubmit(current, passphrase) }
                 Spacer()
             }
             .padding(20)

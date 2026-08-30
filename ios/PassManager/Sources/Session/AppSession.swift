@@ -217,6 +217,32 @@ final class AppSession: ObservableObject {
 
     // MARK: - Leaving the device, and coming back
 
+    /// Replaces the passphrase, keeping every other way in.
+    ///
+    /// The current one is required even though the vault is open: an unlocked phone left on a
+    /// desk must not be enough to lock its owner out. Verifying it costs a full derivation,
+    /// which is why this runs off the main thread like the other two.
+    func changePassphrase(current: String, next: String, onChanged: @escaping (Bool) -> Void) {
+        guard let session else { return }
+        busy = true
+        let a = Secret.companion.ofUtf8(text: current)
+        let b = Secret.companion.ofUtf8(text: next)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let changed = session.changePassphrase(
+                current: a,
+                next: b,
+                parameters: Argon2Parameters.companion.Default
+            )
+            a.destroy()
+            b.destroy()
+            Task { @MainActor in
+                self.busy = false
+                if !changed.boolValue { self.failure = "That is not your current passphrase." }
+                onChanged(changed.boolValue)
+            }
+        }
+    }
+
     /// Seals the whole vault into one file under a passphrase chosen now.
     ///
     /// The Kotlin session is not bound to any actor, so the derivation runs on a background

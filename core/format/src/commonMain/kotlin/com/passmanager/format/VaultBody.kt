@@ -27,11 +27,15 @@ data class VaultBody(
      * which is the opposite of deleting it. An identifier and a time are enough to stop a
      * merge resurrecting it.
      *
-     * Nothing consumes this in version 2.0 — there is no second device to merge with yet.
-     * It is written now because the knowledge that a deletion happened is destroyed at the
-     * instant of the deletion, so recording it from the start is what retroactively covers
-     * the whole 2.0 era once the desktop client lands. Declining it costs one resurrection
-     * window, not a format break.
+     * Written when an item is deleted and consumed when a file is imported: without it, any
+     * export taken before a deletion would bring the item back. The knowledge that a deletion
+     * happened is destroyed at the instant of the deletion, so this is the only moment it can
+     * be recorded.
+     *
+     * They are never pruned. Any cap keeps the newest and discards the oldest, and the oldest
+     * are exactly the ones an old export needs — a cap would delete the only records doing
+     * any work. The cost is about sixty bytes per deletion, inside the body, re-sealed on
+     * every save.
      */
     val deletions: List<Deletion> = emptyList(),
     /**

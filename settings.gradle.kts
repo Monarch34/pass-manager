@@ -44,7 +44,7 @@ rootProject.name = "passmanager"
 //
 //   apps:android ─┬─> core:vault ──┐
 //                 ├─> core:format ─┼─> core:crypto   (primitives; knows nothing else)
-//                 └─> protocol ────┴─> core:domain   (the item model; a leaf)
+//                 └─> core:domain ─┘   (the item model; a leaf)
 //
 // crypto knows nothing about items and format knows nothing about storage, so neither can
 // grow a dependency on the other by accident.
@@ -53,9 +53,12 @@ include(":core:domain")
 include(":core:format")
 include(":core:vault")
 
-// The desktop pairing wire contract. Its own module because two applications have to agree
-// on it byte for byte, and a contract that lives inside one of them is not a contract.
-include(":protocol")
+// There is no :protocol module. There was one — a build script, no source, no tests,
+// configuring four Kotlin compilations that compiled nothing — reserved for the desktop
+// pairing wire contract. The reasoning for giving that contract its own module is sound and
+// unchanged: two applications have to agree on it byte for byte, and a contract living
+// inside one of them is not a contract. It comes back with the first wire type that needs
+// it, rather than standing in the dependency diagram claiming to exist.
 
 // ── Applications ────────────────────────────────────────────────────────────
 // The Android entry point must be its own module: from AGP 9.0 the Kotlin Multiplatform

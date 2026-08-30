@@ -11,6 +11,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -433,5 +434,113 @@ class TransferTest {
         phone.session.save(note("Extremely Secret Bank"))
         val file = phone.exportWith()
         assertFalse(file.decodeToString().contains("Extremely Secret Bank"))
+    }
+}
+
+class ChangePassphraseTest {
+
+    private val cheap = Argon2Parameters(memoryKib = 8192, iterations = 1, parallelism = 1)
+
+    private fun open(): Pair<InMemoryVaultStore, VaultSession> {
+        val store = InMemoryVaultStore()
+        val session = Secret.ofUtf8("first passphrase")
+            .use { Vault.create(store, InMemoryBlobs(), it, cheap) }
+        return store to session
+    }
+
+    private fun VaultSession.change(from: String, to: String) =
+        Secret.ofUtf8(from).use { current ->
+            Secret.ofUtf8(to).use { next -> changePassphrase(current, next, cheap) }
+        }
+
+    @Test
+    fun `the new passphrase opens the vault and the old one stops`() {
+        val (store, session) = open()
+        session.save(
+            VaultItem(
+                id = ItemId.random(),
+                createdAt = 1_700_000_000_000,
+                updatedAt = 1_700_000_000_000,
+                payload = ItemPayload.Note(title = "Kept", notes = SecretText.of("still here")),
+            ),
+        )
+        assertTrue(session.change("first passphrase", "second passphrase"))
+
+        val reopened = Secret.ofUtf8("second passphrase")
+            .use { Vault.unlock(store, InMemoryBlobs(), it) }
+        assertIs<UnlockResult.Unlocked>(reopened)
+        assertEquals("Kept", reopened.session.items.single().payload.title)
+
+        assertIs<UnlockResult.WrongPassphrase>(
+            Secret.ofUtf8("first passphrase").use { Vault.unlock(store, InMemoryBlobs(), it) },
+        )
+    }
+
+    @Test
+    fun `the wrong current passphrase changes nothing`() {
+        // An unlocked phone on a desk must not be enough to lock its owner out.
+        val (store, session) = open()
+        assertFalse(session.change("not the passphrase", "second passphrase"))
+
+        assertIs<UnlockResult.Unlocked>(
+            Secret.ofUtf8("first passphrase").use { Vault.unlock(store, InMemoryBlobs(), it) },
+        )
+    }
+
+    @Test
+    fun `the vault key survives so a second way in keeps working`() {
+        // The whole point of the two-key model: a copy of the vault key held behind a
+        // biometric gate must still open the vault after a passphrase change, without being
+        // registered again.
+        val (store, session) = open()
+        val keptKey = session.useVaultKey { Secret.of(it.toByteArray()) }
+        assertTrue(session.change("first passphrase", "second passphrase"))
+
+        assertIs<UnlockResult.Unlocked>(
+            Vault.unlockWithVaultKey(store, InMemoryBlobs(), keptKey),
+        )
+    }
+
+    @Test
+    fun `the salt changes so work against the old passphrase does not carry over`() {
+        val (store, session) = open()
+        val before = store.bytes!!.copyOfRange(15, 31)
+        assertTrue(session.change("first passphrase", "second passphrase"))
+        val after = store.bytes!!.copyOfRange(15, 31)
+        assertNotEquals(before.toList(), after.toList())
+    }
+
+    @Test
+    fun `attachments are not touched by a passphrase change`() {
+        val store = InMemoryVaultStore()
+        val blobs = InMemoryBlobs()
+        val session = Secret.ofUtf8("first passphrase").use { Vault.create(store, blobs, it, cheap) }
+        val item = VaultItem(
+            id = ItemId.random(),
+            createdAt = 1_700_000_000_000,
+            updatedAt = 1_700_000_000_000,
+            payload = ItemPayload.Note(title = "Passport", notes = SecretText.Empty),
+        )
+        session.save(item)
+        val content = ByteArray(512) { (it and 0xff).toByte() }
+        val stored = Secret.of(content).use {
+            session.attach(item.id, "scan.png", "image/png", it, createdAt = 1_700_000_000_000)
+        }
+        val bytesBefore = blobs.read(stored.id).toList()
+
+        assertTrue(
+            Secret.ofUtf8("first passphrase").use { current ->
+                Secret.ofUtf8("second passphrase").use { next ->
+                    session.changePassphrase(current, next, cheap)
+                }
+            },
+        )
+
+        // Not one byte, because the vault key they are wrapped under did not change.
+        assertEquals(bytesBefore, blobs.read(stored.id).toList())
+        assertEquals(
+            content.toList(),
+            assertNotNull(session.openAttachment(stored.id)).toByteArray().toList(),
+        )
     }
 }

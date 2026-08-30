@@ -2,7 +2,9 @@
 
 A password manager that keeps everything on the device it runs on.
 
-Vault entries are encrypted with a key that never leaves memory in the clear and is unwrapped from a passphrase you choose. There is no account, no server and no sync. The only outbound request the app can make is an optional site-icon lookup, which is off until you turn it on.
+Vault entries are encrypted with a key that never leaves memory in the clear and is unwrapped from a passphrase you choose. There is no account, no server and no sync.
+
+Neither application makes any outbound request. The Android manifest declares no permissions at all, `INTERNET` included, so the phone app is incapable of one; the iOS app links Foundation, PDFKit and LocalAuthentication and nothing that speaks to a network. A vault leaves the device only as a file you export on purpose.
 
 ## Layout
 
@@ -12,12 +14,11 @@ One Gradle build. The dependency arrows only point downward, and each module is 
 apps/android          Compose UI
 ios/framework   ──┐   assembles PassManagerKit.xcframework for the SwiftUI app
                   │
-core/vault    ────┤    the open vault: search, merge, the blob store
+core/vault    ────┤    the open vault: search, merge, export, the blob store
 core/format   ────┤    the .pmvault container
-protocol      ────┤    the desktop pairing wire contract
                   │
 core/crypto   ────┘    primitives, key wrapping
-core/domain            the item model
+core/domain            the item model, password strength and generation
 ```
 
 `core/crypto` knows nothing about items. `core/format` knows nothing about storage. Neither can grow a dependency on the other by accident, because neither can see it.

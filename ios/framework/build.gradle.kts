@@ -7,9 +7,10 @@ plugins {
 /**
  * The umbrella that becomes `PassManagerKit.xcframework`.
  *
- * It holds no code. It exists so that iOS packaging decisions — which modules Swift can
- * see, static or dynamic linkage, the framework's name — live in one file instead of being
- * spread across every core module, and so that the core modules stay unaware that an Apple
+ * It holds almost no code, and what it does hold is there for the same reason as the rest:
+ * iOS packaging decisions — which modules Swift can see, static or dynamic linkage, the
+ * framework's name, and how bytes cross into Swift in bulk — live in one place instead of
+ * being spread across every core module, and the core modules stay unaware that an Apple
  * platform exists at all.
  *
  * Nothing here can be built on a Windows or Linux host: linking an Apple binary needs

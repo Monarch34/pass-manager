@@ -13,17 +13,26 @@ import com.passmanager.crypto.random.secureRandomBytes
  * The passphrase never encrypts anything directly, and that indirection buys three things
  * that a single derived key cannot:
  *
- * - **Changing the passphrase rewraps sixty bytes.** Under a single derived key it would
- *   mean decrypting and re-encrypting the whole vault: slow, and a window in which the
- *   entire plaintext exists at once and a crash leaves a half-written file.
+ * - **Changing the passphrase rewraps sixty bytes and re-seals the item body.** A fresh
+ *   salt is drawn, and the salt lives in the descriptor, which is the body's associated
+ *   data — so the body is re-sealed with it: tens of kilobytes, not the sixty bytes alone
+ *   that a first reading of this suggests, and not the attachments at all. Under a single
+ *   derived key it would mean decrypting and re-encrypting everything the owner has,
+ *   attachments included: slow, and a window in which the entire plaintext exists at once
+ *   and a crash leaves a half-written file.
  * - **A second way in costs one more wrapped copy.** Unlocking with biometrics is the same
  *   vault key wrapped again under a key the platform keystore holds and the passphrase
  *   never touches. Both unlock paths reach the same vault key; neither can derive the
  *   other's. The same shape gives a written-down recovery code its own slot.
- * - **A stolen key expires.** The vault key can be replaced and the contents re-encrypted
- *   without the user choosing a new passphrase, and the passphrase can be changed without
- *   touching the contents. Under one key those two are the same operation and neither can
- *   happen alone.
+ * - **The passphrase and the contents move independently.** The passphrase can be changed
+ *   without touching the vault key, so every other way in keeps working and no attachment
+ *   is rewritten. Under one derived key those are the same operation and neither can happen
+ *   alone.
+ *
+ *   The other half of that independence — replacing the vault key and re-encrypting the
+ *   contents, so that a leaked key expires — is what this shape makes *possible*, and it is
+ *   not implemented. Nothing needs it until a second device exists that could have leaked
+ *   one, and it would rewrite every attachment the owner has.
  *
  * Every key here is a [Secret]; only the salt and the wrapped blob are plain arrays, because
  * only those two are safe to write to a file. How they are stored is not decided here — this

@@ -1,12 +1,18 @@
 # One catalog for the whole build. There is exactly one Gradle build here and exactly one
 # place a version is written down.
 #
-# The core four are not independently chosen — they are the intersection of three published
-# compatibility tables, and moving any one of them moves the others:
+# The core four are not independently chosen. Two published constraints bound them:
 #
-#   Kotlin 2.4.10 supports  Gradle 7.6.3-9.5.0  and  AGP 8.5.2-9.1.0
-#   AGP 9.1.1     requires  Gradle 9.3.1+
-#   => Gradle 9.5.0 is the only point satisfying both ends.
+#   Kotlin 2.4.10 supports Gradle 7.6.3-9.5.0
+#   AGP 9.1.1     requires Gradle 9.3.1+
+#   => Gradle 9.3.1 through 9.5.0. This file takes the top of that range.
+#
+# An earlier version of this comment claimed the result was "the only point" satisfying both
+# ends, which it is not — it is a range — and quoted a supported AGP ceiling of 9.1.0 while
+# the line below pins 9.1.1, so the comment excluded the version it was justifying. Neither
+# error changed a single resolved artifact, and both are the kind of thing a reader would
+# reasonably have trusted. What is actually load-bearing is verified rather than asserted:
+# every push builds and tests this combination on Linux and on macOS.
 #
 # Newer things exist (Gradle 9.7.1, AGP 9.3.2) and are deliberately not used: they fall
 # outside the Kotlin Multiplatform plugin's tested envelope, and "probably fine" is not a
