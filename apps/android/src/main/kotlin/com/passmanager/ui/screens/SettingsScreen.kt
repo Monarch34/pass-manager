@@ -1,6 +1,8 @@
 package com.passmanager.ui.screens
 
 import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,11 +11,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,7 +31,11 @@ import androidx.fragment.app.FragmentActivity
 import com.passmanager.data.BiometricVaultKey
 import com.passmanager.ui.VaultViewModel
 import com.passmanager.ui.components.PanelCard
+import com.passmanager.ui.components.PanelField
+import com.passmanager.ui.components.PanelRow
+import com.passmanager.ui.components.PanelRowDivider
 import com.passmanager.ui.components.SectionFootnote
+import com.passmanager.vault.ImportPreview
 import com.passmanager.ui.promptForCipher
 
 @Composable
@@ -129,8 +139,197 @@ fun SettingsScreen(model: VaultViewModel, onBack: () -> Unit) {
             }
         }
 
+        Transfer(model)
+
         model.failure?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
     }
 }
+
+/**
+ * Taking a copy off the phone, and putting one back.
+ *
+ * There is no account and no server, so this is the only way a vault ever leaves this device
+ * and the only way one arrives. Both sit under one heading because they are two directions of
+ * the same thing, and because whoever is looking for "backup" needs to find "restore" beside
+ * it rather than discover later that it was never there.
+ */
+@Composable
+private fun Transfer(model: VaultViewModel) {
+    var exporting by remember { mutableStateOf(false) }
+    var importingFrom by remember { mutableStateOf<Uri?>(null) }
+
+    val saveTo = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        model.pickerClosed()
+        if (uri != null) model.writeExport(uri) else model.discardExport()
+    }
+
+    val openFrom = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        model.pickerClosed()
+        importingFrom = uri
+    }
+
+    // The bytes exist before a destination does, so where to put them is asked for the moment
+    // they are ready rather than before the passphrase has even been typed.
+    LaunchedEffect(model.pendingExport) {
+        if (model.pendingExport != null) {
+            model.pickerOpened()
+            saveTo.launch("PassManager.pmvault")
+        }
+    }
+
+    Text("Backup", style = MaterialTheme.typography.titleSmall)
+    PanelCard {
+        PanelRow(onClick = { if (!model.busy) exporting = true }) {
+            Column(Modifier.fillMaxWidth()) {
+                Text("Export this vault", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "One file, sealed with a passphrase you choose now.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        PanelRowDivider()
+        PanelRow(onClick = {
+            if (!model.busy) {
+                model.pickerOpened()
+                openFrom.launch("*/*")
+            }
+        }) {
+            Column(Modifier.fillMaxWidth()) {
+                Text("Import a vault file", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Merged into this vault. Nothing is removed without asking.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+
+    if (model.busy) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(Modifier.padding(end = 12.dp))
+            SectionFootnote("Working. A file that leaves the phone is deliberately slow to open.")
+        }
+    }
+
+    SectionFootnote(
+        "An export is a snapshot, not a spare key: it cannot open this vault and this vault " +
+            "cannot open it. Biometric unlock does not travel with it, so restoring needs the " +
+            "passphrase you set here. Anyone holding the file and that passphrase can read " +
+            "everything in it, and there is no way to revoke that."
+    )
+
+    if (exporting) {
+        PassphrasePrompt(
+            title = "Passphrase for this export",
+            body = "Not your vault passphrase unless you choose it to be. Restoring needs this " +
+                "exact passphrase, and nothing can recover it.",
+            confirm = "Export",
+            onDismiss = { exporting = false },
+            onSubmit = { exporting = false; model.export(it) },
+        )
+    }
+
+    importingFrom?.let { uri ->
+        PassphrasePrompt(
+            title = "Passphrase for this file",
+            body = "The passphrase that was set when this file was exported.",
+            confirm = "Open",
+            repeated = false,
+            onDismiss = { importingFrom = null },
+            onSubmit = { importingFrom = null; model.readImport(uri, it) },
+        )
+    }
+
+    model.importPreview?.let { ImportPrompt(model, it) }
+}
+
+/** What agreeing would do, before it is done. */
+@Composable
+private fun ImportPrompt(model: VaultViewModel, preview: ImportPreview) {
+    AlertDialog(
+        onDismissRequest = { model.discardImport() },
+        title = { Text(if (preview.isEmpty) "Nothing to import" else "Import this file?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (preview.isEmpty) {
+                    Text("This vault already holds everything that file has.")
+                } else {
+                    if (preview.added.isNotEmpty()) Text("${preview.added.size} to add")
+                    if (preview.replaced.isNotEmpty()) {
+                        Text("${preview.replaced.size} to update with a newer version")
+                    }
+                    if (preview.attachmentsAdded > 0) {
+                        Text("${preview.attachmentsAdded} attachments to add")
+                    }
+                    if (preview.removed.isNotEmpty()) {
+                        // Named rather than counted. This is the only outcome that destroys
+                        // something already here, and there is no undo anywhere in this app.
+                        Text(
+                            "Deleted on the other device, so they go here too:",
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        preview.removed.forEach {
+                            Text(
+                                "\u00b7 " + it.payload.title,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton({ model.applyImport() }) {
+                Text(if (preview.isEmpty) "Done" else "Import")
+            }
+        },
+        dismissButton = {
+            if (!preview.isEmpty) TextButton({ model.discardImport() }) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+private fun PassphrasePrompt(
+    title: String,
+    body: String,
+    confirm: String,
+    onDismiss: () -> Unit,
+    onSubmit: (String) -> Unit,
+    repeated: Boolean = true,
+) {
+    var passphrase by remember { mutableStateOf("") }
+    var again by remember { mutableStateOf("") }
+    val ready = passphrase.length >= 8 && (!repeated || passphrase == again)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(body, style = MaterialTheme.typography.bodySmall)
+                PanelField("Passphrase", passphrase, { passphrase = it }, secret = true)
+                if (repeated) PanelField("Repeat it", again, { again = it }, secret = true)
+                if (repeated && again.isNotEmpty() && passphrase != again) {
+                    Text(
+                        "The two do not match.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton({ onSubmit(passphrase) }, enabled = ready) { Text(confirm) }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("Cancel") } },
+    )
+}
+

@@ -8,28 +8,21 @@ import PassManagerKit
 /// all: that is `core:vault`, shared with Android, and this app calls it rather than
 /// reimplementing it.
 extension Data {
-    /// Copies into a Kotlin array, one element at a time.
+    /// Copies into a Kotlin array in one `memcpy`.
     ///
-    /// Each element crosses the bridge individually, which is slow in principle. A vault is
-    /// tens of kilobytes and an attachment is capped at five megabytes, and this happens on
-    /// unlock, on save and on attach — not in a loop — so it is not worth something faster
-    /// and less obvious.
+    /// This used to walk the bytes one at a time, each crossing the Objective-C bridge as a
+    /// message send, defended on the grounds that it happened "on unlock, on save and on
+    /// attach — not in a loop". Export and import are that loop: they walk every attachment
+    /// in a vault, and at five megabytes each the element-at-a-time version was millions of
+    /// calls per file. `Bytes` pins the Kotlin array and copies whole.
     var kotlinBytes: KotlinByteArray {
-        let array = KotlinByteArray(size: Int32(count))
-        for (index, byte) in enumerated() {
-            array.set(index: Int32(index), value: Int8(bitPattern: byte))
-        }
-        return array
+        Bytes.shared.fromData(data: self as NSData)
     }
 }
 
 extension KotlinByteArray {
     var swiftData: Data {
-        var data = Data(count: Int(size))
-        for index in 0..<Int(size) {
-            data[index] = UInt8(bitPattern: get(index: Int32(index)))
-        }
-        return data
+        Bytes.shared.toData(bytes: self) as Data
     }
 }
 

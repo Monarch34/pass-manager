@@ -171,6 +171,56 @@ class VaultSessionTest {
             "a save rewrote the descriptor",
         )
     }
+
+    @Test
+    fun `an old password is findable`() {
+        // The only reason the history is kept is to answer "have I used this one before",
+        // and a list nothing can search cannot answer it.
+        val (_, session) = openWithBank()
+        assertEquals(1, session.search("hunter2").size)
+    }
+
+    @Test
+    fun `a card security code does not match everything`() {
+        // Three digits are a substring of most card and account numbers in any vault, which
+        // is exactly why the security code is the one secret left out of the index. The bank
+        // here matches on its account number and should; the card, whose only 447 is its
+        // security code, must not.
+        val (_, session) = openWithBank()
+        assertEquals(listOf("Bank"), session.search("447").map { it.payload.title })
+    }
+
+    private fun openWithBank(): Pair<InMemoryVaultStore, VaultSession> {
+        val store = InMemoryVaultStore()
+        val session = Secret.ofUtf8("open sesame")
+            .use { Vault.create(store, InMemoryBlobs(), it, Argon2Parameters(8192, 1, 1)) }
+        session.save(
+            VaultItem(
+                id = ItemId.random(),
+                createdAt = 1_700_000_000_000,
+                updatedAt = 1_700_000_000_000,
+                payload = ItemPayload.Bank(
+                    title = "Bank",
+                    accountNumber = SecretText.of("9930447221"),
+                    password = SecretText.of("current"),
+                    previousPasswords = listOf(SecretText.of("hunter2")),
+                ),
+            ),
+        )
+        session.save(
+            VaultItem(
+                id = ItemId.random(),
+                createdAt = 1_700_000_000_000,
+                updatedAt = 1_700_000_000_000,
+                payload = ItemPayload.Card(
+                    title = "Card",
+                    cardNumber = SecretText.of("5100000000000000"),
+                    cardCvc = SecretText.of("447"),
+                ),
+            ),
+        )
+        return store to session
+    }
 }
 
 class TombstoneTest {

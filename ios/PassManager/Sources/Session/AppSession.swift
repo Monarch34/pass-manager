@@ -22,6 +22,17 @@ final class AppSession: ObservableObject {
     @Published private(set) var items: [VaultItem] = []
     @Published var failure: String?
 
+    /// Set while an export or an import is deriving a key. Argon2 at export cost is several
+    /// seconds of deliberate work, so it cannot run on the thread that draws the screen — and
+    /// the screen has to say something while it is not drawing.
+    @Published private(set) var busy = false
+
+    /// An export waiting for the user to choose where it goes.
+    @Published var pendingExport: Data?
+
+    /// An import that has been read and previewed, waiting to be agreed to or refused.
+    @Published private(set) var pendingImport: ImportReadReady?
+
     private let files = VaultFile()
     private let blobs = BlobStore()
 
@@ -95,6 +106,10 @@ final class AppSession: ObservableObject {
     }
 
     func lock() {
+        // An export or a half-agreed import is vault contents held outside the vault. Locking
+        // means the key stops existing, and neither may outlive it.
+        discardImport()
+        pendingExport = nil
         session?.lock()
         session = nil
         items = []
@@ -197,6 +212,82 @@ final class AppSession: ObservableObject {
             return nil
         }
         return data
+    }
+
+
+    // MARK: - Leaving the device, and coming back
+
+    /// Seals the whole vault into one file under a passphrase chosen now.
+    ///
+    /// The Kotlin session is not bound to any actor, so the derivation runs on a background
+    /// queue and only the result crosses back to the main one. Doing it in place would freeze
+    /// the app for as long as the Argon2 parameters are worth.
+    func export(passphrase: String) {
+        guard let session else { return }
+        busy = true
+        let secret = Secret.companion.ofUtf8(text: passphrase)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let file = session.export(
+                passphrase: secret,
+                parameters: Argon2Parameters.companion.Export
+            )
+            secret.destroy()
+            let data = file.swiftData
+            Task { @MainActor in
+                self.busy = false
+                self.pendingExport = data
+            }
+        }
+    }
+
+    /// Reads a file far enough to say what importing it would do, and does none of it.
+    func readImport(_ file: Data, passphrase: String) {
+        guard let session else { return }
+        busy = true
+        let secret = Secret.companion.ofUtf8(text: passphrase)
+        let bytes = file.kotlinBytes
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let outcome = session.read(file: bytes, passphrase: secret, now: now)
+            secret.destroy()
+            Task { @MainActor in
+                self.busy = false
+                self.receive(outcome)
+            }
+        }
+    }
+
+    var importPreview: ImportPreview? { pendingImport?.preview }
+
+    func applyImport() {
+        pendingImport?.apply()
+        pendingImport = nil
+        items = session?.items ?? []
+    }
+
+    func discardImport() {
+        pendingImport?.discard()
+        pendingImport = nil
+    }
+
+    private func receive(_ outcome: ImportRead) {
+        switch outcome {
+        case let ready as ImportReadReady:
+            pendingImport = ready
+        case let damaged as ImportReadDamaged:
+            failure = "This file is damaged at byte \(damaged.offset): \(damaged.what)."
+        case is ImportReadUnsupported:
+            failure = "This file was written by a newer version of the app."
+        case is ImportReadNotAVault:
+            failure = "That is not a PassManager vault file."
+        case is ImportReadIncomplete:
+            failure = "This file is missing attachments it says it carries, so importing it "
+                + "would quietly lose them. Use an unaltered copy."
+        default:
+            // Wrong passphrase and an edited file are one outcome here for the same reason
+            // they are one outcome on unlock.
+            failure = "That passphrase does not open this file."
+        }
     }
 
     /// What the file actually is, as far as the system will say.

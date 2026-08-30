@@ -38,6 +38,8 @@ struct SettingsView: View {
                         }
                     }
 
+                    TransferSection()
+
                     if let failure = session.failure {
                         Text(failure).font(.footnote).foregroundStyle(Palette.error)
                     }

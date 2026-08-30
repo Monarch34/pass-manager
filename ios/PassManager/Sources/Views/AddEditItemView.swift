@@ -71,7 +71,7 @@ struct AddEditItemView: View {
                         PasswordField(label: "Password", text: $password)
                     }
 
-                    PanelField(label: "Notes", text: $notes)
+                    PanelField(label: "Notes", text: $notes, multiline: true)
                 }
                 .padding(16)
             }

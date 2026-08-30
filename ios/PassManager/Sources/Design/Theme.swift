@@ -93,6 +93,10 @@ struct PanelField: View {
     let label: String
     @Binding var text: String
     var secure: Bool = false
+    /// Lets the field grow. Set for notes, which are the one field where a line break is
+    /// content rather than formatting — a secure note's whole substance is in this field, and
+    /// a single-line box made the Note category unusable for what it exists to hold.
+    var multiline: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -102,6 +106,10 @@ struct PanelField: View {
             Group {
                 if secure {
                     SecureField("", text: $text)
+                } else if multiline {
+                    TextField("", text: $text, axis: .vertical)
+                        .lineLimit(3...12)
+                        .autocorrectionDisabled()
                 } else {
                     TextField("", text: $text)
                         .autocorrectionDisabled()

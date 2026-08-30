@@ -14,10 +14,16 @@ import com.passmanager.data.BiometricVaultKey
 import javax.crypto.Cipher
 import com.passmanager.domain.item.ItemId
 import com.passmanager.domain.item.VaultItem
+import androidx.lifecycle.viewModelScope
+import com.passmanager.vault.ImportPreview
+import com.passmanager.vault.ImportRead
 import com.passmanager.vault.UnlockResult
 import com.passmanager.vault.Vault
 import com.passmanager.vault.Attachment
 import com.passmanager.vault.VaultSession
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The application's state, which is almost entirely `core:vault`'s state.
@@ -147,6 +153,10 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun lock() {
+        // An export or a half-agreed import is vault contents held outside the vault. Locking
+        // means the key stops existing, and these must not outlive it.
+        discardImport()
+        discardExport()
         session?.lock()
         session = null
         items = emptyList()
@@ -185,6 +195,105 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissFailure() {
         failure = null
+    }
+
+    // ── Leaving the device, and coming back ─────────────────────────────────
+
+    /**
+     * Set while an export or an import is deriving a key.
+     *
+     * Argon2 at export cost is several seconds of deliberate work, so it cannot run on the
+     * thread that draws the screen and the screen has to say something while it does not.
+     */
+    var busy by mutableStateOf(false)
+        private set
+
+    /** The bytes of an export, waiting for the user to choose where they go. */
+    var pendingExport by mutableStateOf<ByteArray?>(null)
+        private set
+
+    /** An import that has been read and previewed, waiting to be agreed to or refused. */
+    var pendingImport by mutableStateOf<ImportRead.Ready?>(null)
+        private set
+
+    val importPreview: ImportPreview? get() = pendingImport?.preview
+
+    fun export(passphrase: String) {
+        val open = session ?: return
+        busy = true
+        viewModelScope.launch {
+            val file = runCatching {
+                withContext(Dispatchers.Default) {
+                    Secret.ofUtf8(passphrase).use { open.export(it) }
+                }
+            }
+            busy = false
+            file.onSuccess { pendingExport = it }
+                .onFailure { failure = it.message ?: "The export could not be written." }
+        }
+    }
+
+    /** Writes the export the user has now chosen a place for, and forgets it either way. */
+    fun writeExport(uri: Uri) = guard {
+        val bytes = pendingExport ?: return@guard
+        getApplication<Application>().contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+            ?: error("that location could not be written to")
+        discardExport()
+    }
+
+    /**
+     * Drops the export, whether it was saved or abandoned.
+     *
+     * It is the whole vault in memory, sealed but decryptable by whoever knows the passphrase
+     * the user just typed. There is no reason to keep it a moment past the save.
+     */
+    fun discardExport() {
+        pendingExport = null
+    }
+
+    fun readImport(uri: Uri, passphrase: String) {
+        val open = session ?: return
+        busy = true
+        viewModelScope.launch {
+            val outcome = runCatching {
+                val bytes = getApplication<Application>().contentResolver
+                    .openInputStream(uri)?.use { it.readBytes() }
+                    ?: error("that file could not be read")
+                withContext(Dispatchers.Default) {
+                    Secret.ofUtf8(passphrase).use { open.read(bytes, it, System.currentTimeMillis()) }
+                }
+            }
+            busy = false
+            outcome.onFailure { failure = it.message ?: "That file could not be read." }
+            outcome.onSuccess { read ->
+                when (read) {
+                    is ImportRead.Ready -> pendingImport = read
+                    // The same answer for both, for the same reason as an unlock: saying
+                    // which would tell an attacker whether their forgery was sound.
+                    ImportRead.WrongPassphrase ->
+                        failure = "That passphrase does not open this file."
+                    is ImportRead.Damaged ->
+                        failure = "This file is damaged at byte ${read.offset}: ${read.what}."
+                    is ImportRead.Unsupported ->
+                        failure = "This file was written by a newer version of the app."
+                    ImportRead.NotAVault -> failure = "That is not a PassManager vault file."
+                    ImportRead.Incomplete ->
+                        failure = "This file is missing attachments it says it carries, so " +
+                            "importing it would quietly lose them. Use an unaltered copy."
+                }
+            }
+        }
+    }
+
+    fun applyImport() = guard {
+        pendingImport?.apply()
+        pendingImport = null
+        items = session?.items.orEmpty()
+    }
+
+    fun discardImport() {
+        pendingImport?.discard()
+        pendingImport = null
     }
 
     // ── Attachments ─────────────────────────────────────────────────────────

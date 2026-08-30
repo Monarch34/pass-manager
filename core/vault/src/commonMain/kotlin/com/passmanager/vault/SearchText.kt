@@ -6,7 +6,8 @@ import com.passmanager.domain.item.VaultItem
 /**
  * Everything about an item that a search should be able to find.
  *
- * Secrets included — a password, a card number, an account number. That is deliberate and it
+ * Secrets included — a password, a card number, an account number, with one exception
+ * named below. That is deliberate and it
  * is safe here: the whole vault is already decrypted in memory while it is open, so matching
  * against a password costs nothing extra and discloses nothing that was not already
  * available to the process. What it buys is being able to find the entry when the only thing
@@ -26,11 +27,17 @@ internal fun StringBuilder.appendPayloadFields(item: VaultItem) {
             append(payload.cardholderName).append(' ')
             append(payload.cardExpiry).append(' ')
             payload.cardNumber.reveal { append(it) }
+            // The security code is left out on purpose, and it is the one exception. Three
+            // digits match a substring of almost every card number and account number in the
+            // vault, so including it would return everything for a great many queries.
         }
         is ItemPayload.Bank -> {
             append(payload.bankName).append(' ')
             payload.accountNumber.reveal { append(it).append(' ') }
-            payload.password.reveal { append(it) }
+            payload.password.reveal { append(it).append(' ') }
+            // Searchable because the whole reason they are kept is to answer "have I used
+            // this one before", and a list you cannot search cannot answer it.
+            for (previous in payload.previousPasswords) previous.reveal { append(it).append(' ') }
         }
         is ItemPayload.Identity -> {
             append(payload.firstName).append(' ')

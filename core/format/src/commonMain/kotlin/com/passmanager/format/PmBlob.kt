@@ -63,8 +63,16 @@ object PmBlob {
      */
     const val MaxContentSize = 5 * 1024 * 1024
 
-    /** Generous for a name, a type and a thumbnail; small enough to bound a prefix read. */
-    const val MaxHeaderSize = 64 * 1024
+    /**
+     * Sixteen kibibytes: a name, a type, and a thumbnail bounded at eight before encoding.
+     *
+     * This is not a generous ceiling and must not be, because it is not really a limit on
+     * headers — it is what a listing reads *per attachment*. HeaderPrefixSize is built from
+     * it, so at 64 KiB, drawing an item with eight attachments read half a megabyte to
+     * render eight rows, and the KDoc's promise of "a few kilobytes each" was false by a
+     * factor of sixteen.
+     */
+    const val MaxHeaderSize = 16 * 1024
 
     /** Magic, container, identifier and wrapped key: everything before the first record. */
     private const val FixedPrefix = 4 + 1 + IdSize + 60
