@@ -15,14 +15,18 @@ extension Data {
     /// attach — not in a loop". Export and import are that loop: they walk every attachment
     /// in a vault, and at five megabytes each the element-at-a-time version was millions of
     /// calls per file. `Bytes` pins the Kotlin array and copies whole.
+    ///
+    /// No cast either way: Kotlin declares these as `NSData`, and Swift bridges `NSData` to
+    /// `Data` automatically in an imported Objective-C signature. Spelling the cast out is
+    /// what fails to compile, not what makes it work.
     var kotlinBytes: KotlinByteArray {
-        Bytes.shared.fromData(data: self as NSData)
+        Bytes.shared.fromData(data: self)
     }
 }
 
 extension KotlinByteArray {
     var swiftData: Data {
-        Bytes.shared.toData(bytes: self) as Data
+        Bytes.shared.toData(bytes: self)
     }
 }
 
