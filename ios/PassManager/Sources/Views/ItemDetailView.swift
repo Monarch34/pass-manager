@@ -175,7 +175,8 @@ struct ItemDetailView: View {
                         .padding(14)
                 } else {
                     ForEach(Array(attachments.enumerated()), id: \.element.id) { index, attachment in
-                        HStack {
+                        HStack(spacing: 12) {
+                            AttachmentThumbnail(attachment: attachment)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(attachment.filename.isEmpty ? "Attachment" : attachment.filename)
                                     // Coloured because the row opens it. Nothing else on this
@@ -262,6 +263,38 @@ struct ItemDetailView: View {
         }
         out.append(Field("Notes", item.payload.notes))
         return out.filter { !$0.isEmpty }
+    }
+}
+
+/// The picture in an attachment's row, when it has one.
+///
+/// Decoded from the header, which is already in hand — the attachment itself stays sealed.
+/// Anything without one gets a placeholder rather than a shifting layout, because a list where
+/// some rows are taller than others reads as broken.
+private struct AttachmentThumbnail: View {
+    let attachment: Attachment
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Palette.surfaceVariant)
+            if let bytes = attachment.thumbnail, let image = UIImage(data: bytes.swiftData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                Text(extensionLabel)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(Palette.onSurfaceVariant)
+            }
+        }
+        .frame(width: 40, height: 40)
+    }
+
+    private var extensionLabel: String {
+        let suffix = (attachment.filename as NSString).pathExtension.uppercased()
+        return suffix.isEmpty ? "FILE" : String(suffix.prefix(3))
     }
 }
 

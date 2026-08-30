@@ -140,7 +140,7 @@ class VaultSession internal constructor(
         mimeType: String,
         content: Secret,
         createdAt: Long,
-        thumbnail: String? = null,
+        thumbnail: ByteArray? = null,
     ): Attachment {
         requireOpen()
         require(contents.items.any { it.id == itemId }) { "no such item" }
@@ -158,7 +158,13 @@ class VaultSession internal constructor(
             mimeType = mimeType,
             size = content.size.toLong(),
             createdAt = createdAt,
-            thumbnail = thumbnail,
+            // Encoded here rather than by each application, so that both reach the same
+            // bytes and neither has to know that the header is JSON. The size bound is the
+            // point: a listing reads every attachment's header, so a thumbnail nobody
+            // limited would turn opening one item into reading megabytes.
+            thumbnail = thumbnail
+                ?.takeIf { it.isNotEmpty() && it.size <= MaxThumbnailSize }
+                ?.let { Base64.encode(it) },
         )
         blobs.write(id.hex, PmBlob.create(vaultKey, id, header, content))
         return header.toAttachment(id.hex)
@@ -251,6 +257,16 @@ class VaultSession internal constructor(
          * folder wearing a password entry's clothes.
          */
         const val MaxAttachmentsPerItem = 8
+
+        /**
+         * Eight kilobytes of image, before encoding.
+         *
+         * Listing an item's attachments reads each one's header, so this multiplied by
+         * [MaxAttachmentsPerItem] is what opening an entry costs. A thumbnail larger than
+         * this is dropped rather than refused: it is a nicety, and losing it must never be
+         * the reason a scan cannot be attached.
+         */
+        const val MaxThumbnailSize = 8 * 1024
     }
 }
 

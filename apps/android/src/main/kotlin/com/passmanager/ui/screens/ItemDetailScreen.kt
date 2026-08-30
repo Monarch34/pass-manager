@@ -8,7 +8,13 @@ import android.os.Build
 import android.os.PersistableBundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,6 +35,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.passmanager.domain.item.ItemPayload
@@ -132,7 +141,8 @@ fun ItemDetailScreen(
             } else {
                 attachments.forEachIndexed { index, attachment ->
                     PanelRow(onClick = { viewing = attachment }) {
-                        Column(Modifier.fillMaxWidth(0.72f)) {
+                        AttachmentThumbnail(attachment)
+                        Column(Modifier.fillMaxWidth(0.62f)) {
                             Text(
                                 attachment.filename.ifEmpty { "Attachment" },
                                 style = MaterialTheme.typography.bodyLarge,
@@ -189,6 +199,47 @@ fun ItemDetailScreen(
         )
     }
 }
+
+/**
+ * The picture in an attachment's row, when it has one.
+ *
+ * Decoded from the header, which is already in hand — the attachment itself stays sealed.
+ * Anything without one gets a placeholder rather than a shifting layout, because a list where
+ * some rows are taller than others reads as broken.
+ */
+@Composable
+private fun AttachmentThumbnail(attachment: Attachment) {
+    val image = remember(attachment.id) {
+        attachment.thumbnail?.let { bytes ->
+            runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }.getOrNull()
+        }?.asImageBitmap()
+    }
+
+    Box(
+        Modifier
+            .size(40.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant, ThumbnailShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (image != null) {
+            Image(
+                bitmap = image,
+                contentDescription = null,
+                modifier = Modifier.size(40.dp).clip(ThumbnailShape),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Text(
+                attachment.filename.substringAfterLast('.', "").take(3).uppercase()
+                    .ifEmpty { "FILE" },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private val ThumbnailShape = RoundedCornerShape(8.dp)
 
 /**
  * The other entries this one is connected to.

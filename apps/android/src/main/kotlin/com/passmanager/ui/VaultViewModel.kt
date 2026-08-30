@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import com.passmanager.crypto.Secret
 import android.net.Uri
 import com.passmanager.data.AndroidBlobFileStore
+import com.passmanager.data.Thumbnails
 import com.passmanager.data.AndroidVaultFileStore
 import com.passmanager.data.BiometricVaultKey
 import javax.crypto.Cipher
@@ -205,6 +206,9 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
 
         val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
             ?: error("that file could not be read")
+        // Made before the bytes are sealed away, because afterwards making one would mean
+        // decrypting the whole attachment again just to draw a row.
+        val thumbnail = Thumbnails.of(bytes)
         Secret.adopt(bytes).use { content ->
             open.attach(
                 itemId = item.id,
@@ -212,6 +216,7 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
                 mimeType = resolver.getType(uri) ?: "application/octet-stream",
                 content = content,
                 createdAt = System.currentTimeMillis(),
+                thumbnail = thumbnail,
             )
         }
     }

@@ -166,6 +166,9 @@ final class AppSession: ObservableObject {
             return
         }
 
+        // Made before the bytes are sealed away, because afterwards making one would mean
+        // decrypting the whole attachment again just to draw a row.
+        let thumbnail = Thumbnails.of(data)
         let content = Secret.companion.adopt(bytes: data.kotlinBytes)
         defer { content.destroy() }
         session.attach(
@@ -174,7 +177,7 @@ final class AppSession: ObservableObject {
             mimeType: Self.mimeType(of: url),
             content: content,
             createdAt: Int64(Date().timeIntervalSince1970 * 1000),
-            thumbnail: nil
+            thumbnail: thumbnail?.kotlinBytes
         )
     }
 
