@@ -73,7 +73,9 @@ class MainActivity : FragmentActivity() {
 private fun Root() {
     val model: VaultViewModel = viewModel()
     var editing by remember { mutableStateOf<String?>(null) }
-    var viewing by remember { mutableStateOf<String?>(null) }
+    // A stack, not one identifier, because a bank opens its cards. Going back from a card
+    // reached that way has to return to the bank rather than to the list.
+    var viewing by remember { mutableStateOf(listOf<String>()) }
     var adding by remember { mutableStateOf(false) }
     var settings by remember { mutableStateOf(false) }
 
@@ -81,7 +83,7 @@ private fun Root() {
         VaultViewModel.Phase.Empty -> CreateVaultScreen(model)
         VaultViewModel.Phase.Locked -> LockScreen(model)
         VaultViewModel.Phase.Unlocked -> {
-            val open = viewing?.let(model::item)
+            val open = viewing.lastOrNull()?.let(model::item)
             val edited = editing?.let(model::item)
             when {
                 settings -> SettingsScreen(model) { settings = false }
@@ -94,11 +96,12 @@ private fun Root() {
                     model = model,
                     item = open,
                     onEdit = { editing = open.id.value },
-                    onBack = { viewing = null },
+                    onOpen = { viewing = viewing + it.id.value },
+                    onBack = { viewing = viewing.dropLast(1) },
                 )
                 else -> VaultListScreen(
                     model = model,
-                    onOpen = { viewing = it.id.value },
+                    onOpen = { viewing = listOf(it.id.value) },
                     onAdd = { adding = true },
                     onSettings = { settings = true },
                 )

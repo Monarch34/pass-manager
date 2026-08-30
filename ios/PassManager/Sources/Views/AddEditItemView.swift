@@ -22,6 +22,9 @@ struct AddEditItemView: View {
     // Bank
     @State private var bankName = ""
     @State private var accountNumber = ""
+    /// Held whole, dangling identifiers included. Those name cards that exist on another
+    /// device; nothing here can render them and nothing here may drop them.
+    @State private var cardIds: [ItemId] = []
     // Identity
     @State private var firstName = ""
     @State private var lastName = ""
@@ -52,6 +55,7 @@ struct AddEditItemView: View {
                         PanelField(label: "Bank", text: $bankName)
                         PanelField(label: "Account", text: $accountNumber, secure: true)
                         PanelField(label: "Password", text: $password, secure: true)
+                        cardLinks
                     case .identity:
                         PanelField(label: "First name", text: $firstName)
                         PanelField(label: "Last name", text: $lastName)
@@ -106,6 +110,7 @@ struct AddEditItemView: View {
             bankName = bank.bankName
             accountNumber = bank.accountNumber.revealed()
             password = bank.password.revealed()
+            cardIds = bank.cardIds
         case let identity as ItemPayloadIdentity:
             firstName = identity.firstName
             lastName = identity.lastName
@@ -133,16 +138,18 @@ struct AddEditItemView: View {
                 cardExpiry: cardExpiry
             )
         case .bank:
+            // The password history is not a field this screen renders, so it is not one this
+            // screen decides. withHistoryFrom carries the old list forward and captures the
+            // password being replaced — in the model, where both apps reach one answer. This
+            // used to pass an empty list, which destroyed the history on every save.
             payload = ItemPayloadBank(
                 title: title, notes: secretNotes,
                 bankName: bankName,
                 accountNumber: SecretText.companion.of(text: accountNumber),
                 password: SecretText.companion.of(text: password),
                 previousPasswords: [],
-                // Links are not editable yet; an edit must carry forward what it did not
-                // show, or saving a bank would silently delete every card it names.
-                cardIds: (existing?.payload as? ItemPayloadBank)?.cardIds ?? []
-            )
+                cardIds: cardIds
+            ).withHistoryFrom(earlier: existing?.payload as? ItemPayloadBank)
         case .identity:
             payload = ItemPayloadIdentity(
                 title: title, notes: secretNotes,
@@ -159,14 +166,65 @@ struct AddEditItemView: View {
             )
         }
 
-        let item = VaultItem(
-            id: existing?.id ?? ItemId.companion.random(),
-            // An edit keeps the original creation time; only a new entry takes now.
-            createdAt: existing?.createdAt ?? now,
-            updatedAt: now,
-            payload: payload
-        )
+        // An edit keeps the identity, the creation time, and the modification time of an
+        // entry nothing was actually typed into. All three rules live on the item, shared.
+        let item = existing?.edited(payload: payload, now: now)
+            ?? VaultItem(id: ItemId.companion.random(), createdAt: now, updatedAt: now, payload: payload)
         session.save(item)
         dismiss()
+    }
+
+    /// The cards this account issues, chosen from the cards the vault already holds.
+    ///
+    /// No free-text field, because a link is an identifier and one typed by hand would name
+    /// nothing. A bank can therefore only be linked to a card that has already been entered.
+    private var cardLinks: some View {
+        let cards = session.items.filter { $0.category == .card }
+        let linked = cardIds.compactMap { id in cards.first { $0.id == id } }
+        let unlinked = cards.filter { card in !cardIds.contains { $0 == card.id } }
+
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Cards")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Palette.onSurfaceVariant)
+
+            if cards.isEmpty {
+                Text("Add a card entry first, then it can be linked to this account.")
+                    .font(.footnote)
+                    .foregroundStyle(Palette.onSurfaceVariant)
+            } else {
+                PanelCard {
+                    ForEach(Array(linked.enumerated()), id: \.element.id.value) { index, card in
+                        linkRow(card.payload.title, action: "Unlink", muted: false) {
+                            cardIds.removeAll { $0 == card.id }
+                        }
+                        if index < linked.count - 1 { Divider().padding(.leading, 14) }
+                    }
+                    if !linked.isEmpty && !unlinked.isEmpty { Divider().padding(.leading, 14) }
+                    ForEach(Array(unlinked.enumerated()), id: \.element.id.value) { index, card in
+                        linkRow(card.payload.title, action: "Link", muted: true) {
+                            cardIds.append(card.id)
+                        }
+                        if index < unlinked.count - 1 { Divider().padding(.leading, 14) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func linkRow(
+        _ title: String,
+        action: String,
+        muted: Bool,
+        tap: @escaping () -> Void
+    ) -> some View {
+        HStack {
+            Text(title)
+                .foregroundStyle(muted ? Palette.onSurfaceVariant : Palette.onSurface)
+            Spacer()
+            Button(action, action: tap)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 }

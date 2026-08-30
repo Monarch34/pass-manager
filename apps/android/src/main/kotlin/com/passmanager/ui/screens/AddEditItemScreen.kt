@@ -28,8 +28,12 @@ import com.passmanager.domain.item.VaultItem
 import com.passmanager.ui.CategoryOrder
 import com.passmanager.ui.VaultViewModel
 import com.passmanager.ui.components.CategoryChip
+import com.passmanager.ui.components.PanelCard
 import com.passmanager.ui.components.PanelField
+import com.passmanager.ui.components.PanelRow
+import com.passmanager.ui.components.PanelRowDivider
 import com.passmanager.ui.components.PillButton
+import com.passmanager.ui.components.SectionFootnote
 import com.passmanager.ui.label
 
 @Composable
@@ -102,6 +106,7 @@ fun AddEditItemScreen(
                 PanelField("Bank", fields.bankName, { fields.bankName = it })
                 PanelField("Account", fields.accountNumber, { fields.accountNumber = it }, secret = true)
                 PanelField("Password", fields.password, { fields.password = it }, secret = true)
+                CardLinks(model, fields)
             }
             ItemCategory.IDENTITY -> {
                 PanelField("First name", fields.firstName, { fields.firstName = it })
@@ -127,6 +132,49 @@ fun AddEditItemScreen(
     }
 }
 
+/**
+ * The cards an account issues, chosen from the cards this vault already holds.
+ *
+ * There is no free-text field here and there cannot be: a link is an identifier, and one
+ * typed by hand would name nothing. So the editor offers what exists, which also means a
+ * bank can only be linked to a card that has already been entered.
+ */
+@Composable
+private fun CardLinks(model: VaultViewModel, fields: EditableFields) {
+    val cards = model.items.filter { it.category == ItemCategory.CARD }
+    val linked = fields.cardIds.mapNotNull { id -> cards.firstOrNull { it.id == id } }
+    val unlinked = cards.filterNot { it.id in fields.cardIds }
+
+    Text("Cards", style = MaterialTheme.typography.titleSmall)
+
+    if (cards.isEmpty()) {
+        SectionFootnote("Add a card entry first, then it can be linked to this account.")
+        return
+    }
+
+    PanelCard {
+        linked.forEachIndexed { index, card ->
+            PanelRow {
+                Text(card.payload.title, Modifier.fillMaxWidth(0.72f))
+                TextButton({ fields.unlink(card.id) }) { Text("Unlink") }
+            }
+            if (index < linked.size - 1) PanelRowDivider()
+        }
+        if (linked.isNotEmpty() && unlinked.isNotEmpty()) PanelRowDivider()
+        unlinked.forEachIndexed { index, card ->
+            PanelRow {
+                Text(
+                    card.payload.title,
+                    Modifier.fillMaxWidth(0.72f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton({ fields.link(card.id) }) { Text("Link") }
+            }
+            if (index < unlinked.size - 1) PanelRowDivider()
+        }
+    }
+}
+
 /** One holder for every field any kind might use, so switching kind keeps what was typed. */
 private class EditableFields(existing: VaultItem?) {
     var title by mutableStateOf(existing?.payload?.title.orEmpty())
@@ -147,10 +195,27 @@ private class EditableFields(existing: VaultItem?) {
     var phone by mutableStateOf("")
     var company by mutableStateOf("")
 
-    /** Links have no editor yet, so they are carried rather than shown. See [toItem]. */
-    private var cardIds = (existing?.payload as? ItemPayload.Bank)?.cardIds.orEmpty()
-    private var previousPasswords =
-        (existing?.payload as? ItemPayload.Bank)?.previousPasswords.orEmpty()
+    /**
+     * The cards this account issues.
+     *
+     * Held whole, including identifiers that name nothing in this vault. Those are never
+     * rendered — there is nothing to render — and [link] and [unlink] cannot reach them,
+     * which is the point: a card deleted on another device leaves every bank that names it
+     * dangling here, and an editor that saved only what it could resolve would delete those
+     * links permanently the first time anyone opened this screen.
+     */
+    var cardIds by mutableStateOf((existing?.payload as? ItemPayload.Bank)?.cardIds.orEmpty())
+        private set
+
+    private val earlierBank = existing?.payload as? ItemPayload.Bank
+
+    fun link(id: ItemId) {
+        if (id !in cardIds) cardIds = cardIds + id
+    }
+
+    fun unlink(id: ItemId) {
+        cardIds = cardIds - id
+    }
 
     init {
         when (val p = existing?.payload) {
@@ -198,17 +263,16 @@ private class EditableFields(existing: VaultItem?) {
                 cardCvc = SecretText.of(cardCvc),
                 cardExpiry = cardExpiry,
             )
+            // The history is not a field this screen renders, so it is not one this screen
+            // decides. withHistoryFrom carries the old list forward and captures the password
+            // being replaced, in the model, where both applications reach the same answer.
             ItemCategory.BANK -> ItemPayload.Bank(
                 title = title, notes = secretNotes,
                 bankName = bankName,
                 accountNumber = SecretText.of(accountNumber),
                 password = SecretText.of(password),
-                // Both are carried forward though nothing here shows them. An editor that
-                // saved only the fields it rendered would silently delete every card this
-                // account names and every old password it remembers.
-                previousPasswords = previousPasswords,
                 cardIds = cardIds,
-            )
+            ).withHistoryFrom(earlierBank)
             ItemCategory.IDENTITY -> ItemPayload.Identity(
                 title = title, notes = secretNotes,
                 firstName = firstName, lastName = lastName,
@@ -216,12 +280,9 @@ private class EditableFields(existing: VaultItem?) {
             )
             ItemCategory.NOTE -> ItemPayload.Note(title = title, notes = secretNotes)
         }
-        return VaultItem(
-            id = existing?.id ?: ItemId.random(),
-            // An edit keeps the original creation time; only a new entry takes now.
-            createdAt = existing?.createdAt ?: now,
-            updatedAt = now,
-            payload = payload,
-        )
+        // An edit keeps the identity, the creation time, and the modification time of an
+        // entry nothing was actually typed into. All three rules live on the item.
+        return existing?.edited(payload, now)
+            ?: VaultItem(id = ItemId.random(), createdAt = now, updatedAt = now, payload = payload)
     }
 }

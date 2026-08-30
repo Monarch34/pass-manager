@@ -91,6 +91,41 @@ sealed interface ItemPayload {
         val cardIds: List<ItemId> = emptyList(),
     ) : ItemPayload {
         override val category: ItemCategory get() = ItemCategory.BANK
+
+        /**
+         * This payload, carrying the password history of the version it replaces.
+         *
+         * Here rather than in each editor, and that is the whole reason it exists. An editor
+         * builds a payload out of the fields it rendered, so a field it does not render is
+         * absent — and [previousPasswords] is never rendered. Android carried it forward by
+         * hand and iOS did not, which meant saving a bank on the phone silently destroyed
+         * every old password it had kept. One rule in one place cannot disagree with itself.
+         *
+         * The capture is the other half. The field is only useful because banks refuse a
+         * password used in the last few changes, which requires the old one to be recorded
+         * at the moment it stops being current — this moment, and no later one.
+         */
+        fun withHistoryFrom(earlier: Bank?): Bank {
+            val replaced = earlier?.password ?: return this
+            // An empty password was never in use, and re-saving without touching the field
+            // is not a change. Neither is worth a slot.
+            if (replaced.isEmpty || replaced == password) {
+                return copy(previousPasswords = earlier.previousPasswords)
+            }
+            return copy(
+                previousPasswords =
+                    (listOf(replaced) + earlier.previousPasswords).take(MaxRememberedPasswords),
+            )
+        }
+
+        companion object {
+            /**
+             * More than any bank checks against, and a hard stop. Every entry here is a
+             * password that once protected this account and very likely still protects
+             * something else, so the list has to end somewhere.
+             */
+            const val MaxRememberedPasswords = 8
+        }
     }
 
     @Serializable

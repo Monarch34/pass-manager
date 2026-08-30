@@ -50,6 +50,7 @@ fun ItemDetailScreen(
     model: VaultViewModel,
     item: VaultItem,
     onEdit: () -> Unit,
+    onOpen: (VaultItem) -> Unit,
     onBack: () -> Unit,
 ) {
     var confirmingDelete by remember { mutableStateOf(false) }
@@ -111,6 +112,12 @@ fun ItemDetailScreen(
                 DetailRow(field)
                 if (index < fields.size - 1) PanelRowDivider()
             }
+        }
+
+        RelatedItems(model, item, onOpen)
+
+        (item.payload as? ItemPayload.Bank)?.previousPasswords?.takeIf { it.isNotEmpty() }?.let {
+            PreviousPasswords(it)
         }
 
         Text("Attachments", style = MaterialTheme.typography.titleSmall)
@@ -180,6 +187,94 @@ fun ItemDetailScreen(
             },
             dismissButton = { TextButton({ confirmingDelete = false }) { Text("Cancel") } },
         )
+    }
+}
+
+/**
+ * The other entries this one is connected to.
+ *
+ * A bank names its cards, so it lists them. A card names nothing — the link is deliberately
+ * one-sided so that making or breaking it touches a single item — but the connection is
+ * still worth seeing from the card, so it is derived by asking which banks name this one.
+ * Reading the relationship backwards is free; only writing it would need a second half that
+ * could disagree.
+ */
+@Composable
+private fun RelatedItems(model: VaultViewModel, item: VaultItem, onOpen: (VaultItem) -> Unit) {
+    val related = when (val payload = item.payload) {
+        // Identifiers that resolve to nothing are skipped rather than shown as a broken row.
+        // A card deleted elsewhere leaves its bank dangling, which is expected and is not an
+        // error to report to anyone.
+        is ItemPayload.Bank -> payload.cardIds.mapNotNull { id -> model.items.firstOrNull { it.id == id } }
+        is ItemPayload.Card -> model.items.filter {
+            (it.payload as? ItemPayload.Bank)?.cardIds?.contains(item.id) == true
+        }
+        else -> emptyList()
+    }
+    if (related.isEmpty()) return
+
+    Text(
+        if (item.payload is ItemPayload.Bank) "Cards" else "Issued by",
+        style = MaterialTheme.typography.titleSmall,
+    )
+    PanelCard {
+        related.forEachIndexed { index, other ->
+            PanelRow(onClick = { onOpen(other) }) {
+                Column(Modifier.fillMaxWidth(0.86f)) {
+                    Text(
+                        other.payload.title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        other.category.label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (index < related.size - 1) PanelRowDivider()
+        }
+    }
+}
+
+/**
+ * The passwords this account used to have.
+ *
+ * Shown because the only reason to keep them is to answer "have I used this one before",
+ * which cannot be answered by a list nobody can read. Hidden by default like every other
+ * secret here — an old password is still a password, and on most accounts it is one the
+ * owner has reused somewhere else.
+ */
+@Composable
+private fun PreviousPasswords(passwords: List<SecretText>) {
+    var shown by remember { mutableStateOf(false) }
+
+    Text("Previous passwords", style = MaterialTheme.typography.titleSmall)
+    PanelCard {
+        PanelRow {
+            Column(Modifier.fillMaxWidth(0.72f)) {
+                Text(
+                    if (shown) "Kept so a bank that refuses reuse can be answered"
+                    else "${passwords.size} kept",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton({ shown = !shown }) { Text(if (shown) "Hide" else "Show") }
+        }
+        if (shown) {
+            passwords.forEach { password ->
+                PanelRowDivider()
+                PanelRow {
+                    Text(
+                        password.reveal { it },
+                        Modifier.fillMaxWidth(0.86f),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
+            }
+        }
     }
 }
 

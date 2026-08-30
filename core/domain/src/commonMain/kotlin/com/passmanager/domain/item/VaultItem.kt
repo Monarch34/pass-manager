@@ -33,6 +33,22 @@ data class VaultItem(
     val category: ItemCategory get() = payload.category
 
     /**
+     * This item with a new payload, and [updatedAt] moved only if the payload actually
+     * differs.
+     *
+     * Shared because both editors need exactly this rule and neither is the right place to
+     * decide it. Opening an entry and pressing Save without typing anything is not a content
+     * edit; stamping it as one would make this copy beat a device where the item genuinely
+     * changed, which is precisely what [updatedAt]'s own documentation forbids.
+     */
+    fun edited(payload: ItemPayload, now: Long): VaultItem = VaultItem(
+        id = id,
+        createdAt = createdAt,
+        updatedAt = if (payload == this.payload) updatedAt else now,
+        payload = payload,
+    )
+
+    /**
      * Which of two versions of the same item survives a merge.
      *
      * Strictly newer, so re-importing a file you exported yourself changes nothing. The

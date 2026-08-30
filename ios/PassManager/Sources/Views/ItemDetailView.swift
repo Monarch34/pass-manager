@@ -12,6 +12,7 @@ struct ItemDetailView: View {
     @State private var attachments: [Attachment] = []
     @State private var picking = false
     @State private var viewing: Viewed?
+    @State private var showingHistory = false
 
     var body: some View {
         ScrollView {
@@ -23,6 +24,8 @@ struct ItemDetailView: View {
                         if index < fields.count - 1 { Divider().padding(.leading, 14) }
                     }
                 }
+                relatedItems
+                previousPasswords
                 attachmentSection
 
                 Button(role: .destructive) { confirmingDelete = true } label: {
@@ -56,6 +59,105 @@ struct ItemDetailView: View {
                 dismiss()
             }
             Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    /// The other entries this one is connected to.
+    ///
+    /// A bank names its cards, so it lists them. A card names nothing — the link is
+    /// deliberately one-sided so that making or breaking it touches a single item — but the
+    /// connection is still worth seeing from the card, so it is derived by asking which banks
+    /// name this one. Reading the relationship backwards is free; only writing it would need
+    /// a second half that could disagree.
+    @ViewBuilder
+    private var relatedItems: some View {
+        let related: [VaultItem] = {
+            switch item.payload {
+            case let bank as ItemPayloadBank:
+                // Identifiers that resolve to nothing are skipped rather than drawn as a
+                // broken row. A card deleted elsewhere leaves its bank dangling, which is
+                // expected and is nobody's error to report.
+                return bank.cardIds.compactMap { id in session.items.first { $0.id == id } }
+            case is ItemPayloadCard:
+                return session.items.filter { other in
+                    ((other.payload as? ItemPayloadBank)?.cardIds ?? []).contains { $0 == item.id }
+                }
+            default:
+                return []
+            }
+        }()
+
+        if !related.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(item.payload is ItemPayloadBank ? "Cards" : "Issued by")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Palette.onSurfaceVariant)
+                PanelCard {
+                    ForEach(Array(related.enumerated()), id: \.element.id.value) { index, other in
+                        NavigationLink(destination: ItemDetailView(item: other)) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(other.payload.title).foregroundStyle(Palette.primary)
+                                    Text(other.category.label)
+                                        .font(.footnote)
+                                        .foregroundStyle(Palette.onSurfaceVariant)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.footnote)
+                                    .foregroundStyle(Palette.onSurfaceVariant)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.plain)
+                        if index < related.count - 1 { Divider().padding(.leading, 14) }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The passwords this account used to have.
+    ///
+    /// Shown because the only reason to keep them is to answer "have I used this one
+    /// before", which cannot be answered by a list nobody can read. Hidden by default like
+    /// every other secret here — an old password is still a password, and on most accounts
+    /// it is one its owner reused somewhere else.
+    @ViewBuilder
+    private var previousPasswords: some View {
+        let history = (item.payload as? ItemPayloadBank)?.previousPasswords ?? []
+        if !history.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Previous passwords")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Palette.onSurfaceVariant)
+                PanelCard {
+                    HStack {
+                        Text(showingHistory
+                            ? "Kept so a bank that refuses reuse can be answered"
+                            : "\(history.count) kept")
+                            .font(.footnote)
+                            .foregroundStyle(Palette.onSurfaceVariant)
+                        Spacer()
+                        Button(showingHistory ? "Hide" : "Show") { showingHistory.toggle() }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+
+                    if showingHistory {
+                        ForEach(Array(history.enumerated()), id: \.offset) { _, password in
+                            Divider().padding(.leading, 14)
+                            Text(password.revealed())
+                                .font(.system(.body, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                        }
+                    }
+                }
+            }
         }
     }
 
