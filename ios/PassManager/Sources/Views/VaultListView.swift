@@ -9,9 +9,7 @@ struct VaultListView: View {
     @State private var showingSettings = false
 
     private var visible: [VaultItem] {
-        session.items.filter { item in
-            (filter == nil || item.category == filter) && matches(item, search)
-        }
+        session.search(search).filter { filter == nil || $0.category == filter }
     }
 
     var body: some View {
@@ -110,25 +108,6 @@ struct VaultListView: View {
                 .multilineTextAlignment(.center)
         }
         .padding(.vertical, 60)
-    }
-
-    /// Searches everything the item holds, secrets included — which is possible only
-    /// because the whole vault is decrypted while it is open, and is what makes an entry
-    /// findable by its username or a line in its notes rather than by its title alone.
-    private func matches(_ item: VaultItem, _ query: String) -> Bool {
-        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !needle.isEmpty else { return true }
-        var haystack = item.payload.title.lowercased()
-        if let login = item.payload as? ItemPayloadLogin {
-            haystack += " \(login.username.lowercased()) \(login.address.lowercased())"
-        }
-        if let bank = item.payload as? ItemPayloadBank {
-            haystack += " \(bank.bankName.lowercased())"
-        }
-        if let identity = item.payload as? ItemPayloadIdentity {
-            haystack += " \(identity.firstName.lowercased()) \(identity.lastName.lowercased()) \(identity.email.lowercased())"
-        }
-        return haystack.contains(needle)
     }
 }
 

@@ -10,6 +10,7 @@ import com.passmanager.format.BlobHeader
 import com.passmanager.format.BlobId
 import com.passmanager.format.PmBlob
 import com.passmanager.format.PmVault
+import com.passmanager.format.VaultBody
 import com.passmanager.format.VaultContents
 import com.passmanager.format.VaultOpen
 import com.passmanager.format.VaultParse
@@ -39,6 +40,14 @@ class VaultSession internal constructor(
     val items: List<VaultItem> get() = contents.items
 
     /**
+     * What this vault knows has been deleted, and when.
+     *
+     * An identifier and a time, never a title or a category: a record naming what was deleted
+     * would outlive the item it names, which is the opposite of deleting it.
+     */
+    val deletions: List<VaultBody.Deletion> get() = contents.deletions
+
+    /**
      * Inserts or replaces by identity, then writes the whole vault.
      *
      * There is no partial write. The container is one sealed document, so changing one entry
@@ -50,16 +59,37 @@ class VaultSession internal constructor(
         val existing = contents.items.indexOfFirst { it.id == item.id }
         val updated = contents.items.toMutableList()
         if (existing >= 0) updated[existing] = item else updated += item
-        persist(updated)
+        // An item that exists is not a deleted item. Only an import can bring an identifier
+        // back from the dead, and when it does, the tombstone has to go with it or the next
+        // merge would remove what was just restored.
+        persist(updated, contents.deletions.filterNot { it.id == item.id })
     }
 
-    fun delete(id: ItemId) {
+    /**
+     * Removes an item and records that it was removed.
+     *
+     * The tombstone is the whole reason this takes a clock. Deleting an item destroys the
+     * fact that it ever existed, so the only moment the deletion can be written down is this
+     * one — and without it, importing any file taken before the deletion brings the item
+     * back. The container has carried a place for these since the first version precisely so
+     * that the 2.0 era would be covered retroactively once anything merges.
+     *
+     * [now] is passed in rather than read here for the same reason every other time in this
+     * module is: common Kotlin has no clock, and a vault's timestamps are the platform's to
+     * supply.
+     */
+    fun delete(id: ItemId, now: Long) {
         requireOpen()
         val doomed = attachments(id)
         // The vault first, the attachments second. A crash between the two leaves files
         // nothing points at, which the next unlock sweeps up; the other order would delete
         // an attachment and then fail to remove the item that still claims it.
-        persist(contents.items.filterNot { it.id == id })
+        persist(
+            contents.items.filterNot { it.id == id },
+            // At most one tombstone per identifier. Deleting, importing the item back, and
+            // deleting it again must not leave two.
+            contents.deletions.filterNot { it.id == id } + VaultBody.Deletion(id, now),
+        )
         for (attachment in doomed) blobs.delete(attachment.id)
     }
 
@@ -193,11 +223,14 @@ class VaultSession internal constructor(
         }
     }
 
-    private fun persist(updated: List<VaultItem>) {
-        // withItems, not a fresh VaultContents: the members a newer writer added and this
+    private fun persist(
+        updated: List<VaultItem>,
+        deletions: List<VaultBody.Deletion> = contents.deletions,
+    ) {
+        // `with`, not a fresh VaultContents: the members a newer writer added and this
         // version does not understand have to survive an edit made here, or saving on an
         // older client silently destroys them.
-        val next = contents.withItems(updated)
+        val next = contents.with(updated, deletions)
         val current = store.read()
         val sealed = PmVault.parse(current) as? VaultParse.Sealed
             ?: error("the vault on disk is no longer readable")

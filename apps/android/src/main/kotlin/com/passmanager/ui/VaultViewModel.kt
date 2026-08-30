@@ -173,7 +173,7 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun delete(id: ItemId) = guard {
-        session?.delete(id)
+        session?.delete(id, System.currentTimeMillis())
         items = session?.items.orEmpty()
     }
 

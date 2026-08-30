@@ -132,7 +132,7 @@ class AttachmentTest {
         Secret.ofUtf8("a").use { session.attach(doomed.id, "a.txt", "text/plain", it, 1) }
         Secret.ofUtf8("b").use { session.attach(kept.id, "b.txt", "text/plain", it, 2) }
 
-        session.delete(doomed.id)
+        session.delete(doomed.id, now = 1_700_000_010_000)
 
         assertEquals(0, session.attachments(doomed.id).size)
         assertEquals(1, session.attachments(kept.id).size)
@@ -157,7 +157,7 @@ class AttachmentTest {
         // item, and the unlink never happened. Restoring the file after the delete is what
         // that leaves behind.
         val leftBehind = blobs.files[orphan.id]!!.copyOf()
-        session.delete(gone.id)
+        session.delete(gone.id, now = 1_700_000_010_000)
         blobs.files[orphan.id] = leftBehind
         assertEquals(2, blobs.files.size)
 

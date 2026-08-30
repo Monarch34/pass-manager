@@ -9,6 +9,7 @@ import com.passmanager.domain.item.VaultItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -92,7 +93,7 @@ class VaultSessionTest {
         session.save(keep)
         session.save(remove)
 
-        session.delete(remove.id)
+        session.delete(remove.id, now = 1_700_000_010_000)
 
         assertEquals(listOf("Keep"), session.items.map { it.payload.title })
     }
@@ -109,7 +110,7 @@ class VaultSessionTest {
         val item = login("One")
         session.save(item)
         session.save(login("Two"))
-        session.delete(item.id)
+        session.delete(item.id, now = 1_700_000_010_000)
         assertEquals(before + 3, store.writes)
     }
 
@@ -169,5 +170,102 @@ class VaultSessionTest {
             store.bytes!!.copyOfRange(0, 31).toList(),
             "a save rewrote the descriptor",
         )
+    }
+}
+
+class TombstoneTest {
+
+    private val cheap = Argon2Parameters(memoryKib = 8192, iterations = 1, parallelism = 1)
+
+    private fun open(): Pair<InMemoryVaultStore, VaultSession> {
+        val store = InMemoryVaultStore()
+        val session = Secret.ofUtf8("open sesame").use { Vault.create(store, InMemoryBlobs(), it, cheap) }
+        return store to session
+    }
+
+    private fun VaultSession.note(title: String): VaultItem {
+        val item = VaultItem(
+            id = ItemId.random(),
+            createdAt = 1_700_000_000_000,
+            updatedAt = 1_700_000_000_000,
+            payload = ItemPayload.Note(title = title, notes = SecretText.Empty),
+        )
+        save(item)
+        return item
+    }
+
+    @Test
+    fun `deleting an item records that it was deleted`() {
+        // The knowledge that a deletion happened is destroyed at the instant of the deletion,
+        // so this is the only moment it can be written down.
+        val (_, session) = open()
+        val item = session.note("Old account")
+        session.delete(item.id, now = 1_700_000_050_000)
+
+        assertEquals(1, session.deletions.size)
+        assertEquals(item.id, session.deletions.single().id)
+        assertEquals(1_700_000_050_000, session.deletions.single().deletedAt)
+    }
+
+    @Test
+    fun `a tombstone names nothing but an identifier and a time`() {
+        // A record saying what was deleted outlives the item it names, which is the opposite
+        // of deleting it. This is enforced by the type, and the test is here so that widening
+        // it later is a deliberate act with a failing test attached.
+        val (store, session) = open()
+        val item = session.note("Extremely Secret Bank")
+        session.delete(item.id, now = 1_700_000_050_000)
+
+        val reopened = Secret.ofUtf8("open sesame").use { Vault.unlock(store, InMemoryBlobs(), it) }
+        assertIs<UnlockResult.Unlocked>(reopened)
+        assertEquals(1, reopened.session.deletions.size)
+        // Weak, and worth having anyway: the title of a deleted entry must not survive
+        // anywhere in the file, tombstone included.
+        assertFalse(store.bytes!!.decodeToString().contains("Extremely Secret Bank"))
+    }
+
+    @Test
+    fun `a tombstone survives being written and read back`() {
+        val (store, session) = open()
+        val item = session.note("Old account")
+        session.delete(item.id, now = 1_700_000_050_000)
+
+        val reopened = Secret.ofUtf8("open sesame").use { Vault.unlock(store, InMemoryBlobs(), it) }
+        assertIs<UnlockResult.Unlocked>(reopened)
+        assertEquals(listOf(item.id), reopened.session.deletions.map { it.id })
+    }
+
+    @Test
+    fun `deleting the same identifier twice leaves one tombstone`() {
+        val (_, session) = open()
+        val item = session.note("Old account")
+        session.delete(item.id, now = 1_700_000_050_000)
+        session.save(item)
+        session.delete(item.id, now = 1_700_000_090_000)
+
+        assertEquals(1, session.deletions.size)
+        assertEquals(1_700_000_090_000, session.deletions.single().deletedAt)
+    }
+
+    @Test
+    fun `an item that comes back takes its tombstone with it`() {
+        // Otherwise the next merge would remove what was just restored.
+        val (_, session) = open()
+        val item = session.note("Old account")
+        session.delete(item.id, now = 1_700_000_050_000)
+        session.save(item)
+
+        assertEquals(0, session.deletions.size)
+    }
+
+    @Test
+    fun `an ordinary edit does not disturb the tombstones`() {
+        val (_, session) = open()
+        val kept = session.note("Kept")
+        val doomed = session.note("Doomed")
+        session.delete(doomed.id, now = 1_700_000_050_000)
+        session.save(kept.edited(ItemPayload.Note(title = "Renamed", notes = SecretText.Empty), now = 1_700_000_060_000))
+
+        assertEquals(listOf(doomed.id), session.deletions.map { it.id })
     }
 }

@@ -265,6 +265,16 @@ class VaultContents private constructor(
     fun withItems(items: List<VaultItem>): VaultContents =
         VaultContents(items, deletions, preserved)
 
+    /**
+     * The same, for an edit that also changes what has been deleted.
+     *
+     * Separate from [withItems] rather than folded into it, because every caller that moves
+     * items around must not have to think about tombstones, and the one caller that does
+     * must say so.
+     */
+    fun with(items: List<VaultItem>, deletions: List<VaultBody.Deletion>): VaultContents =
+        VaultContents(items, deletions, preserved)
+
     internal companion object {
         fun of(
             items: List<VaultItem>,

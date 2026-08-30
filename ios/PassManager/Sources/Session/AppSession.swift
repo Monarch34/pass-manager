@@ -124,9 +124,22 @@ final class AppSession: ObservableObject {
         items = session.items
     }
 
+    /// Which entries match what was typed.
+    ///
+    /// Asked of the shared session rather than answered here. This used to be a local
+    /// function whose own comment claimed it searched "everything the item holds, secrets
+    /// included" while actually matching a title, a username, an address, a bank name and
+    /// three identity fields — no notes, no passwords, nothing on a card. It also folded case
+    /// with `lowercased()`, which turns İ into an i and a combining dot and so fails to match
+    /// exactly the alphabet this application's first users type in.
+    func search(_ query: String) -> [VaultItem] {
+        guard let session, !session.isLocked else { return [] }
+        return session.search(query: query)
+    }
+
     func delete(_ item: VaultItem) {
         guard let session else { return }
-        session.delete(id: item.id)
+        session.delete(id: item.id, now: Int64(Date().timeIntervalSince1970 * 1000))
         items = session.items
     }
 
